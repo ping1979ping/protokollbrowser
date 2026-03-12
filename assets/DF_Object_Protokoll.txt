@@ -1,0 +1,20 @@
+| Element-Name | Alias | Typ-Name | Definitions-Klasse |
+| :--- | :--- | :--- | :--- |
+| _Autor | | STRING | _PINGProtokoll |
+| _Datum | | TIME | _PINGProtokoll |
+| _Dokumente <X> | | Dokument | _PINGProtokoll |
+| _erledigt | | BOOL | _PINGProtokoll |
+| _erstellt | | BOOL | _PINGProtokoll |
+| _istEinzelprotokoll | | BOOL | _PINGProtokoll |
+| _Nachbemerkung | | STRING | _PINGProtokoll |
+| _Name | | STRING | _PINGProtokoll |
+| _Nummer | | INT | _PINGProtokoll |
+| _Ort | | STRING | _PINGProtokoll |
+| _Protokollelemente <NX> | | _PINGProtokollelement | _PINGProtokoll |
+| _Protokollgruppe <X> | | _PINGProtokollgruppe | _PINGProtokoll |
+| _Signatur | | STRING | _PINGProtokoll |
+| _Teilnehmer <X> | | Ansprechpartner | _PINGProtokoll |
+| _TeilnehmerAnmerkung | | STRING | _PINGProtokoll |
+| _Verteiler <X> | | Ansprechpartner | _PINGProtokoll |
+| _verteilt | | BOOL | _PINGProtokoll |
+| _Vorbemerkung | | STRING | _PINGProtokoll |

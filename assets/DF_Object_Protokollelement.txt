@@ -1,0 +1,15 @@
+| Element-Name | Alias | Typ-Name | Definitions-Klasse |
+| :--- | :--- | :--- | :--- |
+| _Anhang <X> |  | Dokument | _PINGProtokollelement |
+| _Bemerkung |  | STRING | _PINGProtokollelement |
+| _Erinnerung |  | BOOL | _PINGProtokollelement |
+| _Position |  | STRING | _PINGProtokollelement |
+| _Positionstext |  | STRING | _PINGProtokollelement |
+| _Positionstitel |  | STRING | _PINGProtokollelement |
+| _Protokoll <X> |  | _PINGProtokoll | _PINGProtokollelement |
+| _Status |  | INT | _PINGProtokollelement |
+| _Termin |  | TIME | _PINGProtokollelement |
+| _Thema |  | STRING | _PINGProtokollelement |
+| _Verantwortlicher <X> |  | Adresse | _PINGProtokollelement |
+| _Verweise <X> |  | _PINGProtokollelement | _PINGProtokollelement |
+| _Wert |  | FLOAT | _PINGProtokollelement |

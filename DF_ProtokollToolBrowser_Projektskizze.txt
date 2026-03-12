@@ -1,0 +1,1059 @@
+# DOCUframe Mobile Protokoll-App - Konzeption & JSON-Schnittstelle
+
+> **Zweck dieses Dokuments:** KI-gestuetzte Weiterentwicklung in VS Code (Copilot, ChatGPT-Extension o.ae.).
+> Alle Abschnitte sind so strukturiert, dass sie als Kontext fuer Code-Generierung, Schema-Verfeinerung und UI-Spezifikation genutzt werden koennen.
+
+---
+
+## 1. Zielsetzung
+
+Entwicklung einer **offlinefaehigen, browserbasierten Protokoll-App (PWA)** fuer Baustellen-/Jour-fixe-Protokolle mit bidirektionaler Anbindung an **DOCUframe**.
+
+**Kernfunktionen:**
+
+- Protokollpunkte (aus DOCUframe exportiert) auf mobilen Geraeten im Browser anzeigen
+- Checklistenfunktion: Punkte abhaken, Status aendern, Termine/Verantwortliche pflegen
+- Neue Protokollelemente erfassen (inkl. Schnellerfassung "Mangel", "Restarbeit", "Info")
+- Fotos (Kamera oder Galerie) an Protokollelemente anhaengen
+- Standort (GPS) pro Eintrag erfassen - als Koordinaten + lesbarer Text
+- Freitext oder Transkript per Device-Spracherkennung (Web Speech API) - **kein Audio speichern**
+- **Vollstaendig offline** nutzbar (Service Worker + IndexedDB)
+- Export als ZIP (JSON + Fotos) -> Import in DOCUframe via DOCUcontrol-Makro
+
+---
+
+## 2. Workflow-Uebersicht
+
+```
+DOCUframe (Desktop)
+      |
+      |  DOCUcontrol-Makro: Export
+      v
+  Protokolle.json
+      |
+      |  Datei-Upload im Browser
+      v
++-----------------------------+
+|   Mobile Protokoll-App      |  <- iPhone / iPad / Android / Windows-Tablet
+|   (PWA, offline-faehig)     |
+|                             |
+|  - Elemente anzeigen        |
+|  - Status setzen            |
+|  - Fotos aufnehmen          |
+|  - GPS erfassen             |
+|  - Sprache -> Text          |
+|  - Neue Elemente anlegen    |
++-----------------------------+
+      |
+      |  ZIP-Export (protocol_export.json + photos/)
+      v
+DOCUframe (Desktop)
+      |
+      |  DOCUcontrol-Makro: Import
+      v
+  Neues Protokoll N+1 angelegt          <- Nummer = max(vorhandene Nummern) + 1
+  Elemente aktualisiert / neu erstellt
+  Fotos: manuell im Projektstammverzeichnis ablegen
+         (Pfad wird im JSON mitgeliefert, kein Auto-Import)
+```
+
+---
+
+## 3. DOCUframe Datenmodell (Ist-Zustand)
+
+### 3.1 GSDObjekt - Basisfelder (alle Objekte)
+
+| Feldname      | Typ    | Bedeutung                        |
+|---------------|--------|----------------------------------|
+| `ExchangeID`  | STRING | Technische Austausch-ID (UUID)   |
+| `CreateTime`  | TIME   | Erstellungszeitpunkt             |
+| `ModifyTime`  | TIME   | Letzter Aenderungszeitpunkt      |
+
+> **Wichtig:** `ExchangeID` ist **nicht** direkt als Feld zugaenglich. Stattdessen wird die OID via
+> `Objekt.GetOID()` ausgelesen und als stabiler Primaerschluessel fuer den JSON-Roundtrip verwendet.
+>
+> ```pascal
+> STRING OidStr;
+> OidStr = Elem.GetOID();   // liefert z.B. "12345678-ABCD-..."
+> ElemJSon.GetMember( "Id", TRUE ).SetString( OidStr );
+> ```
+>
+> Beim Re-Import wird per `ObjektSet.FindOID( OidStr )` das Originalobjekt wiedergefunden.
+
+---
+
+### 3.2 Protokollgruppe - `_PINGProtokollgruppe`
+
+| Feldname           | Typ                    | Pflicht | Bedeutung                          |
+|--------------------|------------------------|---------|-------------------------------------|
+| `_Name`            | STRING                 | ja      | Bezeichnung der Gruppe             |
+| `_Projekt`         | Projekt `<X>`          | ja      | Zugehoeriges Projekt               |
+| `_Protokolle`      | `_PINGProtokoll <NX>`  | -       | Enthaltene Protokolle (1:n)        |
+| `_Protokollnummer` | INT                    | -       | Laufende Nummer                    |
+| `_Kategorie`       | INT                    | -       | Kategorie (z.B. Baustellennotiz)   |
+| `_Vorwort`         | STRING                 | -       | Vorworttext                        |
+| `_Nachwort`        | STRING                 | -       | Nachworttext                       |
+| `_Themen`          | STRING                 | -       | Themenuebersicht                   |
+| `_Bemerkung`       | STRING                 | -       | Interne Bemerkung                  |
+
+---
+
+### 3.3 Protokoll - `_PINGProtokoll`
+
+| Feldname               | Typ                           | Pflicht | Bedeutung                        |
+|------------------------|-------------------------------|---------|----------------------------------|
+| `_Name`                | STRING                        | ja      | Protokollbezeichnung             |
+| `_Nummer`              | INT                           | ja      | Protokollnummer                  |
+| `_Datum`               | TIME                          | ja      | Datum der Besprechung            |
+| `_Ort`                 | STRING                        | -       | Besprechungsort                  |
+| `_Autor`               | STRING                        | -       | Verfasser                        |
+| `_Vorbemerkung`        | STRING                        | -       | Einleitungstext                  |
+| `_Nachbemerkung`       | STRING                        | -       | Abschlusstext                    |
+| `_Protokollgruppe`     | `_PINGProtokollgruppe <X>`    | ja      | Uebergeordnete Gruppe            |
+| `_Protokollelemente`   | `_PINGProtokollelement <NX>`  | -       | Enthaltene Elemente (1:n)        |
+| `_Dokumente`           | Dokument `<X>`                | -       | Angehaengte Dokumente            |
+| `_Teilnehmer`          | Ansprechpartner `<X>`         | -       | Teilnehmerliste                  |
+| `_TeilnehmerAnmerkung` | STRING                        | -       | Anmerkung zur Teilnehmerliste    |
+| `_Verteiler`           | Ansprechpartner `<X>`         | -       | Verteilerliste                   |
+| `_erledigt`            | BOOL                          | -       | Protokoll abgeschlossen          |
+| `_verteilt`            | BOOL                          | -       | Protokoll verteilt               |
+| `_istEinzelprotokoll`  | BOOL                          | -       | Einzelprotokoll-Flag             |
+| `_erstellt`            | BOOL                          | -       | Protokoll erstellt               |
+| `_Signatur`            | STRING                        | -       | Signatur/Freigabe                |
+
+---
+
+### 3.4 Protokollelement - `_PINGProtokollelement`
+
+| Feldname               | Typ                           | Pflicht | Bedeutung                          |
+|------------------------|-------------------------------|---------|-------------------------------------|
+| `_Protokoll`           | `_PINGProtokoll <X>`          | ja      | Uebergeordnetes Protokoll           |
+| `_Position`            | STRING                        | ja      | Positionsnummer (z.B. "1.1")        |
+| `_Positionstitel`      | STRING                        | ja      | Kurztitel                           |
+| `_Positionstext`       | STRING                        | -       | Beschreibungstext                   |
+| `_Bemerkung`           | STRING                        | -       | Bemerkung / Ergebnis                |
+| `_Thema`               | STRING                        | -       | Thema / Kategorie                   |
+| `_Status`              | INT                           | ja      | Status-Code (siehe Mapping 4.1)     |
+| `_Termin`              | TIME                          | -       | Erledigungstermin                   |
+| `_Verantwortlicher`    | Adresse `<X>`                 | -       | Verantwortliche Person/Firma        |
+| `_Anhang`              | Dokument `<X>`                | -       | Angehaengte Dokumente/Fotos         |
+| `_Verweise`            | `_PINGProtokollelement <X>`   | -       | Verweise auf andere Elemente        |
+| `_Erinnerung`          | BOOL                          | -       | Erinnerung aktiv                    |
+| `_Wert`                | FLOAT                         | -       | Numerischer Wert (z.B. Kosten)      |
+
+---
+
+## 4. Status-Mapping `_PINGProtokollelement._Status`
+
+Quelle: DOCUframe Anzeigeparameter `_PINGProtokollelement.Status`
+
+| Wert | Text            | Kategorie  | Hintergrund | Bedeutung / Verwendung                        |
+|------|-----------------|------------|-------------|-----------------------------------------------|
+| `0`  | neu             | -          | FFFFFF      | Neu erfasst, noch nicht bearbeitet            |
+| `10` | offen           | -          | FFFFFF      | In Bearbeitung / offen                        |
+| `19` | freigegeben     | -          | FFFFFF      | Freigegeben zur Ausfuehrung                   |
+| `20` | erledigt        | -          | BBF2CD      | Abgeschlossen (gruener Hintergrund)           |
+| `21` | uebertragen     | -          | FFFFFF      | In Folgeprotokoll uebertragen                 |
+| `11` | offen (M)       | **Mangel** | FFFFFF      | Mangel - offen                                |
+| `25` | beseitigt (M)   | **Mangel** | BBF2CD      | Mangel - beseitigt (gruener Hintergrund)      |
+| `17` | erledigt (Info) | -          | FFFFFF      | Info-Punkt - erledigt                         |
+| `16` | Restarbeit (R)  | **Mangel** | FFFFFF      | Restarbeit - offen (Versteckt: Ja)            |
+| `26` | erledigt (R)    | **Mangel** | BBF2CD      | Restarbeit - erledigt (Versteckt: Ja)         |
+
+### 4.1 Status-Gruppen fuer die Mobile App
+
+```
+Normale Punkte:
+  0  -> neu
+  10 -> offen
+  19 -> freigegeben
+  20 -> erledigt       (Abschluss-Status, gruen)
+  21 -> uebertragen    (in Folgeprotokoll)
+
+Maengel (Kategorie = "Mangel"):
+  11 -> offen (M)
+  25 -> beseitigt (M)  (Abschluss-Status, gruen)
+
+Restarbeiten (Kategorie = "Mangel", versteckt in DF):
+  16 -> Restarbeit (R)
+  26 -> erledigt (R)   (Abschluss-Status, gruen)
+  --> In v1 der App NICHT anzeigen/erfassen
+
+Info-Punkte:
+  17 -> erledigt (Info)
+```
+
+### 4.2 Erlaubte Status-Uebergaenge (Mobile App)
+
+```
+neu (0)
+  +-> offen (10)
+        +-> freigegeben (19)
+        |     +-> erledigt (20)
+        +-> erledigt (20)
+              +-> uebertragen (21)  [nur DOCUframe]
+
+offen (M) (11)
+  +-> beseitigt (M) (25)
+
+Restarbeit (R) (16)  [v1: nicht in App]
+  +-> erledigt (R) (26)
+```
+
+### 4.3 Status-Schnellauswahl in der App (UI-Mapping)
+
+| App-Button              | Setzt Status | Kategorie | Farbe  |
+|-------------------------|-------------|-----------|--------|
+| "Neu"                   | 0           | -         | grau   |
+| "Offen"                 | 10          | -         | gelb   |
+| "Freigegeben"           | 19          | -         | blau   |
+| "Erledigt"              | 20          | -         | gruen  |
+| "Mangel - offen"        | 11          | Mangel    | rot    |
+| "Mangel - beseitigt"    | 25          | Mangel    | gruen  |
+
+---
+
+## 5. Datenmapping DOCUframe <-> Mobile JSON
+
+### 5.1 Protokollgruppe
+
+| DOCUframe Feld         | JSON Export             | JSON Import | Typ    | Bemerkung                                     |
+|------------------------|-------------------------|-------------|--------|-----------------------------------------------|
+| `GetOID()`             | `Id`                    | `Id`        | string | OID via GetOID() - stabiler Primaerschluessel |
+| `_Name`                | `Name`                  | -           | string | Nur Export (readonly in Mobile)               |
+| `_Projekt.Nummer`      | `ProjektId`             | -           | string | Nur Export                                    |
+| `_Projekt.Bezeichnung` | `ProjektName`           | -           | string | Nur Export                                    |
+| `_Projekt.Stammverz.`  | `ProjektStammverzeichnis` | -         | string | Nur Export - fuer Foto-Ablage                 |
+| `_Protokollnummer`     | `Protokollnummer`       | -           | int    | Nur Export                                    |
+| `_Vorwort`             | `Vorwort`               | -           | string | Nur Export                                    |
+| `_Nachwort`            | `Nachwort`              | -           | string | Nur Export                                    |
+| `_Themen`              | `Themen`                | -           | string | Nur Export                                    |
+| `_Bemerkung`           | `Bemerkung`             | -           | string | Nur Export                                    |
+
+---
+
+### 5.2 Protokoll
+
+| DOCUframe Feld        | JSON Export      | JSON Import              | Typ    | Bemerkung                                      |
+|-----------------------|------------------|--------------------------|--------|------------------------------------------------|
+| `GetOID()`            | `Id`             | `ProtokollIdAlt`         | string | OID via GetOID() - Quell-ID des Protokolls     |
+| -                     | -                | `ProtokollIdNeu`         | string | Von DF vergeben nach Import                    |
+| -                     | -                | `AktionProtokoll`        | string | "CREATE" oder "UPDATE"                         |
+| `_Name`               | `Name`           | `ProtokollMeta.Name`     | string | Neuer Name fuer Folgeprotokoll                 |
+| `_Nummer`             | `Nummer`         | `ProtokollMeta.Nummer`   | int    | N+1 fuer Folgeprotokoll                        |
+| `_Datum`              | `Datum`          | `ProtokollMeta.Datum`    | string | ISO 8601                                       |
+| `_Ort`                | `Ort`            | `ProtokollMeta.Ort`      | string |                                                |
+| `_Autor`              | `Autor`          | `ProtokollMeta.Autor`    | string |                                                |
+| `_Vorbemerkung`       | `Vorbemerkung`   | `ProtokollMeta.Vorbemerkung` | string |                                            |
+| `_Nachbemerkung`      | `Nachbemerkung`  | `ProtokollMeta.Nachbemerkung` | string |                                           |
+| `_Teilnehmer`         | `Teilnehmer[]`   | -                        | array  | Mit Oid, Nummer, Name, Rolle                   |
+| `_Verteiler`          | `Verteiler[]`    | -                        | array  | Mit Oid, Nummer, Name, Rolle                   |
+| `_erledigt`           | `Erledigt`       | -                        | bool   | Nur Export                                     |
+| `_istEinzelprotokoll` | `IstEinzelprotokoll` | -                    | bool   | Nur Export                                     |
+| `_erstellt`           | `Erstellt`       | -                        | bool   | Nur Export                                     |
+| `_Signatur`           | `Signatur`       | -                        | string | Nur Export                                     |
+
+---
+
+### 5.3 Protokollelement
+
+| DOCUframe Feld                | JSON Export               | JSON Import               | Typ    | Bemerkung                                      |
+|-------------------------------|---------------------------|---------------------------|--------|------------------------------------------------|
+| `GetOID()`                    | `Id`                      | `DfElementId`             | string | OID via GetOID(); null bei neuen Elementen     |
+| `_Protokoll.GetOID()`         | `ProtokollId`             | -                         | string | Nur Export                                     |
+| `_Position`                   | `Position`                | `Position`                | string | z.B. "1.1"                                     |
+| `_Positionstitel`             | `Positionstitel`          | `Positionstitel`          | string |                                                |
+| `_Positionstext`              | `Positionstext`           | `Positionstext`           | string |                                                |
+| `_Thema`                      | `Thema`                   | `Thema`                   | string | z.B. "Mangel", "Tiefbau"                       |
+| `_Status`                     | `Status`                  | `StatusNeu`               | int    | Siehe Status-Mapping Abschnitt 4               |
+| `_Termin`                     | `Termin`                  | `TerminNeu`               | string | ISO 8601                                       |
+| `_Verantwortlicher.GetOID()`  | `VerantwortlicherOid`     | `VerantwortlicherOidNeu`  | string | OID der Adresse fuer Re-Import-Lookup          |
+| `_Verantwortlicher.Nummer`    | `VerantwortlicherId`      | -                         | string | Nur Export (Anzeige / Fallback)                |
+| `_Verantwortlicher.Name1`     | `VerantwortlicherName`    | -                         | string | Nur Export (Anzeige in App)                    |
+| `_Bemerkung`                  | `Bemerkung`               | `BemerkungNeu`            | string |                                                |
+| `_Erinnerung`                 | `Erinnerung`              | -                         | bool   | Nur Export                                     |
+| `_Wert`                       | `Wert`                    | -                         | float  | Nur Export                                     |
+| -                             | `MobileErfassung.GeoLat`  | `MobileDaten.GeoLat`      | float  | GPS-Breitengrad                                |
+| -                             | `MobileErfassung.GeoLon`  | `MobileDaten.GeoLon`      | float  | GPS-Laengengrad                                |
+| -                             | `MobileErfassung.GeoAccuracy` | `MobileDaten.GeoAccuracy` | float | GPS-Genauigkeit in Metern                  |
+| -                             | `MobileErfassung.GeoText` | `MobileDaten.GeoText`     | string | Lesbarer Standorttext                          |
+| -                             | `MobileErfassung.Notiz`   | `MobileDaten.Notiz`       | string | Freitext-Notiz                                 |
+| -                             | `MobileErfassung.Transkript` | `MobileDaten.Transkript` | string | Spracherkennung -> Text                       |
+| -                             | `MobileErfassung.Fotos`   | `MobileDaten.Fotos`       | array  | Dateiname + Zielpfad im Projektstammverz.      |
+| -                             | -                         | `Aktion`                  | string | "UPDATE" oder "CREATE"                         |
+
+---
+
+## 6. JSON-Datenstruktur
+
+### 6.1 Export DOCUframe -> Mobile (Protokolle.json)
+
+```json
+[
+  {
+    "Protokollgruppe": {
+      "Id": "a1b2c3d4-0001-0000-0000-000000000001",
+      "Name": "Baustellennotiz",
+      "ProjektId": "PR-4711",
+      "ProjektName": "B123 Ausbau Musterstrasse",
+      "ProjektStammverzeichnis": "\\\\Server\\Projekte\\B123_Musterstrasse\\",
+      "Protokollnummer": 5,
+      "Vorwort": "Protokoll der 5. Baustellenbegehung.",
+      "Nachwort": "Naechster Termin: 23.03.2026",
+      "Themen": "Tiefbau, Maengel, Restarbeiten",
+      "Bemerkung": ""
+    },
+    "Protokoll": {
+      "Id": "a1b2c3d4-0002-0000-0000-000000000002",
+      "Name": "Baustellennotiz 5",
+      "Nummer": 5,
+      "Datum": "2026-03-09T09:00:00",
+      "Ort": "Baustelle Musterstrasse",
+      "Autor": "Max Mustermann",
+      "Vorbemerkung": "",
+      "Nachbemerkung": "",
+      "Erledigt": false,
+      "IstEinzelprotokoll": false,
+      "Erstellt": true,
+      "Signatur": "",
+      "Teilnehmer": [
+        {
+          "Oid": "a1b2c3d4-0010-0000-0000-000000000010",
+          "Nummer": "10010",
+          "Name": "GSD Software mbH",
+          "Rolle": "AG"
+        }
+      ],
+      "Verteiler": [
+        {
+          "Oid": "a1b2c3d4-0011-0000-0000-000000000011",
+          "Nummer": "50001",
+          "Name": "Adler Anton",
+          "Rolle": ""
+        }
+      ]
+    },
+    "Protokollelemente": [
+      {
+        "Id": "a1b2c3d4-1001-0000-0000-000000001001",
+        "ProtokollId": "a1b2c3d4-0002-0000-0000-000000000002",
+        "Position": "1.1",
+        "Positionstitel": "Leitungsgraben Abschnitt 1+00 bis 1+50",
+        "Positionstext": "Trasse im Abschnitt 1+00 bis 1+50 herstellen.",
+        "Thema": "Tiefbau",
+        "Status": 10,
+        "Termin": "2026-03-16T00:00:00",
+        "VerantwortlicherOid": "a1b2c3d4-0011-0000-0000-000000000011",
+        "VerantwortlicherId": "50001",
+        "VerantwortlicherName": "Adler Anton",
+        "Bemerkung": "",
+        "Erinnerung": false,
+        "Wert": 0.0,
+        "MobileErfassung": {
+          "GeoLat": null,
+          "GeoLon": null,
+          "GeoAccuracy": null,
+          "GeoText": null,
+          "Notiz": null,
+          "Transkript": null,
+          "Fotos": []
+        }
+      },
+      {
+        "Id": "a1b2c3d4-1002-0000-0000-000000001002",
+        "ProtokollId": "a1b2c3d4-0002-0000-0000-000000000002",
+        "Position": "2.1",
+        "Positionstitel": "Schachtabdeckung Achse 1+35",
+        "Positionstext": "Schachtabdeckung nicht buerdig.",
+        "Thema": "Mangel",
+        "Status": 11,
+        "Termin": "2026-03-18T00:00:00",
+        "VerantwortlicherOid": "a1b2c3d4-0010-0000-0000-000000000010",
+        "VerantwortlicherId": "10010",
+        "VerantwortlicherName": "GSD Software mbH",
+        "Bemerkung": "",
+        "Erinnerung": false,
+        "Wert": 0.0,
+        "MobileErfassung": {
+          "GeoLat": null,
+          "GeoLon": null,
+          "GeoAccuracy": null,
+          "GeoText": null,
+          "Notiz": null,
+          "Transkript": null,
+          "Fotos": []
+        }
+      }
+    ]
+  }
+]
+```
+
+---
+
+### 6.2 Re-Import Mobile -> DOCUframe (protocol_export.json)
+
+```json
+[
+  {
+    "ProtokollgruppeId": "a1b2c3d4-0001-0000-0000-000000000001",
+    "ProtokollIdAlt": "a1b2c3d4-0002-0000-0000-000000000002",
+    "AktionProtokoll": "CREATE",
+    "ProtokollMeta": {
+      "Name": "Baustellennotiz 6",
+      "Datum": "2026-03-23T09:00:00",
+      "Ort": "Baustelle Musterstrasse",
+      "Autor": "Max Mustermann",
+      "Vorbemerkung": "Folgeprotokoll zu Nr. 5",
+      "Nachbemerkung": ""
+    },
+    "Elemente": [
+      {
+        "Aktion": "UPDATE",
+        "DfElementId": "a1b2c3d4-1001-0000-0000-000000001001",
+        "StatusNeu": 20,
+        "TerminNeu": "2026-03-16T00:00:00",
+        "BemerkungNeu": "Leitungsgraben fertiggestellt.",
+        "VerantwortlicherOidNeu": "a1b2c3d4-0011-0000-0000-000000000011",
+        "MobileDaten": {
+          "GeoLat": 50.3245026,
+          "GeoLon": 11.2850063,
+          "GeoAccuracy": 6,
+          "GeoText": "Standort: 50.3245026, 11.2850063 (Genauigkeit 6 m)",
+          "Transkript": "Graben fertiggestellt, Verfuellung abgeschlossen.",
+          "Fotos": [
+            {
+              "FileName": "PE-1001_001.jpg",
+              "RelativePath": "photos/PE-1001_001.jpg",
+              "ZielPfad": "\\\\Server\\Projekte\\B123_Musterstrasse\\Fotos\\PE-1001_001.jpg"
+            }
+          ]
+        }
+      },
+      {
+        "Aktion": "UPDATE",
+        "DfElementId": "a1b2c3d4-1002-0000-0000-000000001002",
+        "StatusNeu": 25,
+        "TerminNeu": "2026-03-18T00:00:00",
+        "BemerkungNeu": "Schachtabdeckung buerdig gesetzt.",
+        "VerantwortlicherOidNeu": "a1b2c3d4-0010-0000-0000-000000000010",
+        "MobileDaten": {
+          "GeoLat": 50.3246,
+          "GeoLon": 11.2851,
+          "GeoAccuracy": 4,
+          "GeoText": "Standort: 50.3246000, 11.2851000 (Genauigkeit 4 m)",
+          "Transkript": "Mangel beseitigt, Abdeckung jetzt buerdig.",
+          "Fotos": [
+            {
+              "FileName": "PE-1002_001.jpg",
+              "RelativePath": "photos/PE-1002_001.jpg",
+              "ZielPfad": "\\\\Server\\Projekte\\B123_Musterstrasse\\Fotos\\PE-1002_001.jpg"
+            }
+          ]
+        }
+      },
+      {
+        "Aktion": "CREATE",
+        "DfElementId": null,
+        "Position": "3.1",
+        "Positionstitel": "Neuer Mangel: Randstein Abschnitt 2+10",
+        "Positionstext": "Randstein auf Achse 2+10 gebrochen, Austausch erforderlich.",
+        "Thema": "Mangel",
+        "Status": 11,
+        "Termin": "2026-03-30T00:00:00",
+        "VerantwortlicherOidNeu": "a1b2c3d4-0010-0000-0000-000000000010",
+        "BemerkungNeu": "",
+        "MobileDaten": {
+          "GeoLat": 50.3248,
+          "GeoLon": 11.2853,
+          "GeoAccuracy": 5,
+          "GeoText": "Standort: 50.3248000, 11.2853000 (Genauigkeit 5 m)",
+          "Transkript": "Randstein gebrochen, muss ausgetauscht werden.",
+          "Fotos": [
+            {
+              "FileName": "NEW_PE_0001.jpg",
+              "RelativePath": "photos/NEW_PE_0001.jpg",
+              "ZielPfad": "\\\\Server\\Projekte\\B123_Musterstrasse\\Fotos\\NEW_PE_0001.jpg"
+            }
+          ]
+        }
+      }
+    ]
+  }
+]
+```
+
+---
+
+### 6.3 ZIP-Paket-Struktur
+
+```
+protocol_export_20260309_093000.zip
++-- protocol_export.json
++-- photos/
+    +-- PE-1001_001.jpg
+    +-- PE-1002_001.jpg
+    +-- NEW_PE_0001.jpg
+```
+
+---
+
+## 7. DOCUcontrol - Export-Makro (DOCUframe -> Mobile)
+
+```pascal
+// DOCUcontrol-Makro: Export Protokollgruppe + Protokoll + Elemente -> JSON
+// WICHTIG: GetOID() statt ExchangeID verwenden!
+// ProjektStammverzeichnis wird mitexportiert.
+// Teilnehmer/Verteiler werden mit OID, Nummer und Name exportiert.
+
+HJSON JSon;
+HJSON GroupJSon;
+HJSON ProtoJSon;
+HJSON ElemArray;
+HJSON ElemJSon;
+HJSON MobileJSon;
+HJSON TeilnArray;
+HJSON TeilnJSon;
+HFILE File;
+STRING Txt;
+STRING OidStr;
+
+_PINGProtokollgruppeSet ProtGrpSet;
+_PINGProtokollgruppe ProtGrp;
+_PINGProtokollSet ProtSet;
+_PINGProtokoll Prot;
+_PINGProtokollelementSet ElemSet;
+_PINGProtokollelement Elem;
+AnsprechpartnerSet TeilnSet;
+Ansprechpartner Teiln;
+
+JSon.Construct();
+
+IF( ProtGrpSet.Get( ProtGrp, 1, START ) )
+  REPEAT
+    GroupJSon = JSon.AddElement();
+
+    // --- Protokollgruppe ---
+    OidStr = ProtGrp.GetOID();
+    GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "Id", TRUE ).SetString( OidStr );
+    GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "Name", TRUE ).SetString( ProtGrp._Name );
+    GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "Protokollnummer", TRUE ).SetNumber( ProtGrp._Protokollnummer );
+    GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "Vorwort", TRUE ).SetString( ProtGrp._Vorwort );
+    GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "Nachwort", TRUE ).SetString( ProtGrp._Nachwort );
+    GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "Themen", TRUE ).SetString( ProtGrp._Themen );
+    GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "Bemerkung", TRUE ).SetString( ProtGrp._Bemerkung );
+    IF( ProtGrp._Projekt.Valid() )
+      GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "ProjektId", TRUE ).SetString( ProtGrp._Projekt.Nummer );
+      GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "ProjektName", TRUE ).SetString( ProtGrp._Projekt.Bezeichnung );
+      // Projektstammverzeichnis mitexportieren (Feldname ggf. anpassen)
+      GroupJSon.GetMember( "Protokollgruppe", TRUE ).GetMember( "ProjektStammverzeichnis", TRUE ).SetString( ProtGrp._Projekt.Stammverzeichnis );
+    ENDIF
+
+    // --- Protokoll ---
+    ProtSet = ProtGrp._Protokolle;
+    IF( ProtSet.Get( Prot, 1, START ) )
+      ProtoJSon = GroupJSon.GetMember( "Protokoll", TRUE );
+      OidStr = Prot.GetOID();
+      ProtoJSon.GetMember( "Id", TRUE ).SetString( OidStr );
+      ProtoJSon.GetMember( "Name", TRUE ).SetString( Prot._Name );
+      ProtoJSon.GetMember( "Nummer", TRUE ).SetNumber( Prot._Nummer );
+      ProtoJSon.GetMember( "Datum", TRUE ).SetString( Prot._Datum.EditFormatDateTime() );
+      ProtoJSon.GetMember( "Ort", TRUE ).SetString( Prot._Ort );
+      ProtoJSon.GetMember( "Autor", TRUE ).SetString( Prot._Autor );
+      ProtoJSon.GetMember( "Vorbemerkung", TRUE ).SetString( Prot._Vorbemerkung );
+      ProtoJSon.GetMember( "Nachbemerkung", TRUE ).SetString( Prot._Nachbemerkung );
+      ProtoJSon.GetMember( "Erledigt", TRUE ).SetBool( Prot._erledigt );
+      ProtoJSon.GetMember( "IstEinzelprotokoll", TRUE ).SetBool( Prot._istEinzelprotokoll );
+      ProtoJSon.GetMember( "Erstellt", TRUE ).SetBool( Prot._erstellt );
+      ProtoJSon.GetMember( "Signatur", TRUE ).SetString( Prot._Signatur );
+
+      // Teilnehmer mit OID exportieren
+      TeilnArray = ProtoJSon.GetMember( "Teilnehmer", TRUE );
+      TeilnSet = Prot._Teilnehmer;
+      IF( TeilnSet.Get( Teiln, 1, START ) )
+        REPEAT
+          TeilnJSon = TeilnArray.AddElement();
+          TeilnJSon.GetMember( "Oid", TRUE ).SetString( Teiln.GetOID() );
+          TeilnJSon.GetMember( "Nummer", TRUE ).SetString( Teiln.Nummer );
+          TeilnJSon.GetMember( "Name", TRUE ).SetString( Teiln.Name1 );
+          TeilnJSon.GetMember( "Rolle", TRUE ).SetString( "" );
+        UNTIL( !TeilnSet.Get( Teiln, 1, CURRENT ) )
+      ENDIF
+
+      // Verteiler mit OID exportieren
+      TeilnArray = ProtoJSon.GetMember( "Verteiler", TRUE );
+      TeilnSet = Prot._Verteiler;
+      IF( TeilnSet.Get( Teiln, 1, START ) )
+        REPEAT
+          TeilnJSon = TeilnArray.AddElement();
+          TeilnJSon.GetMember( "Oid", TRUE ).SetString( Teiln.GetOID() );
+          TeilnJSon.GetMember( "Nummer", TRUE ).SetString( Teiln.Nummer );
+          TeilnJSon.GetMember( "Name", TRUE ).SetString( Teiln.Name1 );
+          TeilnJSon.GetMember( "Rolle", TRUE ).SetString( "" );
+        UNTIL( !TeilnSet.Get( Teiln, 1, CURRENT ) )
+      ENDIF
+
+      // --- Protokollelemente ---
+      ElemArray = GroupJSon.GetMember( "Protokollelemente", TRUE );
+      ElemSet = Prot._Protokollelemente;
+      IF( ElemSet.Get( Elem, 1, START ) )
+        REPEAT
+          ElemJSon = ElemArray.AddElement();
+          OidStr = Elem.GetOID();
+          ElemJSon.GetMember( "Id", TRUE ).SetString( OidStr );
+          ElemJSon.GetMember( "ProtokollId", TRUE ).SetString( Prot.GetOID() );
+          ElemJSon.GetMember( "Position", TRUE ).SetString( Elem._Position );
+          ElemJSon.GetMember( "Positionstitel", TRUE ).SetString( Elem._Positionstitel );
+          ElemJSon.GetMember( "Positionstext", TRUE ).SetString( Elem._Positionstext );
+          ElemJSon.GetMember( "Thema", TRUE ).SetString( Elem._Thema );
+          ElemJSon.GetMember( "Status", TRUE ).SetNumber( Elem._Status );
+          ElemJSon.GetMember( "Termin", TRUE ).SetString( Elem._Termin.EditFormatDateTime() );
+          ElemJSon.GetMember( "Bemerkung", TRUE ).SetString( Elem._Bemerkung );
+          ElemJSon.GetMember( "Erinnerung", TRUE ).SetBool( Elem._Erinnerung );
+          ElemJSon.GetMember( "Wert", TRUE ).SetNumber( Elem._Wert );
+          IF( Elem._Verantwortlicher.Valid() )
+            ElemJSon.GetMember( "VerantwortlicherOid", TRUE ).SetString( Elem._Verantwortlicher.GetOID() );
+            ElemJSon.GetMember( "VerantwortlicherId", TRUE ).SetString( Elem._Verantwortlicher.Nummer );
+            ElemJSon.GetMember( "VerantwortlicherName", TRUE ).SetString( Elem._Verantwortlicher.Name1 );
+          ENDIF
+
+          // Mobile-Felder initial leer
+          MobileJSon = ElemJSon.GetMember( "MobileErfassung", TRUE );
+          MobileJSon.GetMember( "GeoLat", TRUE );
+          MobileJSon.GetMember( "GeoLon", TRUE );
+          MobileJSon.GetMember( "GeoAccuracy", TRUE );
+          MobileJSon.GetMember( "GeoText", TRUE ).SetString( "" );
+          MobileJSon.GetMember( "Notiz", TRUE ).SetString( "" );
+          MobileJSon.GetMember( "Transkript", TRUE ).SetString( "" );
+          MobileJSon.GetMember( "Fotos", TRUE );
+
+        UNTIL( !ElemSet.Get( Elem, 1, CURRENT ) )
+      ENDIF
+    ENDIF
+
+  UNTIL( !ProtGrpSet.Get( ProtGrp, 1, CURRENT ) )
+ENDIF
+
+Txt = JSon.GetText( TRUE );
+File.Open( "C:\\Temp\\Protokolle.json", FILE_MODE_CREATE | FILE_MODE_WRITE );
+FileWriteString( File, Txt );
+File.Close();
+JSon.Destruct();
+```
+
+---
+
+## 8. DOCUcontrol - Import-Makro (Mobile -> DOCUframe)
+
+```pascal
+// DOCUcontrol-Makro: Import protocol_export.json -> neues Folgeprotokoll anlegen
+// - Protokollnummer N+1 wird automatisch berechnet (max + 1)
+// - Verantwortlicher wird via OID (FindOID) gesetzt
+// - Fotos: kein Auto-Import, ZielPfad wird in Bemerkung vermerkt
+// - Nur ein Mitarbeiter gleichzeitig (kein Konflikt-Handling noetig)
+
+HJSON JSon;
+HJSON GroupJSon;
+HJSON ProtoJSon;
+HJSON ElemArray;
+HJSON ElemJSon;
+HJSON MobileJSon;
+HFILE File;
+STRING JSonTxt;
+INT GroupCount, i, j, ElemCount;
+INT MaxNummer, NeueNummer;
+STRING GroupId, DfElementId, Aktion, GeoText, Transkript;
+STRING VerantwOid;
+
+_PINGProtokollgruppeSet ProtGrpSet;
+_PINGProtokollgruppe ProtGrp;
+_PINGProtokollSet ProtSet;
+_PINGProtokoll Prot, ProtAlt;
+_PINGProtokollelementSet ElemSet;
+_PINGProtokollelement Elem;
+AdresseNrSet AdrSet;
+AdresseNr Adr;
+
+JSon.Construct();
+
+File.Open( "C:\\Temp\\protocol_export.json", FILE_MODE_READ );
+FileReadString( File, JSonTxt, FileGetLength( File ), TRUE );
+File.Close();
+JSon.SetText( JSonTxt );
+
+GroupCount = JSon.GetElementCount();
+IF( GroupCount > 0 )
+
+  FOR( i = 1; i <= GroupCount; i++ )
+    GroupJSon = JSon.GetElement( i );
+    GroupId = GroupJSon.GetMember( "ProtokollgruppeId", TRUE ).GetString();
+
+    // Protokollgruppe via OID suchen
+    ProtGrpSet.Construct( "_PINGProtokollgruppe" );
+    IF( ProtGrpSet.FindOID( GroupId ) )
+      ProtGrpSet.Get( ProtGrp, 0, CURRENT );
+    ELSE
+      // Fehlerbehandlung: Gruppe nicht gefunden
+    ENDIF
+
+    // Maximale Protokollnummer ermitteln -> N+1
+    MaxNummer = 0;
+    ProtSet = ProtGrp._Protokolle;
+    IF( ProtSet.Get( ProtAlt, 1, START ) )
+      REPEAT
+        IF( ProtAlt._Nummer > MaxNummer )
+          MaxNummer = ProtAlt._Nummer;
+        ENDIF
+      UNTIL( !ProtSet.Get( ProtAlt, 1, CURRENT ) )
+    ENDIF
+    NeueNummer = MaxNummer + 1;
+
+    // Neues Folgeprotokoll anlegen
+    ProtoJSon = GroupJSon.GetMember( "ProtokollMeta", TRUE );
+    Prot.Create( "_PINGProtokoll" );
+    Prot._Protokollgruppe = ProtGrp;
+    Prot._Name = ProtoJSon.GetMember( "Name", TRUE ).GetString();
+    Prot._Nummer = NeueNummer;
+    Prot._Datum = ProtoJSon.GetMember( "Datum", TRUE ).GetString();
+    Prot._Ort = ProtoJSon.GetMember( "Ort", TRUE ).GetString();
+    Prot._Autor = ProtoJSon.GetMember( "Autor", TRUE ).GetString();
+    Prot._Vorbemerkung = ProtoJSon.GetMember( "Vorbemerkung", TRUE ).GetString();
+    Prot._Nachbemerkung = ProtoJSon.GetMember( "Nachbemerkung", TRUE ).GetString();
+    Prot._erstellt = TRUE;
+    Prot.Store();
+
+    // Elemente verarbeiten
+    ElemArray = GroupJSon.GetMember( "Elemente", TRUE );
+    ElemCount = ElemArray.GetElementCount();
+
+    FOR( j = 1; j <= ElemCount; j++ )
+      ElemJSon = ElemArray.GetElement( j );
+      Aktion = ElemJSon.GetMember( "Aktion", TRUE ).GetString();
+      MobileJSon = ElemJSon.GetMember( "MobileDaten", TRUE );
+      GeoText = MobileJSon.GetMember( "GeoText", TRUE ).GetString();
+      Transkript = MobileJSon.GetMember( "Transkript", TRUE ).GetString();
+      VerantwOid = ElemJSon.GetMember( "VerantwortlicherOidNeu", TRUE ).GetString();
+
+      IF( Aktion = "UPDATE" )
+        DfElementId = ElemJSon.GetMember( "DfElementId", TRUE ).GetString();
+        ElemSet.Construct( "_PINGProtokollelement" );
+        IF( ElemSet.FindOID( DfElementId ) )
+          ElemSet.Get( Elem, 0, CURRENT );
+          IF( Elem.Lock( WRITE_NOWRITE, FLAT ) )
+            IF( Elem.Refresh( FLAT ) )
+              Elem._Status = ElemJSon.GetMember( "StatusNeu", TRUE ).GetNumber();
+              Elem._Termin = ElemJSon.GetMember( "TerminNeu", TRUE ).GetString();
+              Elem._Bemerkung = ElemJSon.GetMember( "BemerkungNeu", TRUE ).GetString();
+              IF( GeoText <> "" )
+                Elem._Bemerkung = Elem._Bemerkung + "\r\n[GPS] " + GeoText;
+              ENDIF
+              IF( Transkript <> "" )
+                Elem._Bemerkung = Elem._Bemerkung + "\r\n[Transkript] " + Transkript;
+              ENDIF
+              // Verantwortlicher via OID setzen
+              IF( VerantwOid <> "" )
+                AdrSet.Construct( "AdresseNr" );
+                IF( AdrSet.FindOID( VerantwOid ) )
+                  AdrSet.Get( Adr, 0, CURRENT );
+                  Elem._Verantwortlicher = Adr;
+                ENDIF
+              ENDIF
+              // Fotos: ZielPfad in Bemerkung vermerken (kein Auto-Import)
+              // TODO: MobileDaten.Fotos[].ZielPfad auslesen und in Bemerkung anhaengen
+              Elem.Store( FLAT );
+            ENDIF
+            Elem.Unlock( WRITE_NOWRITE, FLAT );
+          ENDIF
+        ENDIF
+
+      ELSEIF( Aktion = "CREATE" )
+        Elem.Create( "_PINGProtokollelement" );
+        Elem._Protokoll = Prot;
+        Elem._Position = ElemJSon.GetMember( "Position", TRUE ).GetString();
+        Elem._Positionstitel = ElemJSon.GetMember( "Positionstitel", TRUE ).GetString();
+        Elem._Positionstext = ElemJSon.GetMember( "Positionstext", TRUE ).GetString();
+        Elem._Thema = ElemJSon.GetMember( "Thema", TRUE ).GetString();
+        Elem._Status = ElemJSon.GetMember( "Status", TRUE ).GetNumber();
+        Elem._Termin = ElemJSon.GetMember( "Termin", TRUE ).GetString();
+        Elem._Bemerkung = ElemJSon.GetMember( "BemerkungNeu", TRUE ).GetString();
+        IF( GeoText <> "" )
+          Elem._Bemerkung = Elem._Bemerkung + "\r\n[GPS] " + GeoText;
+        ENDIF
+        IF( Transkript <> "" )
+          Elem._Bemerkung = Elem._Bemerkung + "\r\n[Transkript] " + Transkript;
+        ENDIF
+        // Verantwortlicher via OID setzen
+        IF( VerantwOid <> "" )
+          AdrSet.Construct( "AdresseNr" );
+          IF( AdrSet.FindOID( VerantwOid ) )
+            AdrSet.Get( Adr, 0, CURRENT );
+            Elem._Verantwortlicher = Adr;
+          ENDIF
+        ENDIF
+        Elem.Store();
+      ENDIF
+
+    NEXT
+  NEXT
+ENDIF
+
+JSon.Destruct();
+```
+
+---
+
+## 9. Browser-App Spezifikation (PWA)
+
+### 9.1 Tech-Stack
+
+| Schicht         | Technologie                                 | Begruendung                                 |
+|-----------------|---------------------------------------------|---------------------------------------------|
+| Framework       | React (Vite) oder Vue 3                     | Komponentenbasiert, gute PWA-Unterstuetzung |
+| Sprache         | TypeScript                                  | Typsicherheit fuer JSON-Mapping             |
+| Styling         | Tailwind CSS                                | Mobile-first, schnell                       |
+| Offline-Storage | IndexedDB via idb (Wrapper-Library)         | Fotos + JSON lokal speichern                |
+| PWA             | Vite PWA Plugin (Workbox)                   | Service Worker, Manifest                    |
+| ZIP-Export      | JSZip                                       | ZIP im Browser erzeugen                     |
+| Kamera/GPS      | Browser-APIs: getUserMedia, Geolocation     | Nativ, kein Plugin noetig                   |
+| Spracherkennung | Web Speech API (SpeechRecognition)          | Geraeteeigen, kein Audio gespeichert        |
+
+---
+
+### 9.2 Screen-Struktur
+
+```
+App
++-- Screen 1: Import
+|   +-- Datei-Upload (JSON oder ZIP)
+|   +-- Protokollgruppe / Protokoll auswaehlen
+|   +-- -> Weiter zu Screen 2
+|
++-- Screen 2: Protokoll-Uebersicht
+|   +-- Protokollkopf (Name, Datum, Ort, Autor)
+|   +-- Filter-Leiste (Status, Thema, Suche)
+|   +-- Elementliste (sortiert nach Position)
+|   |   +-- Status-Badge (farbig)
+|   |   +-- Positionstitel
+|   |   +-- Verantwortlicher + Termin
+|   |   +-- Foto-Indikator (Anzahl Fotos)
+|   +-- FAB: "+ Neues Element"
+|   +-- -> Tap auf Element -> Screen 3
+|
++-- Screen 3: Element-Detail
+|   +-- Positionstitel + Positionstext (readonly)
+|   +-- Status-Auswahl (Buttons)
+|   +-- Termin-Picker
+|   +-- Verantwortlicher (Dropdown aus Teilnehmerliste)
+|   +-- Bemerkung (Textfeld, mehrzeilig)
+|   +-- Notiz (Textfeld)
+|   +-- Transkript (Textfeld + Mikrofon-Button)
+|   +-- GPS-Button -> Koordinaten + GeoText
+|   +-- Foto-Bereich (Kamera + Galerie + Thumbnails)
+|   +-- Speichern-Button
+|
++-- Screen 4: Neues Element
+|   +-- Schnelltyp: Mangel / Info / Allgemein
+|   |   (Restarbeit Status 16/26 in v1 NICHT anzeigen)
+|   +-- Position (auto-increment oder manuell)
+|   +-- Positionstitel (Pflichtfeld)
+|   +-- Positionstext
+|   +-- Status (vorbelegt durch Schnelltyp)
+|   +-- Termin-Picker
+|   +-- Verantwortlicher (Dropdown aus Teilnehmerliste)
+|   +-- Bemerkung / Notiz / Transkript
+|   +-- GPS-Button
+|   +-- Foto-Bereich
+|   +-- Speichern-Button
+|
++-- Screen 5: Export
+    +-- Zusammenfassung (geaenderte / neue Elemente)
+    +-- Neues Protokoll-Datum eingeben
+    +-- Autor bestaetigen
+    +-- Vorbemerkung (optional)
+    +-- Export als ZIP (JSON + Fotos)
+    +-- Download-Button
+    Hinweis: Protokollnummer N+1 wird automatisch beim Re-Import berechnet
+```
+
+---
+
+### 9.3 Schnellerfassung
+
+| Typ        | Setzt Thema | Setzt Status | Kamera sofort | Anzeige in App |
+|------------|-------------|--------------|---------------|----------------|
+| Mangel     | "Mangel"    | 11           | ja (optional) | ja             |
+| Info       | "Info"      | 0            | nein          | ja             |
+| Allgemein  | -           | 0            | nein          | ja             |
+| Restarbeit | "Mangel"    | 16           | nein          | NEIN (v1)      |
+
+---
+
+### 9.4 Offline-Konzept (IndexedDB-Tabellen)
+
+| Store              | Schluessel | Inhalt                                      |
+|--------------------|------------|---------------------------------------------|
+| `protokollgruppen` | `Id`       | Protokollgruppe-Objekte                     |
+| `protokolle`       | `Id`       | Protokoll-Objekte                           |
+| `elemente`         | `Id`       | Protokollelement-Objekte inkl. MobileFelder |
+| `fotos`            | `fotoId`   | Blob (JPEG), verknuepft mit elementId       |
+| `meta`             | `key`      | App-Zustand, letzter Import, Benutzer       |
+
+---
+
+### 9.5 GPS-Erfassung (TypeScript)
+
+```typescript
+async function getPosition(): Promise<{
+  lat: number;
+  lon: number;
+  accuracy: number;
+  text: string;
+}> {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const accuracy = Math.round(pos.coords.accuracy);
+        const text =
+          "Standort: " +
+          lat.toFixed(7) +
+          ", " +
+          lon.toFixed(7) +
+          " (Genauigkeit " +
+          accuracy +
+          " m)";
+        resolve({ lat, lon, accuracy, text });
+      },
+      (err) => reject(err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+```
+
+---
+
+### 9.6 Spracherkennung -> Text (TypeScript)
+
+```typescript
+function startSpeechRecognition(onResult: (text: string) => void): void {
+  const SpeechRecognition =
+    (window as any).SpeechRecognition ||
+    (window as any).webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("Spracherkennung wird von diesem Browser nicht unterstuetzt.");
+    return;
+  }
+  const recognition = new SpeechRecognition();
+  recognition.lang = "de-DE";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onresult = (event: any) => {
+    const transcript = event.results[0][0].transcript;
+    onResult(transcript);
+  };
+  recognition.start();
+}
+```
+
+---
+
+### 9.7 ZIP-Export (TypeScript)
+
+```typescript
+import JSZip from "jszip";
+
+async function exportZip(
+  exportJson: object,
+  fotos: { fileName: string; blob: Blob }[]
+): Promise<void> {
+  const zip = new JSZip();
+  zip.file("protocol_export.json", JSON.stringify(exportJson, null, 2));
+  const photosFolder = zip.folder("photos")!;
+  for (const foto of fotos) {
+    photosFolder.file(foto.fileName, foto.blob);
+  }
+  const content = await zip.generateAsync({ type: "blob" });
+  const url = URL.createObjectURL(content);
+  const a = document.createElement("a");
+  const ts = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")
+    .slice(0, 19);
+  a.href = url;
+  a.download = "protocol_export_" + ts + ".zip";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+```
+
+---
+
+### 9.8 PWA-Konfiguration (vite.config.ts)
+
+```typescript
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: "autoUpdate",
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        runtimeCaching: [],
+      },
+      manifest: {
+        name: "Protokoll-App",
+        short_name: "Protokoll",
+        description: "Mobile Protokollerfassung fuer DOCUframe",
+        theme_color: "#1e40af",
+        background_color: "#ffffff",
+        display: "standalone",
+        orientation: "portrait",
+        icons: [
+          { src: "icons/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "icons/icon-512.png", sizes: "512x512", type: "image/png" },
+        ],
+      },
+    }),
+  ],
+});
+```
+
+---
+
+## 10. Geklärte Designfragen (Zusammenfassung)
+
+| # | Frage | Antwort / Entscheidung |
+|---|-------|------------------------|
+| 1 | ExchangeID-Verfügbarkeit | `ExchangeID` nicht direkt zugänglich. Stattdessen `Objekt.GetOID()` verwenden. Re-Import via `ObjektSet.FindOID(OidStr)`. |
+| 2 | Foto-Import in DF | Kein automatischer Import als Dokument-Objekt. Fotos werden im Projektstammverzeichnis abgelegt. Pfad wird im JSON mitgeliefert. |
+| 3 | Verantwortlicher-Lookup | OID der Adresse wird exportiert. In der App Auswahl aus Teilnehmern/Verteilern. Re-Import via `FindOID`. |
+| 4 | Protokollnummer N+1 | Wird beim Re-Import in DOCUframe automatisch berechnet (`max(Nummer) + 1`). |
+| 5 | Multi-User | Nur ein Mitarbeiter gleichzeitig pro Protokoll. Keine Konfliktlösung (Locking) in v1 nötig. |
+| 6 | Versteckte Status (16, 26) | Restarbeiten (Status 16/26) sind für Mängellisten gedacht. In v1 der App werden diese **nicht** angezeigt oder erfasst. |
+| 7 | Kategorie-Feld | `_PINGProtokollgruppe._Kategorie` ist für die App-Logik/Filterung aktuell nicht relevant. |
+
+---
+
+## 11. Nächste Schritte (Action Plan)
+
+1.  **DOCUframe-Vorbereitung:**
+    *   Export-Makro (Abschnitt 7) in DOCUcontrol anlegen und Pfade anpassen.
+    *   Test-Export einer `Protokolle.json` durchführen.
+2.  **PWA-Entwicklung (MVP):**
+    *   Projekt-Setup mit Vite, React und Tailwind.
+    *   Implementierung des JSON-Imports in IndexedDB.
+    *   Erstellung der Listen- und Detailansichten.
+    *   Integration von Kamera- und GPS-API.
+3.  **Schnittstellen-Test:**
+    *   Erzeugung des ZIP-Exports in der App.
+    *   Import-Makro (Abschnitt 8) in DOCUframe implementieren.
+    *   Validierung des Roundtrips (OID-Matching, neue Elemente).
+4.  **Deployment:**
+    *   Hosting der PWA (z.B. intern oder via HTTPS-Server).
+    *   Installation auf den Endgeräten (iPhone/iPad/Tablet).

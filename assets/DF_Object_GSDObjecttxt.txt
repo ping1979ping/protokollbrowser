@@ -1,0 +1,23 @@
+| Element-Name | Alias | Typ-Name | Definitions-Klasse |
+| :--- | :--- | :--- | :--- |
+| ActivityLog <C> | ActivityLog | STRING | Object |
+| ExchangeID <C> | ExchangeID | STRING | Object |
+| History <C> | History | STRING | Object |
+| StoreTime <C> | StoreTime | TIME | Object |
+| Aenderungszeit <C> | ModifyTime | TIME | GSDObjekt |
+| ContainerDokument <CNX> | ContainerDocument | ContainerDokument | GSDObjekt |
+| DATAframeAenderungszeit <C> | DATAframeModifyTime | TIME | GSDObjekt |
+| DSGVOBezugsdatum | GDPRReferenceDate | TIME | GSDObjekt |
+| DSGVODatenklassifizierung | GDPRDataClassification | DSGVODatenklassifizierung | GSDObjekt |
+| DSGVOVerfallsdatum | GDPRExpiryDate | TIME | GSDObjekt |
+| Ersteller <CU> | Creator | STRING | GSDObjekt |
+| Erstellungszeit <C> | CreateTime | TIME | GSDObjekt |
+| GlobaleKennzeichen | GlobalTags | STRING | GSDObjekt |
+| Lesebenutzer <C> | ReadUsers | User | GSDObjekt |
+| Lesebenutzergruppen <C> | ReadUserGroups | UserGroup | GSDObjekt |
+| PersoenlicheKennzeichen | PrivateTags | STRING | GSDObjekt |
+| PersoenlicheNotizen | PrivateNotes | STRING | GSDObjekt |
+| xBewBewertungen | xBewReviews | xBewBewertung | GSDObjekt |
+| xRBPSElementfreigabeobjekte | xRBPSElementApprovalO... | xRBPSElementfreigabeobjekt | GSDObjekt |
+| xRBPSProzessobjekte | xRBPSProcessobject | xRBPSProzessobjekt | GSDObjekt |
+| xSPMIsFinished | | BOOL | GSDObjekt |

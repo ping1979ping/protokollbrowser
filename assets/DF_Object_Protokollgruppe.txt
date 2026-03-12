@@ -1,0 +1,12 @@
+| Element-Name | Alias | Typ-Name | Definitions-Klasse |
+| :--- | :--- | :--- | :--- |
+| _Bemerkung |  | STRING | _PINGProtokollgruppe |
+| _Kategorie |  | INT | _PINGProtokollgruppe |
+| _Nachwort |  | STRING | _PINGProtokollgruppe |
+| _Name |  | STRING | _PINGProtokollgruppe |
+| _Projekt <X> |  | Projekt | _PINGProtokollgruppe |
+| _Protokolle <NX> |  | _PINGProtokoll | _PINGProtokollgruppe |
+| _Protokollnummer |  | INT | _PINGProtokollgruppe |
+| _Speicherort |  | STRING | _PINGProtokollgruppe |
+| _Themen |  | STRING | _PINGProtokollgruppe |
+| _Vorwort |  | STRING | _PINGProtokollgruppe |
