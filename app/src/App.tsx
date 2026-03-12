@@ -46,6 +46,7 @@ export default function App() {
     case 'detail':
       return (
         <ElementDetail
+          key={screen.element.Id}
           element={screen.element}
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
