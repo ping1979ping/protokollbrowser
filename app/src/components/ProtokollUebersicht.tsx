@@ -58,11 +58,11 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
       if (filter) {
         const s = filter.toLowerCase();
         return (
+          e.Positionstext.toLowerCase().includes(s) ||
           e.Positionstitel.toLowerCase().includes(s) ||
           e.Position.toLowerCase().includes(s) ||
           e.Thema.toLowerCase().includes(s) ||
-          e.VerantwortlicherName.toLowerCase().includes(s) ||
-          e.Bemerkung.toLowerCase().includes(s)
+          e.VerantwortlicherName.toLowerCase().includes(s)
         );
       }
       return true;
@@ -127,7 +127,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
       <div className="px-2 py-1.5 bg-white border-b flex gap-1.5 items-center">
         <input
           type="text"
-          placeholder="Suche..."
+          placeholder="Positionstext suchen..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue"
@@ -160,10 +160,10 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
             <tr className="text-left text-gray-500">
               <th className="px-2 py-1.5 font-medium w-10">Pos.</th>
               <th className="px-1 py-1.5 font-medium">Thema</th>
-              <th className="px-1 py-1.5 font-medium">Positionstext</th>
+              <th className="px-1 py-1.5 font-medium w-1/3">Positionstext</th>
               <th className="px-1 py-1.5 font-medium w-16">Status</th>
               <th className="px-1 py-1.5 font-medium w-16">Termin</th>
-              <th className="px-1 py-1.5 font-medium hidden sm:table-cell">Bemerkung</th>
+              <th className="px-1 py-1.5 font-medium hidden sm:table-cell w-20">Bemerkung</th>
               <th className="px-1 py-1.5 font-medium w-20">Verantw.</th>
             </tr>
           </thead>
@@ -179,7 +179,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
                   <td className="px-2 py-1.5 font-mono text-gray-400">{elem.Position}</td>
                   <td className="px-1 py-1.5 text-gray-600">{elem.Thema || '-'}</td>
                   <td className="px-1 py-1.5 text-gray-800">
-                    <div className="leading-tight truncate max-w-[200px]">{elem.Positionstext || elem.Positionstitel || '—'}</div>
+                    <div className="leading-tight truncate max-w-[300px]">{elem.Positionstext || elem.Positionstitel || '—'}</div>
                     {elem._geaendert && <span className="text-orange-500 font-medium"> *</span>}
                     {elem._neu && <span className="text-green-600 font-medium"> +neu</span>}
                     {(elem.Verweise?.length > 0) && <span className="text-amber-500"> ↩</span>}
@@ -192,7 +192,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
                   <td className="px-1 py-1.5 text-gray-500 whitespace-nowrap">
                     {elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : '-'}
                   </td>
-                  <td className="px-1 py-1.5 text-gray-400 hidden sm:table-cell truncate max-w-[150px]">
+                  <td className="px-1 py-1.5 text-gray-400 hidden sm:table-cell truncate max-w-[80px]">
                     {elem.Bemerkung || '-'}
                   </td>
                   <td className="px-1 py-1.5 text-gray-600 truncate max-w-[80px]">{elem.VerantwortlicherName || '-'}</td>

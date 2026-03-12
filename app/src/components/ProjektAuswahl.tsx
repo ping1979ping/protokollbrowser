@@ -33,7 +33,7 @@ export default function ProjektAuswahl({ onSelect, onZurueck }: Props) {
       <div className="bg-ping-blue text-white p-4">
         <div className="flex items-center justify-between mb-1">
           <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-sm">&larr; Import</button>
-          <span className="bg-white rounded px-2 py-0.5 inline-flex items-center"><img src={logo} alt="PING" className="h-5" /></span>
+          <span className="bg-white rounded-lg px-3 py-1 inline-flex items-center"><img src={logo} alt="PING" className="h-8" /></span>
         </div>
         <h1 className="text-lg font-bold mt-1">Projektauswahl</h1>
       </div>
