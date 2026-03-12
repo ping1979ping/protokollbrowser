@@ -3,25 +3,27 @@ import type { IDBPDatabase } from 'idb';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket } from './types';
 
 const DB_NAME = 'protokoll-app';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
+
+export interface ProtokollMitGruppe extends Protokoll {
+  GruppeId: string;
+}
 
 async function getDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
-      if (!db.objectStoreNames.contains('protokollgruppen')) {
-        db.createObjectStore('protokollgruppen', { keyPath: 'Id' });
-      }
-      if (!db.objectStoreNames.contains('protokolle')) {
-        db.createObjectStore('protokolle', { keyPath: 'Id' });
-      }
-      if (!db.objectStoreNames.contains('elemente')) {
-        const store = db.createObjectStore('elemente', { keyPath: 'Id' });
-        store.createIndex('byProtokoll', 'ProtokollId');
-      }
-      if (!db.objectStoreNames.contains('fotos')) {
-        const store = db.createObjectStore('fotos', { keyPath: 'fotoId' });
-        store.createIndex('byElement', 'elementId');
-      }
+      if (db.objectStoreNames.contains('protokollgruppen')) db.deleteObjectStore('protokollgruppen');
+      if (db.objectStoreNames.contains('protokolle')) db.deleteObjectStore('protokolle');
+      if (db.objectStoreNames.contains('elemente')) db.deleteObjectStore('elemente');
+      if (db.objectStoreNames.contains('fotos')) db.deleteObjectStore('fotos');
+
+      db.createObjectStore('protokollgruppen', { keyPath: 'Id' });
+      const protStore = db.createObjectStore('protokolle', { keyPath: 'Id' });
+      protStore.createIndex('byGruppe', 'GruppeId');
+      const elemStore = db.createObjectStore('elemente', { keyPath: 'Id' });
+      elemStore.createIndex('byProtokoll', 'ProtokollId');
+      const fotoStore = db.createObjectStore('fotos', { keyPath: 'fotoId' });
+      fotoStore.createIndex('byElement', 'elementId');
     },
   });
 }
@@ -31,7 +33,8 @@ export async function importPakete(pakete: ProtokollPaket[]): Promise<void> {
   const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente'], 'readwrite');
   for (const paket of pakete) {
     await tx.objectStore('protokollgruppen').put(paket.Protokollgruppe);
-    await tx.objectStore('protokolle').put(paket.Protokoll);
+    const protMitGruppe: ProtokollMitGruppe = { ...paket.Protokoll, GruppeId: paket.Protokollgruppe.Id };
+    await tx.objectStore('protokolle').put(protMitGruppe);
     for (const elem of paket.Protokollelemente) {
       await tx.objectStore('elemente').put(elem);
     }
@@ -39,14 +42,24 @@ export async function importPakete(pakete: ProtokollPaket[]): Promise<void> {
   await tx.done;
 }
 
-export async function getProtokolle(): Promise<Protokoll[]> {
+export async function getAllGruppen(): Promise<Protokollgruppe[]> {
   const db = await getDb();
-  return db.getAll('protokolle');
+  return db.getAll('protokollgruppen');
 }
 
 export async function getProtokollgruppe(id: string): Promise<Protokollgruppe | undefined> {
   const db = await getDb();
   return db.get('protokollgruppen', id);
+}
+
+export async function getProtokolleByGruppe(gruppeId: string): Promise<ProtokollMitGruppe[]> {
+  const db = await getDb();
+  return db.getAllFromIndex('protokolle', 'byGruppe', gruppeId);
+}
+
+export async function getProtokolle(): Promise<ProtokollMitGruppe[]> {
+  const db = await getDb();
+  return db.getAll('protokolle');
 }
 
 export async function getElemente(protokollId: string): Promise<Protokollelement[]> {
@@ -77,6 +90,21 @@ export async function getFotos(elementId: string): Promise<{ fotoId: string; blo
 export async function deleteFoto(fotoId: string): Promise<void> {
   const db = await getDb();
   await db.delete('fotos', fotoId);
+}
+
+export async function getElement(id: string): Promise<Protokollelement | undefined> {
+  const db = await getDb();
+  return db.get('elemente', id);
+}
+
+export async function getAllElemente(): Promise<Protokollelement[]> {
+  const db = await getDb();
+  return db.getAll('elemente');
+}
+
+export async function findNachfolger(vorgaengerId: string): Promise<Protokollelement[]> {
+  const alle = await getAllElemente();
+  return alle.filter(e => e.Verweise?.includes(vorgaengerId));
 }
 
 export async function clearAll(): Promise<void> {

@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+@theme {
+  --color-ping-blue: #004899;
+  --color-ping-blue-light: #E6EEF7;
+  --color-ping-blue-dark: #003366;
+  --color-ping-gold: #B9791E;
+  --color-ping-gold-light: #F5EDE0;
+  --color-ping-gold-dark: #8A5A14;
+  --color-ping-bg: #F7F8FA;
+  --color-ping-text: #1A1A2E;
+  --color-ping-text-mid: #4A5568;
+  --color-ping-text-light: #A0AEC0;
+}

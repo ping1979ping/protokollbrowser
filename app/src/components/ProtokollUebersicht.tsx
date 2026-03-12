@@ -1,143 +1,220 @@
 import { useEffect, useState } from 'react';
-import type { Protokoll, Protokollelement } from '../types';
-import { getProtokolle, getElemente } from '../db';
-import StatusBadge from './StatusBadge';
+import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
+import { STATUS_MAP } from '../types';
+import { getProtokolleByGruppe, getElemente, getProtokollgruppe } from '../db';
 
 interface Props {
-  onSelectElement: (element: Protokollelement, protokoll: Protokoll) => void;
-  onNeuesElement: (protokoll: Protokoll) => void;
-  onExport: (protokoll: Protokoll) => void;
+  gruppeId: string;
+  onSelectElement: (element: Protokollelement, protokoll: Protokoll, gruppe: Protokollgruppe) => void;
+  onNeuesElement: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
+  onExport: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
   onZurueck: () => void;
 }
 
-export default function ProtokollUebersicht({ onSelectElement, onNeuesElement, onExport, onZurueck }: Props) {
-  const [protokoll, setProtokoll] = useState<Protokoll | null>(null);
+export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeuesElement, onExport, onZurueck }: Props) {
+  const [gruppe, setGruppe] = useState<Protokollgruppe | null>(null);
+  const [protokolle, setProtokolle] = useState<Protokoll[]>([]);
+  const [gewaehltesProt, setGewaehltesProt] = useState<Protokoll | null>(null);
   const [elemente, setElemente] = useState<Protokollelement[]>([]);
+  const [alleElemente, setAlleElemente] = useState<(Protokollelement & { _protName: string })[]>([]);
+  const [ansicht, setAnsicht] = useState<'alle' | 'einzeln'>('einzeln');
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<number | null>(null);
 
   useEffect(() => { laden(); }, []);
 
   async function laden() {
-    const prots = await getProtokolle();
+    const grp = await getProtokollgruppe(gruppeId);
+    if (!grp) return;
+    setGruppe(grp);
+    const prots = await getProtokolleByGruppe(gruppeId);
+    prots.sort((a, b) => b.Nummer - a.Nummer);
+    setProtokolle(prots);
     if (prots.length > 0) {
-      const p = prots[0];
-      setProtokoll(p);
-      const elems = await getElemente(p.Id);
-      elems.sort((a, b) => a.Position.localeCompare(b.Position, undefined, { numeric: true }));
-      setElemente(elems);
+      await ladeElemente(prots[0]);
     }
+    // Alle Elemente aller Protokolle laden
+    const alle: (Protokollelement & { _protName: string })[] = [];
+    for (const p of prots) {
+      const elems = await getElemente(p.Id);
+      for (const e of elems) {
+        alle.push({ ...e, _protName: `Nr. ${p.Nummer}` });
+      }
+    }
+    alle.sort((a, b) => a.Position.localeCompare(b.Position, undefined, { numeric: true }));
+    setAlleElemente(alle);
   }
 
-  const gefilterteElemente = elemente.filter((e) => {
-    if (statusFilter !== null && e.Status !== statusFilter) return false;
-    if (filter) {
-      const s = filter.toLowerCase();
-      return (
-        e.Positionstitel.toLowerCase().includes(s) ||
-        e.Position.toLowerCase().includes(s) ||
-        e.Thema.toLowerCase().includes(s) ||
-        e.VerantwortlicherName.toLowerCase().includes(s)
-      );
-    }
-    return true;
-  });
+  async function ladeElemente(prot: Protokoll) {
+    setGewaehltesProt(prot);
+    const elems = await getElemente(prot.Id);
+    elems.sort((a, b) => a.Position.localeCompare(b.Position, undefined, { numeric: true }));
+    setElemente(elems);
+  }
 
-  if (!protokoll) return <div className="p-6 text-gray-500">Keine Protokolle geladen.</div>;
+  function filtern(liste: Protokollelement[]) {
+    return liste.filter((e) => {
+      if (statusFilter !== null && e.Status !== statusFilter) return false;
+      if (filter) {
+        const s = filter.toLowerCase();
+        return (
+          e.Positionstitel.toLowerCase().includes(s) ||
+          e.Position.toLowerCase().includes(s) ||
+          e.Thema.toLowerCase().includes(s) ||
+          e.VerantwortlicherName.toLowerCase().includes(s) ||
+          e.Bemerkung.toLowerCase().includes(s)
+        );
+      }
+      return true;
+    });
+  }
 
-  const datum = new Date(protokoll.Datum).toLocaleDateString('de-DE', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  });
+  const aktuelleElemente = ansicht === 'alle' ? filtern(alleElemente) : filtern(elemente);
+  const aktivProt = gewaehltesProt || protokolle[0];
+
+  if (!gruppe) return <div className="p-6 text-gray-500">Laden...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-ping-bg flex flex-col">
       {/* Header */}
-      <div className="bg-blue-700 text-white p-4 pb-5">
-        <div className="flex items-center justify-between mb-2">
-          <button onClick={onZurueck} className="text-blue-200 hover:text-white text-sm">&larr; Import</button>
-          <button
-            onClick={() => onExport(protokoll)}
-            className="bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded-lg text-sm"
-          >
-            Export
-          </button>
+      <div className="bg-ping-blue text-white p-3">
+        <div className="flex items-center justify-between mb-1">
+          <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-sm">&larr; Projekte</button>
+          {aktivProt && (
+            <button
+              onClick={() => onExport(aktivProt, gruppe)}
+              className="bg-ping-blue-dark hover:bg-ping-blue px-3 py-1 rounded-lg text-xs"
+            >
+              Export
+            </button>
+          )}
         </div>
-        <h1 className="text-lg font-bold">{protokoll.Name}</h1>
-        <p className="text-blue-200 text-sm">
-          {datum} &middot; {protokoll.Ort} &middot; {protokoll.Autor}
-        </p>
+        <h1 className="text-base font-bold leading-tight">{gruppe.ProjektName}</h1>
+        <p className="text-ping-blue-light text-xs">{gruppe.Name}</p>
+      </div>
+
+      {/* Protokoll-Tabs */}
+      <div className="bg-white border-b overflow-x-auto">
+        <div className="flex">
+          <button
+            onClick={() => setAnsicht('alle')}
+            className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
+              ansicht === 'alle' ? 'border-ping-blue text-ping-blue' : 'border-transparent text-gray-500'
+            }`}
+          >
+            Gesamt
+          </button>
+          {protokolle.map(p => (
+            <button
+              key={p.Id}
+              onClick={() => { setAnsicht('einzeln'); ladeElemente(p); }}
+              className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
+                ansicht === 'einzeln' && gewaehltesProt?.Id === p.Id
+                  ? 'border-ping-blue text-ping-blue'
+                  : 'border-transparent text-gray-500'
+              }`}
+            >
+              Nr. {p.Nummer}
+              <span className="text-gray-400 ml-1">
+                {new Date(p.Datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Filter */}
-      <div className="p-3 bg-white border-b space-y-2">
+      <div className="px-2 py-1.5 bg-white border-b flex gap-1.5 items-center">
         <input
           type="text"
           placeholder="Suche..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue"
         />
-        <div className="flex gap-1.5 flex-wrap">
-          <FilterBtn label="Alle" active={statusFilter === null} onClick={() => setStatusFilter(null)} />
-          <FilterBtn label="Offen" active={statusFilter === 10} onClick={() => setStatusFilter(10)} />
-          <FilterBtn label="Mängel" active={statusFilter === 11} onClick={() => setStatusFilter(11)} />
-          <FilterBtn label="Erledigt" active={statusFilter === 20} onClick={() => setStatusFilter(20)} />
-          <FilterBtn label="Neu" active={statusFilter === 0} onClick={() => setStatusFilter(0)} />
-        </div>
-      </div>
-
-      {/* Liste */}
-      <div className="p-3 space-y-2">
-        {gefilterteElemente.map((elem) => (
+        {[null, 10, 11, 20, 0].map(s => (
           <button
-            key={elem.Id}
-            onClick={() => onSelectElement(elem, protokoll)}
-            className="w-full text-left bg-white rounded-xl shadow-sm p-3 hover:shadow-md transition border border-gray-100 active:bg-gray-50"
+            key={String(s)}
+            onClick={() => setStatusFilter(s)}
+            className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
+              statusFilter === s ? 'bg-ping-blue text-white' : 'bg-gray-100 text-gray-600'
+            }`}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-mono text-gray-400">{elem.Position}</span>
-                  <StatusBadge status={elem.Status} />
-                  {elem._geaendert && <span className="text-xs text-orange-500 font-medium">geändert</span>}
-                  {elem._neu && <span className="text-xs text-green-600 font-medium">neu</span>}
-                </div>
-                <p className="font-medium text-gray-900 text-sm truncate">{elem.Positionstitel}</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {elem.VerantwortlicherName}
-                  {elem.Termin && <> &middot; {new Date(elem.Termin).toLocaleDateString('de-DE')}</>}
-                </p>
-              </div>
-              {elem.MobileErfassung.Fotos.length > 0 && (
-                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                  {elem.MobileErfassung.Fotos.length} Foto{elem.MobileErfassung.Fotos.length > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
+            {s === null ? 'Alle' : s === 10 ? 'Offen' : s === 11 ? 'Mängel' : s === 20 ? 'Erledigt' : 'Neu'}
           </button>
         ))}
       </div>
 
-      {/* FAB */}
-      <button
-        onClick={() => onNeuesElement(protokoll)}
-        className="fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg hover:bg-blue-700 active:bg-blue-800 text-2xl font-light flex items-center justify-center"
-      >
-        +
-      </button>
-    </div>
-  );
-}
+      {/* Protokollkopf (nur bei Einzelansicht) */}
+      {ansicht === 'einzeln' && aktivProt && (
+        <div className="px-3 py-1.5 bg-ping-blue-light border-b text-xs text-gray-600">
+          {new Date(aktivProt.Datum).toLocaleDateString('de-DE')} &middot; {aktivProt.Ort} &middot; {aktivProt.Autor}
+          {aktivProt.Erledigt && <span className="ml-2 text-green-600 font-medium">erledigt</span>}
+        </div>
+      )}
 
-function FilterBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-        active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-      }`}
-    >
-      {label}
-    </button>
+      {/* Tabelle */}
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-100 sticky top-0">
+            <tr className="text-left text-gray-500">
+              <th className="px-2 py-1.5 font-medium w-10">Pos.</th>
+              <th className="px-1 py-1.5 font-medium">Thema</th>
+              <th className="px-1 py-1.5 font-medium">Positionstext</th>
+              <th className="px-1 py-1.5 font-medium w-16">Status</th>
+              <th className="px-1 py-1.5 font-medium w-16">Termin</th>
+              <th className="px-1 py-1.5 font-medium hidden sm:table-cell">Bemerkung</th>
+              <th className="px-1 py-1.5 font-medium w-20">Verantw.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {aktuelleElemente.map((elem) => {
+              const st = STATUS_MAP[elem.Status];
+              return (
+                <tr
+                  key={elem.Id}
+                  onClick={() => aktivProt && onSelectElement(elem, ansicht === 'einzeln' ? aktivProt : protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe)}
+                  className="border-b border-gray-100 hover:bg-ping-blue-light active:bg-ping-blue-light cursor-pointer"
+                >
+                  <td className="px-2 py-1.5 font-mono text-gray-400">{elem.Position}</td>
+                  <td className="px-1 py-1.5 text-gray-600">{elem.Thema || '-'}</td>
+                  <td className="px-1 py-1.5 text-gray-800">
+                    <div className="leading-tight truncate max-w-[200px]">{elem.Positionstext || elem.Positionstitel || '—'}</div>
+                    {elem._geaendert && <span className="text-orange-500 font-medium"> *</span>}
+                    {elem._neu && <span className="text-green-600 font-medium"> +neu</span>}
+                    {(elem.Verweise?.length > 0) && <span className="text-amber-500"> ↩</span>}
+                  </td>
+                  <td className="px-1 py-1.5">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium leading-tight ${st?.css || 'bg-gray-100'}`}>
+                      {st?.label || elem.Status}
+                    </span>
+                  </td>
+                  <td className="px-1 py-1.5 text-gray-500 whitespace-nowrap">
+                    {elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : '-'}
+                  </td>
+                  <td className="px-1 py-1.5 text-gray-400 hidden sm:table-cell truncate max-w-[150px]">
+                    {elem.Bemerkung || '-'}
+                  </td>
+                  <td className="px-1 py-1.5 text-gray-600 truncate max-w-[80px]">{elem.VerantwortlicherName || '-'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {aktuelleElemente.length === 0 && (
+          <p className="text-center text-gray-400 py-6 text-sm">Keine Elemente gefunden.</p>
+        )}
+      </div>
+
+      {/* FAB */}
+      {aktivProt && (
+        <button
+          onClick={() => onNeuesElement(aktivProt, gruppe)}
+          className="fixed bottom-4 right-4 bg-ping-blue text-white w-12 h-12 rounded-full shadow-lg hover:bg-ping-blue-dark active:bg-ping-blue-dark text-xl font-light flex items-center justify-center"
+        >
+          +
+        </button>
+      )}
+    </div>
   );
 }

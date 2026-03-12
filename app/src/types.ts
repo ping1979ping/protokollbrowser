@@ -12,8 +12,6 @@ export interface MobileErfassung {
   GeoLon: number | null;
   GeoAccuracy: number | null;
   GeoText: string | null;
-  Notiz: string | null;
-  Transkript: string | null;
   Fotos: FotoRef[];
 }
 
@@ -38,6 +36,7 @@ export interface Protokollelement {
   Bemerkung: string;
   Erinnerung: boolean;
   Wert: number;
+  Verweise: string[]; // OIDs von verknüpften Vorgänger-Elementen
   MobileErfassung: MobileErfassung;
   // App-intern
   _geaendert?: boolean;

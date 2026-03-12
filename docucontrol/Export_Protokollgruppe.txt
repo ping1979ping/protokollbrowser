@@ -1,0 +1,194 @@
+// ============================================================================
+// DOCUcontrol-Makro: Export Protokollgruppe -> JSON
+// ============================================================================
+//
+// Exportiert die aktuell selektierte Protokollgruppe mit ALLEN enthaltenen
+// Protokollen und deren Protokollelementen als JSON-Datei.
+//
+// Ausfuehrung:
+//   - In DOCUframe eine Protokollgruppe selektieren
+//   - Makro ausfuehren (Rechtsklick -> Makro oder ueber DOCUcontrol)
+//   - Ergebnis: C:\Temp\Protokolle.json
+//
+// Datenstruktur (Array mit einem Eintrag pro Protokoll):
+//   [
+//     {
+//       "Protokollgruppe": { ... },       // Gruppendaten (in jedem Eintrag gleich)
+//       "Protokoll": { ... },             // Protokolldaten
+//       "Protokollelemente": [ ... ]      // Elemente dieses Protokolls
+//     },
+//     ...
+//   ]
+//
+// Hinweise:
+//   - GetOID() wird als stabiler Primaerschluessel verwendet
+//   - Teilnehmer/Verteiler werden mit OID, Nummer und Name exportiert
+//   - ProjektStammverzeichnis wird fuer Foto-Ablage mitexportiert
+//   - MobileErfassung-Felder werden initial leer angelegt
+//   - Datum/Termin werden als ISO 8601 String exportiert
+// ============================================================================
+
+HJSON JSon;
+HJSON PaketJSon;
+HJSON GruppeJSon;
+HJSON ProtoJSon;
+HJSON ElemArray;
+HJSON ElemJSon;
+HJSON MobileJSon;
+HJSON FotosArray;
+HJSON TeilnArray;
+HJSON TeilnJSon;
+HJSON VertArray;
+HJSON VertJSon;
+HFILE File;
+STRING Txt;
+STRING OidStr;
+STRING GruppeOid;
+STRING FilePath;
+
+_PINGProtokollgruppe ProtGrp;
+_PINGProtokollSet ProtSet;
+_PINGProtokoll Prot;
+_PINGProtokollelementSet ElemSet;
+_PINGProtokollelement Elem;
+AnsprechpartnerSet TeilnSet;
+Ansprechpartner Teiln;
+
+// --- Protokollgruppe aus Selektion holen ---
+ProtGrp = SELF;
+IF( !ProtGrp.Valid() )
+  MsgBox( "Bitte eine Protokollgruppe selektieren.", "Export-Fehler", MB_OK | MB_ICONERROR );
+  RETURN;
+ENDIF
+
+GruppeOid = ProtGrp.GetOID();
+
+// --- Ausgabepfad ---
+FilePath = "C:\Temp\Protokolle.json";
+
+// --- JSON-Array aufbauen ---
+JSon.Construct();
+
+// --- Alle Protokolle der Gruppe durchlaufen ---
+ProtSet = ProtGrp._Protokolle;
+IF( ProtSet.Get( Prot, 1, START ) )
+  REPEAT
+
+    PaketJSon = JSon.AddElement();
+
+    // === Protokollgruppe (in jedem Paket identisch) ===
+    GruppeJSon = PaketJSon.GetMember( "Protokollgruppe", TRUE );
+    GruppeJSon.GetMember( "Id", TRUE ).SetString( GruppeOid );
+    GruppeJSon.GetMember( "Name", TRUE ).SetString( ProtGrp._Name );
+    GruppeJSon.GetMember( "Protokollnummer", TRUE ).SetNumber( ProtGrp._Protokollnummer );
+    GruppeJSon.GetMember( "Vorwort", TRUE ).SetString( ProtGrp._Vorwort );
+    GruppeJSon.GetMember( "Nachwort", TRUE ).SetString( ProtGrp._Nachwort );
+    GruppeJSon.GetMember( "Themen", TRUE ).SetString( ProtGrp._Themen );
+    GruppeJSon.GetMember( "Bemerkung", TRUE ).SetString( ProtGrp._Bemerkung );
+    IF( ProtGrp._Projekt.Valid() )
+      GruppeJSon.GetMember( "ProjektId", TRUE ).SetString( ProtGrp._Projekt.Nummer );
+      GruppeJSon.GetMember( "ProjektName", TRUE ).SetString( ProtGrp._Projekt.Bezeichnung );
+      GruppeJSon.GetMember( "ProjektStammverzeichnis", TRUE ).SetString( ProtGrp._Projekt.Stammverzeichnis );
+    ELSE
+      GruppeJSon.GetMember( "ProjektId", TRUE ).SetString( "" );
+      GruppeJSon.GetMember( "ProjektName", TRUE ).SetString( "" );
+      GruppeJSon.GetMember( "ProjektStammverzeichnis", TRUE ).SetString( "" );
+    ENDIF
+
+    // === Protokoll ===
+    ProtoJSon = PaketJSon.GetMember( "Protokoll", TRUE );
+    OidStr = Prot.GetOID();
+    ProtoJSon.GetMember( "Id", TRUE ).SetString( OidStr );
+    ProtoJSon.GetMember( "Name", TRUE ).SetString( Prot._Name );
+    ProtoJSon.GetMember( "Nummer", TRUE ).SetNumber( Prot._Nummer );
+    ProtoJSon.GetMember( "Datum", TRUE ).SetString( Prot._Datum.EditFormatDateTime() );
+    ProtoJSon.GetMember( "Ort", TRUE ).SetString( Prot._Ort );
+    ProtoJSon.GetMember( "Autor", TRUE ).SetString( Prot._Autor );
+    ProtoJSon.GetMember( "Vorbemerkung", TRUE ).SetString( Prot._Vorbemerkung );
+    ProtoJSon.GetMember( "Nachbemerkung", TRUE ).SetString( Prot._Nachbemerkung );
+    ProtoJSon.GetMember( "Erledigt", TRUE ).SetBool( Prot._erledigt );
+    ProtoJSon.GetMember( "IstEinzelprotokoll", TRUE ).SetBool( Prot._istEinzelprotokoll );
+    ProtoJSon.GetMember( "Erstellt", TRUE ).SetBool( Prot._erstellt );
+    ProtoJSon.GetMember( "Signatur", TRUE ).SetString( Prot._Signatur );
+
+    // --- Teilnehmer ---
+    TeilnArray = ProtoJSon.GetMember( "Teilnehmer", TRUE );
+    TeilnSet = Prot._Teilnehmer;
+    IF( TeilnSet.Get( Teiln, 1, START ) )
+      REPEAT
+        TeilnJSon = TeilnArray.AddElement();
+        TeilnJSon.GetMember( "Oid", TRUE ).SetString( Teiln.GetOID() );
+        TeilnJSon.GetMember( "Nummer", TRUE ).SetString( Teiln.Nummer );
+        TeilnJSon.GetMember( "Name", TRUE ).SetString( Teiln.Name1 );
+        TeilnJSon.GetMember( "Rolle", TRUE ).SetString( "" );
+      UNTIL( !TeilnSet.Get( Teiln, 1, CURRENT ) )
+    ENDIF
+
+    // --- Verteiler ---
+    VertArray = ProtoJSon.GetMember( "Verteiler", TRUE );
+    TeilnSet = Prot._Verteiler;
+    IF( TeilnSet.Get( Teiln, 1, START ) )
+      REPEAT
+        VertJSon = VertArray.AddElement();
+        VertJSon.GetMember( "Oid", TRUE ).SetString( Teiln.GetOID() );
+        VertJSon.GetMember( "Nummer", TRUE ).SetString( Teiln.Nummer );
+        VertJSon.GetMember( "Name", TRUE ).SetString( Teiln.Name1 );
+        VertJSon.GetMember( "Rolle", TRUE ).SetString( "" );
+      UNTIL( !TeilnSet.Get( Teiln, 1, CURRENT ) )
+    ENDIF
+
+    // === Protokollelemente ===
+    ElemArray = PaketJSon.GetMember( "Protokollelemente", TRUE );
+    ElemSet = Prot._Protokollelemente;
+    IF( ElemSet.Get( Elem, 1, START ) )
+      REPEAT
+        ElemJSon = ElemArray.AddElement();
+        OidStr = Elem.GetOID();
+        ElemJSon.GetMember( "Id", TRUE ).SetString( OidStr );
+        ElemJSon.GetMember( "ProtokollId", TRUE ).SetString( Prot.GetOID() );
+        ElemJSon.GetMember( "Position", TRUE ).SetString( Elem._Position );
+        ElemJSon.GetMember( "Positionstitel", TRUE ).SetString( Elem._Positionstitel );
+        ElemJSon.GetMember( "Positionstext", TRUE ).SetString( Elem._Positionstext );
+        ElemJSon.GetMember( "Thema", TRUE ).SetString( Elem._Thema );
+        ElemJSon.GetMember( "Status", TRUE ).SetNumber( Elem._Status );
+        ElemJSon.GetMember( "Termin", TRUE ).SetString( Elem._Termin.EditFormatDateTime() );
+        ElemJSon.GetMember( "Bemerkung", TRUE ).SetString( Elem._Bemerkung );
+        ElemJSon.GetMember( "Erinnerung", TRUE ).SetBool( Elem._Erinnerung );
+        ElemJSon.GetMember( "Wert", TRUE ).SetNumber( Elem._Wert );
+
+        // Verantwortlicher (Typ: Adresse)
+        IF( Elem._Verantwortlicher.Valid() )
+          ElemJSon.GetMember( "VerantwortlicherOid", TRUE ).SetString( Elem._Verantwortlicher.GetOID() );
+          ElemJSon.GetMember( "VerantwortlicherId", TRUE ).SetString( Elem._Verantwortlicher.Nummer );
+          ElemJSon.GetMember( "VerantwortlicherName", TRUE ).SetString( Elem._Verantwortlicher.Name1 );
+        ELSE
+          ElemJSon.GetMember( "VerantwortlicherOid", TRUE ).SetString( "" );
+          ElemJSon.GetMember( "VerantwortlicherId", TRUE ).SetString( "" );
+          ElemJSon.GetMember( "VerantwortlicherName", TRUE ).SetString( "" );
+        ENDIF
+
+        // MobileErfassung - initial leer
+        MobileJSon = ElemJSon.GetMember( "MobileErfassung", TRUE );
+        MobileJSon.GetMember( "GeoLat", TRUE );
+        MobileJSon.GetMember( "GeoLon", TRUE );
+        MobileJSon.GetMember( "GeoAccuracy", TRUE );
+        MobileJSon.GetMember( "GeoText", TRUE ).SetString( "" );
+        MobileJSon.GetMember( "Notiz", TRUE ).SetString( "" );
+        MobileJSon.GetMember( "Transkript", TRUE ).SetString( "" );
+        FotosArray = MobileJSon.GetMember( "Fotos", TRUE );
+        // Fotos-Array bleibt leer
+
+      UNTIL( !ElemSet.Get( Elem, 1, CURRENT ) )
+    ENDIF
+
+  UNTIL( !ProtSet.Get( Prot, 1, CURRENT ) )
+ENDIF
+
+// --- JSON in Datei schreiben ---
+Txt = JSon.GetText( TRUE );
+File.Open( FilePath, FILE_MODE_CREATE | FILE_MODE_WRITE );
+FileWriteString( File, Txt );
+File.Close();
+JSon.Destruct();
+
+MsgBox( "Export abgeschlossen.\n\nDatei: " + FilePath + "\n\nAnzahl Protokolle: " + STR( ProtSet.Count() ), "Export erfolgreich", MB_OK | MB_ICONINFORMATION );

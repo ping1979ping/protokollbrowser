@@ -1,0 +1,44 @@
+DOCUcontrol-Makros fuer Protokoll-App
+======================================
+
+1. Export_Protokollgruppe.txt
+-----------------------------
+Exportiert eine Protokollgruppe mit allen Protokollen und Elementen als JSON.
+
+Einrichtung in DOCUframe:
+  - DOCUcontrol oeffnen
+  - Neues Makro anlegen auf Objekttyp "_PINGProtokollgruppe"
+  - Inhalt von Export_Protokollgruppe.txt einfuegen
+  - Makro speichern
+
+Ausfuehrung:
+  - Eine Protokollgruppe in DOCUframe selektieren (Rechtsklick)
+  - Makro "Export Protokollgruppe" ausfuehren
+  - Ergebnis: C:\Temp\Protokolle.json
+
+Ausgabeformat:
+  JSON-Array, ein Eintrag pro Protokoll:
+  [
+    {
+      "Protokollgruppe": { Id, Name, ProjektId, ... },
+      "Protokoll": { Id, Name, Nummer, Datum, Teilnehmer[], ... },
+      "Protokollelemente": [
+        { Id, Position, Positionstitel, Status, Termin, ... },
+        ...
+      ]
+    },
+    ... (naechstes Protokoll)
+  ]
+
+Hinweise:
+  - Sicherstellen, dass C:\Temp\ existiert
+  - GetOID() wird als stabiler Schluessel verwendet (nicht ExchangeID)
+  - Datum/Termin: Format abhaengig von EditFormatDateTime() -
+    ggf. in der App beide Formate (DE/ISO) unterstuetzen
+  - _Verantwortlicher ist vom Typ "Adresse" (Name1, Nummer)
+
+Bekannte Punkte zum Pruefen:
+  - Feldname fuer Projektstammverzeichnis (Stammverzeichnis vs. _Stammverz.)
+  - Datumsformat von EditFormatDateTime() - ggf. FormatDateTime() verwenden
+  - Ansprechpartner-Felder: Nummer vs. _Nummer, Name1 vs. _Name
+  - Anzahl der Teilnehmer/Verteiler (Get-Methode CURRENT vs. NEXT)

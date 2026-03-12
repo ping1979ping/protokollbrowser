@@ -54,6 +54,7 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
           base.Thema = e.Thema;
           base.Status = e.Status;
           base.Termin = e.Termin;
+          base.Verweise = e.Verweise || [];
         } else {
           base.StatusNeu = e.Status;
           base.TerminNeu = e.Termin;
@@ -66,7 +67,6 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
           GeoLon: e.MobileErfassung.GeoLon,
           GeoAccuracy: e.MobileErfassung.GeoAccuracy,
           GeoText: e.MobileErfassung.GeoText || '',
-          Transkript: e.MobileErfassung.Transkript || '',
           Fotos: e.MobileErfassung.Fotos,
         };
 
@@ -117,9 +117,9 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-blue-700 text-white p-4">
-        <button onClick={onBack} className="text-blue-200 hover:text-white text-sm">&larr; Zurück</button>
+    <div className="min-h-screen bg-ping-bg">
+      <div className="bg-ping-blue text-white p-4">
+        <button onClick={onBack} className="text-ping-blue-light hover:text-white text-sm">&larr; Zurück</button>
         <h1 className="text-lg font-bold mt-1">Export</h1>
       </div>
 
@@ -142,7 +142,7 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
             type="date"
             value={datum}
             onChange={(e) => setDatum(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue"
           />
         </div>
 
@@ -152,7 +152,7 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
             type="text"
             value={autor}
             onChange={(e) => setAutor(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue"
           />
         </div>
 
@@ -162,7 +162,7 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
             value={vorbemerkung}
             onChange={(e) => setVorbemerkung(e.target.value)}
             rows={2}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue resize-none"
           />
         </div>
 
