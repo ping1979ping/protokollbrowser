@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe, Teilnehmer } from '../types';
 import { STATUS_MAP } from '../types';
-import { updateElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger } from '../db';
+import { updateElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente } from '../db';
 
 interface Props {
   element: Protokollelement;
@@ -20,6 +20,8 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
   const [gespeichert, setGespeichert] = useState(false);
   const [vorgaenger, setVorgaenger] = useState<Protokollelement[]>([]);
   const [nachfolger, setNachfolger] = useState<Protokollelement[]>([]);
+  const [prevElem, setPrevElem] = useState<Protokollelement | null>(null);
+  const [nextElem, setNextElem] = useState<Protokollelement | null>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
 
   const istNeu = !!elem._neu;
@@ -27,6 +29,7 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
   useEffect(() => {
     ladenFotos();
     ladenVerweise();
+    ladenGeschwister();
     return () => { fotos.forEach(f => f.url && URL.revokeObjectURL(f.url)); };
   }, [element.Id]);
 
@@ -47,6 +50,14 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
     // Nachfolger suchen (andere Elemente die auf dieses verweisen)
     const nachf = await findNachfolger(elem.Id);
     setNachfolger(nachf);
+  }
+
+  async function ladenGeschwister() {
+    const alle = await getElemente(protokoll.Id);
+    alle.sort((a, b) => a.Position.localeCompare(b.Position, undefined, { numeric: true }));
+    const idx = alle.findIndex(e => e.Id === elem.Id);
+    setPrevElem(idx > 0 ? alle[idx - 1] : null);
+    setNextElem(idx < alle.length - 1 ? alle[idx + 1] : null);
   }
 
   function updateStatus(status: number) {
@@ -123,8 +134,22 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
             {st && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${st.css}`}>{st.label}</span>}
           </div>
         </div>
-        {!istNeu && <p className="text-xs text-ping-blue-light mt-0.5">Nur Status änderbar</p>}
-        {istNeu && <p className="text-xs text-green-300 mt-0.5">Neues Element — alle Felder editierbar</p>}
+        <div className="flex items-center justify-between mt-1">
+          <div>
+            {!istNeu && <p className="text-xs text-ping-blue-light">Nur Status änderbar</p>}
+            {istNeu && <p className="text-xs text-green-300">Neues Element — alle Felder editierbar</p>}
+          </div>
+          <div className="flex gap-1">
+            <button onClick={() => prevElem && onNavigate(prevElem)} disabled={!prevElem}
+              className={`px-2 py-0.5 rounded text-xs ${prevElem ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
+              &larr; Vorh.
+            </button>
+            <button onClick={() => nextElem && onNavigate(nextElem)} disabled={!nextElem}
+              className={`px-2 py-0.5 rounded text-xs ${nextElem ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
+              Nächst. &rarr;
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="p-3 space-y-2.5">
