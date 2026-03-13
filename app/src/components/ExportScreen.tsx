@@ -61,7 +61,7 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
         }
 
         base.BemerkungNeu = e.Bemerkung;
-        base.VerantwortlicherOidNeu = e.VerantwortlicherOid;
+        base.VerantwortlicherFirmaOidNeu = e.VerantwortlicherFirmaOid;
         base.MobileDaten = {
           GeoLat: e.MobileErfassung.GeoLat,
           GeoLon: e.MobileErfassung.GeoLon,

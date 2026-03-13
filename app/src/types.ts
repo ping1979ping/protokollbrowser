@@ -30,9 +30,8 @@ export interface Protokollelement {
   Thema: string;
   Status: number;
   Termin: string;
-  VerantwortlicherOid: string;
-  VerantwortlicherId: string;
-  VerantwortlicherName: string;
+  VerantwortlicherFirmaOid: string;
+  VerantwortlicherFirmaName: string;
   Bemerkung: string;
   Erinnerung: boolean;
   Wert: number;

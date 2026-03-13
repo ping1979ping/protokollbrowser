@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Protokoll, Protokollelement, Protokollgruppe, Teilnehmer } from '../types';
+import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
 import { updateElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente } from '../db';
 
@@ -72,7 +72,6 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
   }
 
   function updateMobile(patch: Partial<Protokollelement['MobileErfassung']>) {
-    if (!istNeu) return;
     setElem(prev => ({
       ...prev, _geaendert: true,
       MobileErfassung: { ...prev.MobileErfassung, ...patch },
@@ -117,7 +116,7 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
     await ladenFotos();
   }
 
-  const alleTeilnehmer: Teilnehmer[] = [
+  const alleFirmen = [
     ...protokoll.Teilnehmer,
     ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
   ];
@@ -242,20 +241,20 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
             )}
           </div>
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich (Firma)</label>
             {istNeu ? (
-              <select value={elem.VerantwortlicherOid}
+              <select value={elem.VerantwortlicherFirmaOid}
                 onChange={(e) => {
-                  const t = alleTeilnehmer.find(t => t.Oid === e.target.value);
-                  if (t) update({ VerantwortlicherOid: t.Oid, VerantwortlicherId: t.Nummer, VerantwortlicherName: t.Name });
+                  const t = alleFirmen.find(t => t.Oid === e.target.value);
+                  if (t) update({ VerantwortlicherFirmaOid: t.Oid, VerantwortlicherFirmaName: t.Name });
                 }}
                 className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-                {alleTeilnehmer.map(t => (
+                {alleFirmen.map(t => (
                   <option key={t.Oid} value={t.Oid}>{t.Name}</option>
                 ))}
               </select>
             ) : (
-              <p className="text-xs text-gray-700">{elem.VerantwortlicherName || '—'}</p>
+              <p className="text-xs text-gray-700">{elem.VerantwortlicherFirmaName || '—'}</p>
             )}
           </div>
         </div>
@@ -271,36 +270,36 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
           )}
         </div>
 
-        {/* GPS + Fotos — nur bei neuen Elementen */}
+        {/* GPS — immer verfügbar (Standort nachträglich festlegen) */}
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
+            <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
+          </div>
+          {elem.MobileErfassung.GeoText
+            ? <p className="text-[10px] text-gray-600">{elem.MobileErfassung.GeoText}</p>
+            : <p className="text-[10px] text-gray-300">Kein Standort</p>}
+        </div>
+
+        {/* Fotos — nur bei neuen Elementen */}
         {istNeu && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] text-gray-400 font-medium uppercase">GPS</label>
-                <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
-              </div>
-              {elem.MobileErfassung.GeoText
-                ? <p className="text-[10px] text-gray-600">{elem.MobileErfassung.GeoText}</p>
-                : <p className="text-[10px] text-gray-300">Kein Standort</p>}
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
+              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px]">Hinzufügen</button>
+              <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple onChange={fotoHinzufuegen} className="hidden" />
             </div>
-            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
-                <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px]">Hinzufügen</button>
-                <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple onChange={fotoHinzufuegen} className="hidden" />
+            {fotos.length > 0 && (
+              <div className="flex gap-1 flex-wrap">
+                {fotos.map(f => (
+                  <div key={f.fotoId} className="relative w-10 h-10">
+                    <img src={f.url} alt="" className="w-full h-full object-cover rounded" />
+                    <button onClick={() => fotoLoeschen(f.fotoId)}
+                      className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
+                  </div>
+                ))}
               </div>
-              {fotos.length > 0 && (
-                <div className="flex gap-1 flex-wrap">
-                  {fotos.map(f => (
-                    <div key={f.fotoId} className="relative w-10 h-10">
-                      <img src={f.url} alt="" className="w-full h-full object-cover rounded" />
-                      <button onClick={() => fotoLoeschen(f.fotoId)}
-                        className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
           </div>
         )}
 
@@ -321,25 +320,15 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
           </div>
         )}
 
-        {/* GPS/Fotos readonly bei alten Elementen, wenn vorhanden */}
-        {!istNeu && (elem.MobileErfassung.GeoText || fotos.length > 0) && (
-          <div className="grid grid-cols-2 gap-2">
-            {elem.MobileErfassung.GeoText && (
-              <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-                <label className="text-[10px] text-gray-400 font-medium uppercase">GPS</label>
-                <p className="text-[10px] text-gray-600">{elem.MobileErfassung.GeoText}</p>
-              </div>
-            )}
-            {fotos.length > 0 && (
-              <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-                <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
-                <div className="flex gap-1 flex-wrap mt-1">
-                  {fotos.map(f => (
-                    <img key={f.fotoId} src={f.url} alt="" className="w-10 h-10 object-cover rounded" />
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* Fotos readonly bei alten Elementen, wenn vorhanden */}
+        {!istNeu && fotos.length > 0 && (
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
+            <div className="flex gap-1 flex-wrap mt-1">
+              {fotos.map(f => (
+                <img key={f.fotoId} src={f.url} alt="" className="w-10 h-10 object-cover rounded" />
+              ))}
+            </div>
           </div>
         )}
 

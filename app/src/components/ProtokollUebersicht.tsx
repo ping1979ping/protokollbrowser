@@ -62,7 +62,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
           e.Positionstitel.toLowerCase().includes(s) ||
           e.Position.toLowerCase().includes(s) ||
           e.Thema.toLowerCase().includes(s) ||
-          e.VerantwortlicherName.toLowerCase().includes(s)
+          e.VerantwortlicherFirmaName.toLowerCase().includes(s)
         );
       }
       return true;
@@ -155,16 +155,25 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
 
       {/* Tabelle */}
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs table-fixed">
+          <colgroup>
+            <col className="w-[8%]" />
+            <col className="w-[10%]" />
+            <col />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%] hidden sm:table-column" />
+            <col className="w-[12%]" />
+          </colgroup>
           <thead className="bg-gray-100 sticky top-0">
             <tr className="text-left text-gray-500">
-              <th className="px-2 py-1.5 font-medium w-10">Pos.</th>
-              <th className="px-1 py-1.5 font-medium w-16">Thema</th>
+              <th className="px-2 py-1.5 font-medium">Pos.</th>
+              <th className="px-1 py-1.5 font-medium">Thema</th>
               <th className="px-1 py-1.5 font-medium">Positionstext</th>
-              <th className="px-1 py-1.5 font-medium w-16">Status</th>
-              <th className="px-1 py-1.5 font-medium w-16">Termin</th>
-              <th className="px-1 py-1.5 font-medium hidden sm:table-cell w-16">Bemerkung</th>
-              <th className="px-1 py-1.5 font-medium w-20">Verantw.</th>
+              <th className="px-1 py-1.5 font-medium">Status</th>
+              <th className="px-1 py-1.5 font-medium">Termin</th>
+              <th className="px-1 py-1.5 font-medium hidden sm:table-cell">Bemerkung</th>
+              <th className="px-1 py-1.5 font-medium">Verantw.</th>
             </tr>
           </thead>
           <tbody>
@@ -195,7 +204,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
                   <td className="px-1 py-1.5 text-gray-400 hidden sm:table-cell truncate">
                     {elem.Bemerkung || '-'}
                   </td>
-                  <td className="px-1 py-1.5 text-gray-600 truncate max-w-[80px]">{elem.VerantwortlicherName || '-'}</td>
+                  <td className="px-1 py-1.5 text-gray-600 truncate max-w-[80px]">{elem.VerantwortlicherFirmaName || '-'}</td>
                 </tr>
               );
             })}

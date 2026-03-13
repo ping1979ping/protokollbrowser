@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import type { Protokoll, Protokollelement, Teilnehmer } from '../types';
+import type { Protokoll, Protokollelement } from '../types';
 import { STATUS_MAP } from '../types';
 import { addElement, getElemente, saveFoto } from '../db';
 
@@ -25,7 +25,7 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
   const [positionstext, setPositionstext] = useState('');
   const [status, setStatus] = useState(vorgaenger?.Thema === 'Mangel' ? 11 : 0);
   const [termin, setTermin] = useState('');
-  const [verantwOid, setVerantwOid] = useState(vorgaenger?.VerantwortlicherOid || protokoll.Teilnehmer[0]?.Oid || '');
+  const [verantwFirmaOid, setVerantwFirmaOid] = useState(vorgaenger?.VerantwortlicherFirmaOid || protokoll.Teilnehmer[0]?.Oid || '');
   const [bemerkung, setBemerkung] = useState('');
   const [titel, setTitel] = useState('');
   const [geoText, setGeoText] = useState('');
@@ -35,7 +35,7 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
   const [tempFotos, setTempFotos] = useState<File[]>([]);
   const fotoRef = useRef<HTMLInputElement>(null);
 
-  const alleTeilnehmer: Teilnehmer[] = [
+  const alleFirmen = [
     ...protokoll.Teilnehmer,
     ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
   ];
@@ -71,10 +71,10 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
         const num = parseFloat(e.Position);
         return num > max ? num : max;
       }, 0);
-      pos = `${Math.floor(maxPos) + 1}.1`;
+      pos = `${Math.floor(maxPos) + 1}`;
     }
 
-    const verantw = alleTeilnehmer.find(t => t.Oid === verantwOid);
+    const verantw = alleFirmen.find(t => t.Oid === verantwFirmaOid);
     const elemId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
     // Fotos speichern
@@ -98,9 +98,8 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
       Thema: thema,
       Status: status,
       Termin: termin ? termin + 'T00:00:00' : '',
-      VerantwortlicherOid: verantw?.Oid || '',
-      VerantwortlicherId: verantw?.Nummer || '',
-      VerantwortlicherName: verantw?.Name || '',
+      VerantwortlicherFirmaOid: verantw?.Oid || '',
+      VerantwortlicherFirmaName: verantw?.Name || '',
       Bemerkung: bemerkung,
       Erinnerung: false,
       Wert: 0,
@@ -194,9 +193,9 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
           </div>
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
-            <select value={verantwOid} onChange={(e) => setVerantwOid(e.target.value)}
+            <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-              {alleTeilnehmer.map(t => (
+              {alleFirmen.map(t => (
                 <option key={t.Oid} value={t.Oid}>{t.Name}</option>
               ))}
             </select>
