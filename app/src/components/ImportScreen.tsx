@@ -1,7 +1,6 @@
 import { useRef } from 'react';
-import type { ProtokollPaket } from '../types';
 import { importPakete, clearAll } from '../db';
-import { testDaten } from '../testdata';
+import { decodeText, parseDfJson } from '../dfimport';
 import logo from '../assets/ping-logo.png';
 
 interface Props {
@@ -15,8 +14,14 @@ export default function ImportScreen({ onImported }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const text = await file.text();
-      const pakete: ProtokollPaket[] = JSON.parse(text);
+      const buffer = await file.arrayBuffer();
+      const text = decodeText(buffer);
+      const raw = JSON.parse(text);
+      const { pakete } = parseDfJson(raw);
+      if (pakete.length === 0) {
+        alert('Keine Protokolle in der Datei gefunden.');
+        return;
+      }
       await clearAll();
       await importPakete(pakete);
       onImported();
@@ -26,9 +31,19 @@ export default function ImportScreen({ onImported }: Props) {
   }
 
   async function handleTestdaten() {
-    await clearAll();
-    await importPakete(testDaten);
-    onImported();
+    // Testdaten direkt aus der mitgelieferten JSON-Datei laden
+    try {
+      const resp = await fetch(import.meta.env.BASE_URL + 'testdata.json');
+      const buffer = await resp.arrayBuffer();
+      const text = decodeText(buffer);
+      const raw = JSON.parse(text);
+      const { pakete } = parseDfJson(raw);
+      await clearAll();
+      await importPakete(pakete);
+      onImported();
+    } catch (err) {
+      alert('Fehler beim Laden der Testdaten: ' + (err as Error).message);
+    }
   }
 
   return (
