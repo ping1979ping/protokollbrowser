@@ -84,8 +84,6 @@ Push auf `master` loest automatisch GitHub Actions aus:
 1. `npm ci && npm run build`
 2. Deploy nach GitHub Pages
 
-Live unter: `https://ping1979ping.github.io/protokollbrowser/`
-
 ## DOCUframe-Integration
 
 ### Export (DOCUframe → App)
