@@ -16,11 +16,15 @@ function parseDfDatum(s: string): string {
   return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6]}`;
 }
 
-// UTF-16LE BOM erkennen und dekodieren
+// UTF-16LE erkennen und dekodieren (mit oder ohne BOM)
 export function decodeText(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   // UTF-16LE BOM: FF FE
   if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    return new TextDecoder('utf-16le').decode(buffer);
+  }
+  // UTF-16LE ohne BOM: zweites Byte ist 0x00 bei ASCII-Zeichen (z.B. '[' = 5B 00)
+  if (bytes.length >= 2 && bytes[1] === 0x00) {
     return new TextDecoder('utf-16le').decode(buffer);
   }
   // UTF-8 BOM oder kein BOM
