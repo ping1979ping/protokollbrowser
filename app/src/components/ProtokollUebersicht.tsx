@@ -188,7 +188,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
                   <td className="px-2 py-1.5 font-mono text-gray-400">{elem.Position}</td>
                   <td className="px-1 py-1.5 text-gray-600">{elem.Thema || '-'}</td>
                   <td className="px-1 py-1.5 text-gray-800">
-                    <div className="leading-tight truncate">{elem.Positionstext || elem.Positionstitel || '—'}</div>
+                    <div className="leading-tight line-clamp-2">{elem.Positionstext || elem.Positionstitel || '—'}</div>
                     {elem._geaendert && <span className="text-orange-500 font-medium"> *</span>}
                     {elem._neu && <span className="text-green-600 font-medium"> +neu</span>}
                     {(elem.Verweise?.length > 0) && <span className="text-amber-500"> ↩</span>}
