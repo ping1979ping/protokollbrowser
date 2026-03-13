@@ -186,7 +186,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
                   className="border-b border-gray-100 hover:bg-ping-blue-light active:bg-ping-blue-light cursor-pointer"
                 >
                   <td className="px-2 py-1.5 font-mono text-gray-400">{elem.Position}</td>
-                  <td className="px-1 py-1.5 text-gray-600">{elem.Thema || '-'}</td>
+                  <td className="px-1 py-1.5 text-gray-600 text-[10px] leading-tight break-words">{elem.Thema || '-'}</td>
                   <td className="px-1 py-1.5 text-gray-800">
                     <div className="leading-tight line-clamp-2">{elem.Positionstext || elem.Positionstitel || '—'}</div>
                     {elem._geaendert && <span className="text-orange-500 font-medium"> *</span>}
