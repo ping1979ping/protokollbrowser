@@ -67,6 +67,7 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
           GeoLon: e.MobileErfassung.GeoLon,
           GeoAccuracy: e.MobileErfassung.GeoAccuracy,
           GeoText: e.MobileErfassung.GeoText || '',
+          GeoHeading: e.MobileErfassung.GeoHeading,
           Fotos: e.MobileErfassung.Fotos,
         };
 

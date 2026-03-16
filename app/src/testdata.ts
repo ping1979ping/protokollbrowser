@@ -1,6 +1,6 @@
 import type { ProtokollPaket } from './types';
 
-const mob = { GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, Fotos: [] };
+const mob = { GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, GeoHeading: null, Fotos: [] };
 
 export const testDaten: ProtokollPaket[] = [
   // === Projekt 1: B123 Ausbau Musterstrasse — Protokoll 4 ===

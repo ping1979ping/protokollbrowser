@@ -2,6 +2,8 @@ import { useState, useRef } from 'react';
 import type { Protokoll, Protokollelement } from '../types';
 import { STATUS_MAP } from '../types';
 import { addElement, getElemente, saveFoto } from '../db';
+import MapEditorModal from './map/MapEditorModal';
+import { formatCoord } from './map/mapUtils';
 
 interface Props {
   protokoll: Protokoll;
@@ -32,6 +34,8 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
   const [geoLat, setGeoLat] = useState<number | null>(null);
   const [geoLon, setGeoLon] = useState<number | null>(null);
   const [geoAcc, setGeoAcc] = useState<number | null>(null);
+  const [geoHeading, setGeoHeading] = useState<number | null>(null);
+  const [karteOffen, setKarteOffen] = useState(false);
   const [tempFotos, setTempFotos] = useState<File[]>([]);
   const fotoRef = useRef<HTMLInputElement>(null);
 
@@ -106,7 +110,7 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
       Verweise: verweise,
       MobileErfassung: {
         GeoLat: geoLat, GeoLon: geoLon, GeoAccuracy: geoAcc,
-        GeoText: geoText || null, Fotos: fotoRefs,
+        GeoText: geoText || null, GeoHeading: geoHeading, Fotos: fotoRefs,
       },
       _neu: true,
     };
@@ -214,9 +218,25 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <div className="flex items-center justify-between mb-1">
               <label className="text-[10px] text-gray-400 font-medium uppercase">GPS</label>
-              <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
+              <div className="flex gap-1">
+                <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
+                <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
+              </div>
             </div>
             {geoText ? <p className="text-[10px] text-gray-600">{geoText}</p> : <p className="text-[10px] text-gray-300">Kein Standort</p>}
+            {karteOffen && (
+              <MapEditorModal
+                lat={geoLat}
+                lon={geoLon}
+                heading={geoHeading}
+                onSave={(lat, lon, heading) => {
+                  setGeoLat(lat); setGeoLon(lon); setGeoHeading(heading);
+                  setGeoText(formatCoord(lat, lon, null, heading));
+                  setKarteOffen(false);
+                }}
+                onCancel={() => setKarteOffen(false)}
+              />
+            )}
           </div>
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <div className="flex items-center justify-between mb-1">

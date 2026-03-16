@@ -108,7 +108,7 @@ export function parseDfJson(raw: unknown[]): { pakete: ProtokollPaket[]; verantw
                   VerantwortlicherFirmaName: eRaw['VerantwortlicherName'] as string || '',
                   Verweise: [],
                   MobileErfassung: {
-                    GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, Fotos: [],
+                    GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, GeoHeading: null, Fotos: [],
                   },
                 });
               }

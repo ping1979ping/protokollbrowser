@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
 import { updateElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente } from '../db';
+import MapEditorModal from './map/MapEditorModal';
+import { formatCoord } from './map/mapUtils';
 
 interface Props {
   element: Protokollelement;
@@ -23,6 +25,7 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
   const [prevElem, setPrevElem] = useState<Protokollelement | null>(null);
   const [nextElem, setNextElem] = useState<Protokollelement | null>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
+  const [karteOffen, setKarteOffen] = useState(false);
 
   const istNeu = !!elem._neu;
 
@@ -274,12 +277,33 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
             <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
-            <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
+            <div className="flex gap-1">
+              <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
+              <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
+            </div>
           </div>
-          {elem.MobileErfassung.GeoText
-            ? <p className="text-[10px] text-gray-600">{elem.MobileErfassung.GeoText}</p>
+          {elem.MobileErfassung.GeoLat != null
+            ? <p className="text-[10px] text-gray-600">
+                {formatCoord(elem.MobileErfassung.GeoLat, elem.MobileErfassung.GeoLon!, elem.MobileErfassung.GeoAccuracy, elem.MobileErfassung.GeoHeading)}
+              </p>
             : <p className="text-[10px] text-gray-300">Kein Standort</p>}
         </div>
+        {karteOffen && (
+          <MapEditorModal
+            lat={elem.MobileErfassung.GeoLat}
+            lon={elem.MobileErfassung.GeoLon}
+            heading={elem.MobileErfassung.GeoHeading ?? null}
+            onSave={(lat, lon, heading) => {
+              const acc = elem.MobileErfassung.GeoAccuracy;
+              updateMobile({
+                GeoLat: lat, GeoLon: lon, GeoHeading: heading,
+                GeoText: formatCoord(lat, lon, acc, heading),
+              });
+              setKarteOffen(false);
+            }}
+            onCancel={() => setKarteOffen(false)}
+          />
+        )}
 
         {/* Fotos — nur bei neuen Elementen */}
         {istNeu && (

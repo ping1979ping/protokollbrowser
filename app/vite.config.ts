@@ -12,6 +12,15 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        runtimeCaching: [{
+          urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\//,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'map-tiles',
+            expiration: { maxEntries: 2000, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            cacheableResponse: { statuses: [0, 200] },
+          },
+        }],
       },
       manifest: {
         name: 'Protokoll-App',

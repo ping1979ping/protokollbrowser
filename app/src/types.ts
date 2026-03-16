@@ -12,6 +12,7 @@ export interface MobileErfassung {
   GeoLon: number | null;
   GeoAccuracy: number | null;
   GeoText: string | null;
+  GeoHeading: number | null; // Blickrichtung in Grad, 0=Nord, im Uhrzeigersinn
   Fotos: FotoRef[];
 }
 
