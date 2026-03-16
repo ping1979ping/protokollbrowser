@@ -60,6 +60,34 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
     }
   }, []);
 
+  // Auto-Kompass: Heading automatisch erfassen wenn verfügbar
+  useEffect(() => {
+    if (!autoGps) return;
+    if (!('DeviceOrientationEvent' in window)) return;
+    let captured = false;
+    const handler = (e: DeviceOrientationEvent) => {
+      if (captured) return;
+      if (e.alpha != null) {
+        const iosHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+        const h = Math.round(iosHeading ?? (360 - e.alpha));
+        setGeoHeading(h);
+        captured = true;
+        window.removeEventListener('deviceorientation', handler as EventListener);
+      }
+    };
+    const DOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+    if (DOE.requestPermission) {
+      DOE.requestPermission().then((result) => {
+        if (result === 'granted') {
+          window.addEventListener('deviceorientation', handler as EventListener);
+        }
+      });
+    } else {
+      window.addEventListener('deviceorientation', handler as EventListener);
+    }
+    return () => window.removeEventListener('deviceorientation', handler as EventListener);
+  }, []);
+
   function toggleAutoGps() {
     const next = !autoGps;
     setAutoGps(next);

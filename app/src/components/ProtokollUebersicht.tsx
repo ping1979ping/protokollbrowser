@@ -31,7 +31,11 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
     const prots = await getProtokolleByGruppe(gruppeId);
     prots.sort((a, b) => b.Nummer - a.Nummer);
     setProtokolle(prots);
-    if (prots.length > 0) {
+    // Bevorzugt das Draft-Protokoll auswählen, sonst das erste
+    const draftProt = prots.find(p => (p as typeof p & { _neu?: boolean })._neu);
+    if (draftProt) {
+      await ladeElemente(draftProt);
+    } else if (prots.length > 0) {
       await ladeElemente(prots[0]);
     }
     // Alle Elemente aller Protokolle laden

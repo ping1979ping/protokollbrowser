@@ -114,6 +114,7 @@ export async function getOrCreateDraftProtokoll(
 
   const db = await getDb();
   await db.put('protokolle', neuProt);
+  console.log('[Draft] Neues Protokoll erstellt:', neuProt.Name, 'Nr.', neuProt.Nummer, 'Id:', neuProt.Id);
   return neuProt;
 }
 
