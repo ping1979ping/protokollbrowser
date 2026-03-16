@@ -173,6 +173,8 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
     // Verweise: wenn Nachfolger, dann OID des Vorgängers
     const verweise: string[] = vorgaenger ? [vorgaenger.Id] : [];
 
+    console.log('[NeuesElement] Speichere in Protokoll:', protokoll.Id, protokoll.Name, 'Nr.', protokoll.Nummer, '_neu:', (protokoll as typeof protokoll & { _neu?: boolean })._neu);
+
     const neuesElem: Protokollelement = {
       Id: elemId,
       ProtokollId: protokoll.Id,
