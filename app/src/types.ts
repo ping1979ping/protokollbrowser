@@ -58,6 +58,8 @@ export interface Protokoll {
   Signatur: string;
   Teilnehmer: Teilnehmer[];
   Verteiler: Teilnehmer[];
+  // App-intern
+  _neu?: boolean;
 }
 
 export interface Protokollgruppe {

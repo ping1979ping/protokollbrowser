@@ -41,7 +41,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
   const [tempFotos, setTempFotos] = useState<File[]>([]);
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
   const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
-  const [autoGps, setAutoGps] = useState(() => localStorage.getItem('autoGps') === 'true');
+  const [autoGps, setAutoGps] = useState(() => localStorage.getItem('autoGps') !== 'false');
   const fotoRef = useRef<HTMLInputElement>(null);
 
   // Auto-GPS: bei Erstellung automatisch aktuelle Position erfassen

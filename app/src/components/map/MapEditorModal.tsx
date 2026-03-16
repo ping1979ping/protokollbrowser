@@ -45,7 +45,7 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
   const center: [number, number] = pos || DEFAULT_CENTER;
   const zoom = pos ? DETAIL_ZOOM : 6;
 
-  const [compassActive, setCompassActive] = useState(false);
+  const [compassActive, setCompassActive] = useState(() => localStorage.getItem('compassActive') !== 'false');
   const compassHandlerRef = useCallback((e: DeviceOrientationEvent) => {
     if (e.alpha != null) {
       const iosHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
@@ -53,10 +53,27 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
     }
   }, []);
 
+  // Auto-start compass if default on
+  useEffect(() => {
+    if (compassActive && 'DeviceOrientationEvent' in window) {
+      const DOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+      if (DOE.requestPermission) {
+        DOE.requestPermission().then((result) => {
+          if (result === 'granted') {
+            window.addEventListener('deviceorientation', compassHandlerRef as EventListener);
+          } else setCompassActive(false);
+        });
+      } else {
+        window.addEventListener('deviceorientation', compassHandlerRef as EventListener);
+      }
+    }
+  }, []);
+
   function toggleCompass() {
     if (compassActive) {
       window.removeEventListener('deviceorientation', compassHandlerRef as EventListener);
       setCompassActive(false);
+      localStorage.setItem('compassActive', 'false');
       return;
     }
     if (!('DeviceOrientationEvent' in window)) {
@@ -69,11 +86,13 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
         if (result === 'granted') {
           window.addEventListener('deviceorientation', compassHandlerRef as EventListener);
           setCompassActive(true);
+          localStorage.setItem('compassActive', 'true');
         } else alert('Kompass-Berechtigung verweigert.');
       });
     } else {
       window.addEventListener('deviceorientation', compassHandlerRef as EventListener);
       setCompassActive(true);
+      localStorage.setItem('compassActive', 'true');
     }
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
-import { getProtokolleByGruppe, getElemente, getProtokollgruppe } from '../db';
+import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll } from '../db';
 import MapOverview from './map/MapOverview';
 
 interface Props {
@@ -121,22 +121,26 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
           >
             Karte
           </button>
-          {protokolle.map(p => (
-            <button
-              key={p.Id}
-              onClick={() => { setAnsicht('einzeln'); ladeElemente(p); }}
-              className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
-                ansicht === 'einzeln' && gewaehltesProt?.Id === p.Id
-                  ? 'border-ping-blue text-ping-blue'
-                  : 'border-transparent text-gray-500'
-              }`}
-            >
-              Nr. {p.Nummer}
-              <span className="text-gray-400 ml-1">
-                {new Date(p.Datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
-              </span>
-            </button>
-          ))}
+          {protokolle.map(p => {
+            const isDraft = (p as typeof p & { _neu?: boolean })._neu;
+            return (
+              <button
+                key={p.Id}
+                onClick={() => { setAnsicht('einzeln'); ladeElemente(p); }}
+                className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
+                  ansicht === 'einzeln' && gewaehltesProt?.Id === p.Id
+                    ? isDraft ? 'border-green-500 text-green-700' : 'border-ping-blue text-ping-blue'
+                    : isDraft ? 'border-transparent text-green-600' : 'border-transparent text-gray-500'
+                }`}
+              >
+                Nr. {p.Nummer}
+                {isDraft && <span className="text-green-500 ml-0.5">*</span>}
+                <span className="text-gray-400 ml-1">
+                  {new Date(p.Datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -246,9 +250,16 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
       )}
 
       {/* FAB */}
-      {aktivProt && (
+      {aktivProt && gruppe && (
         <button
-          onClick={() => onNeuesElement(aktivProt, gruppe)}
+          onClick={async () => {
+            const draft = await getOrCreateDraftProtokoll(gruppe.Id, {
+              Name: aktivProt.Name,
+              Ort: aktivProt.Ort,
+              Autor: aktivProt.Autor,
+            });
+            onNeuesElement(draft, gruppe);
+          }}
           className="fixed bottom-4 right-4 bg-ping-blue text-white w-12 h-12 rounded-full shadow-lg hover:bg-ping-blue-dark active:bg-ping-blue-dark text-xl font-light flex items-center justify-center"
         >
           +

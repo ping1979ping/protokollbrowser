@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from './types';
-import { getProtokolleByGruppe } from './db';
+import { getProtokolleByGruppe, getOrCreateDraftProtokoll } from './db';
 import ImportScreen from './components/ImportScreen';
 import ProjektAuswahl from './components/ProjektAuswahl';
 import ProtokollUebersicht from './components/ProtokollUebersicht';
@@ -52,7 +52,14 @@ export default function App() {
           gruppe={screen.gruppe}
           filteredIds={screen.filteredIds}
           onBack={() => { refresh(); setScreen({ name: 'uebersicht', gruppeId: screen.gruppe.Id }); }}
-          onNachfolger={(vorgaenger) => setScreen({ name: 'neu', protokoll: screen.protokoll, gruppe: screen.gruppe, vorgaenger })}
+          onNachfolger={async (vorgaenger) => {
+            const draft = await getOrCreateDraftProtokoll(screen.gruppe.Id, {
+              Name: screen.protokoll.Name,
+              Ort: screen.protokoll.Ort,
+              Autor: screen.protokoll.Autor,
+            });
+            setScreen({ name: 'neu', protokoll: draft, gruppe: screen.gruppe, vorgaenger });
+          }}
           onNavigate={async (elem) => {
             let prot = screen.protokoll;
             if (elem.ProtokollId !== screen.protokoll.Id) {

@@ -79,6 +79,44 @@ export async function getProtokolleByGruppe(gruppeId: string): Promise<Protokoll
   return db.getAllFromIndex('protokolle', 'byGruppe', gruppeId);
 }
 
+export async function getOrCreateDraftProtokoll(
+  gruppeId: string,
+  basierend: { Name: string; Ort: string; Autor: string },
+): Promise<ProtokollMitGruppe> {
+  const prots = await getProtokolleByGruppe(gruppeId);
+  // Bereits ein Draft-Protokoll vorhanden?
+  const draft = prots.find(p => (p as ProtokollMitGruppe & { _neu?: boolean })._neu);
+  if (draft) return draft;
+
+  // Neues Protokoll anlegen: nächste Nummer
+  const maxNummer = prots.reduce((max, p) => Math.max(max, p.Nummer), 0);
+  const neueNummer = maxNummer + 1;
+  const nameBase = basierend.Name.replace(/\d+$/, '');
+
+  const neuProt: ProtokollMitGruppe & { _neu?: boolean } = {
+    Id: `prot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    Name: `${nameBase}${neueNummer}`,
+    Nummer: neueNummer,
+    Datum: new Date().toISOString(),
+    Ort: basierend.Ort,
+    Autor: basierend.Autor,
+    Vorbemerkung: '',
+    Nachbemerkung: '',
+    Erledigt: false,
+    IstEinzelprotokoll: false,
+    Erstellt: false,
+    Signatur: '',
+    Teilnehmer: [],
+    Verteiler: [],
+    GruppeId: gruppeId,
+    _neu: true,
+  };
+
+  const db = await getDb();
+  await db.put('protokolle', neuProt);
+  return neuProt;
+}
+
 export async function getProtokolle(): Promise<ProtokollMitGruppe[]> {
   const db = await getDb();
   return db.getAll('protokolle');
