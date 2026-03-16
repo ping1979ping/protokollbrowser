@@ -92,14 +92,18 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
   async function speichern() {
     if (!positionstext.trim()) { alert('Bitte Positionstext eingeben.'); return; }
 
-    // Position: manuell oder auto-generiert
+    // Position: manuell oder auto-generiert (über ALLE Protokolle der Gruppe)
     let pos = position.trim();
     if (!pos) {
-      const bestehende = await getElemente(protokoll.Id);
-      const maxPos = bestehende.reduce((max, e) => {
-        const num = parseFloat(e.Position);
-        return num > max ? num : max;
-      }, 0);
+      const allProts = await getProtokolleByGruppe(gruppe.Id);
+      let maxPos = 0;
+      for (const p of allProts) {
+        const elems = await getElemente(p.Id);
+        for (const e of elems) {
+          const num = parseFloat(e.Position);
+          if (num > maxPos) maxPos = num;
+        }
+      }
       pos = `${Math.floor(maxPos) + 1}`;
     }
 

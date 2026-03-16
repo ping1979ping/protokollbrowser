@@ -34,7 +34,7 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
   const [changes, setChanges] = useState<Map<string, { lat: number; lon: number }>>(new Map());
   const [saving, setSaving] = useState(false);
   const [activeLayer, setActiveLayer] = useState<LayerDef>(LAYERS[0]);
-  const [layerOpacity, setLayerOpacity] = useState(100);
+  const [layerOpacity, setLayerOpacity] = useState(60);
   const [showTileCache, setShowTileCache] = useState(false);
 
   const mitGps = useMemo(() => elementeWithGps(elemente), [elemente]);

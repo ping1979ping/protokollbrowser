@@ -22,7 +22,7 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
   const [heading, setHeading] = useState<number | null>(initialHeading);
   const [locating, setLocating] = useState(false);
   const [activeLayer, setActiveLayer] = useState<LayerDef>(LAYERS[0]);
-  const [layerOpacity, setLayerOpacity] = useState(100);
+  const [layerOpacity, setLayerOpacity] = useState(60);
 
   useEffect(() => {
     if (pos) return;
