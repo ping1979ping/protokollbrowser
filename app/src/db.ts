@@ -91,11 +91,13 @@ export async function getOrCreateDraftProtokoll(
   // Neues Protokoll anlegen: nächste Nummer
   const maxNummer = prots.reduce((max, p) => Math.max(max, p.Nummer), 0);
   const neueNummer = maxNummer + 1;
-  const nameBase = basierend.Name.replace(/\d+$/, '');
+  // Name-Pattern: "Baustellennotiz 6 - 2025" → Basis "Baustellennotiz", dann "Nr - Jahr"
+  const nameBase = basierend.Name.replace(/\s*\d+\s*[-–]\s*\d+$/, '').replace(/\s*\d+$/, '');
+  const jahr = new Date().getFullYear();
 
   const neuProt: ProtokollMitGruppe & { _neu?: boolean } = {
     Id: `prot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    Name: `${nameBase}${neueNummer}`,
+    Name: `${nameBase} ${neueNummer} - ${jahr}`,
     Nummer: neueNummer,
     Datum: new Date().toISOString(),
     Ort: basierend.Ort,
