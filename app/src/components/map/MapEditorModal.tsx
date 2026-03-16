@@ -45,7 +45,20 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
   const center: [number, number] = pos || DEFAULT_CENTER;
   const zoom = pos ? DETAIL_ZOOM : 6;
 
-  function handleCompass() {
+  const [compassActive, setCompassActive] = useState(false);
+  const compassHandlerRef = useCallback((e: DeviceOrientationEvent) => {
+    if (e.alpha != null) {
+      const iosHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+      setHeading(Math.round(iosHeading ?? (360 - e.alpha)));
+    }
+  }, []);
+
+  function toggleCompass() {
+    if (compassActive) {
+      window.removeEventListener('deviceorientation', compassHandlerRef as EventListener);
+      setCompassActive(false);
+      return;
+    }
     if (!('DeviceOrientationEvent' in window)) {
       alert('Kompass nicht verfügbar auf diesem Gerät.');
       return;
@@ -53,24 +66,21 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
     const DOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
     if (DOE.requestPermission) {
       DOE.requestPermission().then((result) => {
-        if (result === 'granted') readCompass();
-        else alert('Kompass-Berechtigung verweigert.');
+        if (result === 'granted') {
+          window.addEventListener('deviceorientation', compassHandlerRef as EventListener);
+          setCompassActive(true);
+        } else alert('Kompass-Berechtigung verweigert.');
       });
     } else {
-      readCompass();
+      window.addEventListener('deviceorientation', compassHandlerRef as EventListener);
+      setCompassActive(true);
     }
   }
 
-  function readCompass() {
-    function handler(e: DeviceOrientationEvent) {
-      if (e.alpha != null) {
-        const iosHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
-        setHeading(Math.round(iosHeading ?? (360 - e.alpha)));
-      }
-      window.removeEventListener('deviceorientation', handler);
-    }
-    window.addEventListener('deviceorientation', handler);
-  }
+  // Cleanup compass on unmount
+  useEffect(() => {
+    return () => window.removeEventListener('deviceorientation', compassHandlerRef as EventListener);
+  }, [compassHandlerRef]);
 
   return (
     <div className="fixed inset-0 z-[9999] bg-white flex flex-col" style={{ height: '100dvh' }}>
@@ -149,13 +159,6 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
           <span className="text-[10px] text-gray-600 w-8 text-right font-mono">
             {heading != null ? `${heading}°` : '—'}
           </span>
-          <button
-            onClick={handleCompass}
-            className="bg-ping-blue-light text-ping-blue px-2 py-1 rounded text-[10px] font-medium"
-            title="Kompass"
-          >
-            Kompass
-          </button>
           {heading != null && (
             <button
               onClick={() => setHeading(null)}
@@ -181,9 +184,19 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
               );
             }}
-            className="flex-1 bg-green-600 text-white py-2 rounded text-xs font-medium"
+            className="bg-green-600 text-white py-1.5 px-3 rounded text-[10px] font-medium"
           >
-            GPS-Position verwenden
+            Aktuelle GPS-Position
+          </button>
+          <button
+            onClick={toggleCompass}
+            className={`py-1.5 px-3 rounded text-[10px] font-medium ${
+              compassActive
+                ? 'bg-ping-blue text-white'
+                : 'bg-ping-blue-light text-ping-blue'
+            }`}
+          >
+            Kompass {compassActive ? 'AN' : 'AUS'}
           </button>
         </div>
       </div>

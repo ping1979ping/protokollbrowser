@@ -41,7 +41,30 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
   const [tempFotos, setTempFotos] = useState<File[]>([]);
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
   const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
+  const [autoGps, setAutoGps] = useState(() => localStorage.getItem('autoGps') === 'true');
   const fotoRef = useRef<HTMLInputElement>(null);
+
+  // Auto-GPS: bei Erstellung automatisch aktuelle Position erfassen
+  useEffect(() => {
+    if (autoGps && geoLat == null && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (p) => {
+          const lat = p.coords.latitude, lon = p.coords.longitude;
+          const acc = Math.round(p.coords.accuracy);
+          setGeoLat(lat); setGeoLon(lon); setGeoAcc(acc);
+          setGeoText(`${lat.toFixed(7)}, ${lon.toFixed(7)} (${acc} m)`);
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+      );
+    }
+  }, []);
+
+  function toggleAutoGps() {
+    const next = !autoGps;
+    setAutoGps(next);
+    localStorage.setItem('autoGps', String(next));
+  }
 
   useEffect(() => {
     getVerantwortliche().then(setFirmen);
@@ -245,6 +268,20 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
             className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
         </div>
 
+        {/* Auto-GPS Toggle */}
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100 flex items-center justify-between">
+          <div>
+            <label className="text-[10px] text-gray-400 font-medium uppercase block">Auto-GPS</label>
+            <p className="text-[10px] text-gray-500">Position automatisch erfassen</p>
+          </div>
+          <button
+            onClick={toggleAutoGps}
+            className={`relative w-10 h-5 rounded-full transition ${autoGps ? 'bg-green-500' : 'bg-gray-300'}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoGps ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+
         {/* GPS + Fotos */}
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
@@ -255,7 +292,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
                 <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
               </div>
             </div>
-            {geoText ? <p className="text-[10px] text-gray-600">{geoText}</p> : <p className="text-[10px] text-gray-300">Kein Standort</p>}
+            {geoText ? <p className="text-[10px] text-gray-600">{geoText}</p> : <p className="text-[10px] text-gray-300">{autoGps ? 'Wird ermittelt...' : 'Kein Standort'}</p>}
             {karteOffen && (
               <MapEditorModal
                 lat={geoLat}

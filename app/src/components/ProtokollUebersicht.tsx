@@ -108,7 +108,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
           <button
             onClick={() => setAnsicht('alle')}
             className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
-              ansicht === 'alle' ? 'border-ping-blue text-ping-blue' : 'border-transparent text-gray-500'
+              ansicht === 'alle' ? 'border-ping-gold text-ping-gold-dark bg-ping-gold-light' : 'border-transparent text-ping-gold-dark bg-ping-gold-light/40'
             }`}
           >
             Gesamt
@@ -116,7 +116,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
           <button
             onClick={() => setAnsicht('karte')}
             className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
-              ansicht === 'karte' ? 'border-ping-blue text-ping-blue' : 'border-transparent text-gray-500'
+              ansicht === 'karte' ? 'border-ping-gold text-ping-gold-dark bg-ping-gold-light' : 'border-transparent text-ping-gold-dark bg-ping-gold-light/40'
             }`}
           >
             Karte
@@ -144,7 +144,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
       <div className="px-2 py-1.5 bg-white border-b flex gap-1.5 items-center">
         <input
           type="text"
-          placeholder="Positionstext suchen..."
+          placeholder="Text suchen..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue"
@@ -162,10 +162,15 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
         ))}
       </div>
 
-      {/* Protokollkopf (nur bei Einzelansicht) */}
+      {/* Protokollkopf */}
+      {ansicht === 'alle' && (
+        <div className="px-3 py-1.5 bg-ping-blue-light border-b text-xs text-gray-600 font-medium">
+          Gesamtprotokoll
+        </div>
+      )}
       {ansicht === 'einzeln' && aktivProt && (
         <div className="px-3 py-1.5 bg-ping-blue-light border-b text-xs text-gray-600">
-          {new Date(aktivProt.Datum).toLocaleDateString('de-DE')} &middot; {aktivProt.Ort} &middot; {aktivProt.Autor}
+          <span className="font-medium">{aktivProt.Name}</span> &middot; {new Date(aktivProt.Datum).toLocaleDateString('de-DE')} &middot; {aktivProt.Ort} &middot; {aktivProt.Autor}
           {aktivProt.Erledigt && <span className="ml-2 text-green-600 font-medium">erledigt</span>}
         </div>
       )}
