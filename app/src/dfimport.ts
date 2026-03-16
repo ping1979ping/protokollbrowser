@@ -107,9 +107,7 @@ export function parseDfJson(raw: unknown[]): { pakete: ProtokollPaket[]; verantw
                   VerantwortlicherFirmaOid: eRaw['VerantwortlicherOid'] as string || '',
                   VerantwortlicherFirmaName: eRaw['VerantwortlicherName'] as string || '',
                   Verweise: [],
-                  MobileErfassung: {
-                    GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, GeoHeading: null, Fotos: [],
-                  },
+                  MobileErfassung: parseMobileErfassung(eRaw['MobileErfassung']),
                 });
               }
             }
@@ -122,6 +120,21 @@ export function parseDfJson(raw: unknown[]): { pakete: ProtokollPaket[]; verantw
   }
 
   return { pakete, verantwortliche };
+}
+
+function parseMobileErfassung(raw: unknown): Protokollelement['MobileErfassung'] {
+  if (!raw || typeof raw !== 'object') {
+    return { GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, GeoHeading: null, Fotos: [] };
+  }
+  const m = raw as Record<string, unknown>;
+  return {
+    GeoLat: typeof m['GeoLat'] === 'number' ? m['GeoLat'] : null,
+    GeoLon: typeof m['GeoLon'] === 'number' ? m['GeoLon'] : null,
+    GeoAccuracy: typeof m['GeoAccuracy'] === 'number' ? m['GeoAccuracy'] : null,
+    GeoText: (m['GeoText'] as string) || null,
+    GeoHeading: typeof m['GeoHeading'] === 'number' ? m['GeoHeading'] : null,
+    Fotos: Array.isArray(m['Fotos']) ? m['Fotos'] : [],
+  };
 }
 
 function parseTeilnehmer(raw: unknown): Teilnehmer[] {

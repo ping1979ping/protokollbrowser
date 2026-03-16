@@ -78,7 +78,15 @@
                   "Erinnerung": false,
                   "Wert": 0,
                   "VerantwortlicherOid": "",
-                  "VerantwortlicherName": ""
+                  "VerantwortlicherName": "",
+                  "MobileErfassung": {
+                    "GeoLat": 49.2513,
+                    "GeoLon": 11.2342,
+                    "GeoAccuracy": 5,
+                    "GeoText": "49.2513000, 11.2342000 (5 m)",
+                    "GeoHeading": 45,
+                    "Fotos": []
+                  }
                 },
                 {
                   "Id": "1CY9N8",
@@ -93,7 +101,15 @@
                   "Erinnerung": false,
                   "Wert": 0,
                   "VerantwortlicherOid": "",
-                  "VerantwortlicherName": ""
+                  "VerantwortlicherName": "",
+                  "MobileErfassung": {
+                    "GeoLat": 49.252,
+                    "GeoLon": 11.2358,
+                    "GeoAccuracy": 3,
+                    "GeoText": "49.2520000, 11.2358000 (3 m)",
+                    "GeoHeading": 120,
+                    "Fotos": []
+                  }
                 },
                 {
                   "Id": "1CY9N9",
@@ -108,7 +124,15 @@
                   "Erinnerung": false,
                   "Wert": 0,
                   "VerantwortlicherOid": "3W2Q",
-                  "VerantwortlicherName": "PETTER INGENIEURE GmbH"
+                  "VerantwortlicherName": "PETTER INGENIEURE GmbH",
+                  "MobileErfassung": {
+                    "GeoLat": 49.2505,
+                    "GeoLon": 11.237,
+                    "GeoAccuracy": 8,
+                    "GeoText": "49.2505000, 11.2370000 (8 m)",
+                    "GeoHeading": 270,
+                    "Fotos": []
+                  }
                 },
                 {
                   "Id": "1CY9NA",
@@ -123,7 +147,15 @@
                   "Erinnerung": false,
                   "Wert": 0,
                   "VerantwortlicherOid": "6G06",
-                  "VerantwortlicherName": "Fritz Kreichauf GmbH & Co KG"
+                  "VerantwortlicherName": "Fritz Kreichauf GmbH & Co KG",
+                  "MobileErfassung": {
+                    "GeoLat": 49.253,
+                    "GeoLon": 11.233,
+                    "GeoAccuracy": 4,
+                    "GeoText": "49.2530000, 11.2330000 (4 m)",
+                    "GeoHeading": null,
+                    "Fotos": []
+                  }
                 },
                 {
                   "Id": "1CY9NB",
@@ -138,7 +170,15 @@
                   "Erinnerung": false,
                   "Wert": 0,
                   "VerantwortlicherOid": "3W2Q",
-                  "VerantwortlicherName": "PETTER INGENIEURE GmbH"
+                  "VerantwortlicherName": "PETTER INGENIEURE GmbH",
+                  "MobileErfassung": {
+                    "GeoLat": 49.2498,
+                    "GeoLon": 11.2345,
+                    "GeoAccuracy": 6,
+                    "GeoText": "49.2498000, 11.2345000 (6 m)",
+                    "GeoHeading": 180,
+                    "Fotos": []
+                  }
                 },
                 {
                   "Id": "1CY9NC",
@@ -153,7 +193,15 @@
                   "Erinnerung": false,
                   "Wert": 0,
                   "VerantwortlicherOid": "",
-                  "VerantwortlicherName": ""
+                  "VerantwortlicherName": "",
+                  "MobileErfassung": {
+                    "GeoLat": 49.254,
+                    "GeoLon": 11.238,
+                    "GeoAccuracy": 3,
+                    "GeoText": "49.2540000, 11.2380000 (3 m)",
+                    "GeoHeading": 0,
+                    "Fotos": []
+                  }
                 },
                 {
                   "Id": "1CY9ND",
@@ -168,7 +216,15 @@
                   "Erinnerung": false,
                   "Wert": 0,
                   "VerantwortlicherOid": "6FTC",
-                  "VerantwortlicherName": "Zweckverband zur Wasserversorgung der Jura-Schwarzach-Thalach-Gruppe"
+                  "VerantwortlicherName": "Zweckverband zur Wasserversorgung der Jura-Schwarzach-Thalach-Gruppe",
+                  "MobileErfassung": {
+                    "GeoLat": 49.2515,
+                    "GeoLon": 11.231,
+                    "GeoAccuracy": 5,
+                    "GeoText": "49.2515000, 11.2310000 (5 m)",
+                    "GeoHeading": 90,
+                    "Fotos": []
+                  }
                 },
                 {
                   "Id": "1CY9NE",
@@ -183,7 +239,15 @@
                   "Erinnerung": false,
                   "Wert": 0,
                   "VerantwortlicherOid": "3W2Q",
-                  "VerantwortlicherName": "PETTER INGENIEURE GmbH"
+                  "VerantwortlicherName": "PETTER INGENIEURE GmbH",
+                  "MobileErfassung": {
+                    "GeoLat": 49.2525,
+                    "GeoLon": 11.2365,
+                    "GeoAccuracy": 7,
+                    "GeoText": "49.2525000, 11.2365000 (7 m)",
+                    "GeoHeading": 315,
+                    "Fotos": []
+                  }
                 }
               ]
             ]
@@ -313,7 +377,7 @@
                   "ProtokollId": "1DCEUE",
                   "Position": "16",
                   "Positionstitel": "",
-                  "Positionstext": "Fa. LIPP hat mitgeteilt, dass das Provisorium abweichend vom LV im Regelfall mit einer Pumpe betrieben wird. \r\n\r\nEine 2. Pumpe steht für den Havariefall im Provisorium bereit und kann über eine manuelle Ansteuerung in Betrieb genommen werden. \r\n\r\nEin Umbau\/ Tausch der Pumpen ist jederzeit möglich unterbricht jedoch die Versorgung für ca. 1 Tag. \r\n\r\nDas Provisorium kann durch eine manuelle Umschaltung im Havariefall auch als Druckerhöhungsanlage betrieben werden. \r\n\r\nDie Leistungsfähigkeit der Pumpe beträgt ca. 20 m³\/h. PING verweist das die Pumpe eine geringere Leistungsfähigkeit als ausgeschrieben aufweist. \r\n\r\nDas Provisorium wird über einen 16 Amper- Stecker angeschlossen. \r\n\r\nFa. LIPP hat mitgeteilt, dass das Provisorium mit 24 V Gleichspannung betrieben wird. \r\n\r\nFa. LIPP verweist auf den Einbau eines Fi- Schutzschalters der Klasse B. \r\n\r\nZVJST hat der Ausführung des Provisorium zugestimmt. \r\n\r\n ",
+                  "Positionstext": "Fa. LIPP hat mitgeteilt, dass das Provisorium abweichend vom LV im Regelfall mit einer Pumpe betrieben wird. \r\n\r\nEine 2. Pumpe steht für den Havariefall im Provisorium bereit und kann über eine manuelle Ansteuerung in Betrieb genommen werden. \r\n\r\nEin Umbau/ Tausch der Pumpen ist jederzeit möglich unterbricht jedoch die Versorgung für ca. 1 Tag. \r\n\r\nDas Provisorium kann durch eine manuelle Umschaltung im Havariefall auch als Druckerhöhungsanlage betrieben werden. \r\n\r\nDie Leistungsfähigkeit der Pumpe beträgt ca. 20 m³/h. PING verweist das die Pumpe eine geringere Leistungsfähigkeit als ausgeschrieben aufweist. \r\n\r\nDas Provisorium wird über einen 16 Amper- Stecker angeschlossen. \r\n\r\nFa. LIPP hat mitgeteilt, dass das Provisorium mit 24 V Gleichspannung betrieben wird. \r\n\r\nFa. LIPP verweist auf den Einbau eines Fi- Schutzschalters der Klasse B. \r\n\r\nZVJST hat der Ausführung des Provisorium zugestimmt. \r\n\r\n ",
                   "Thema": "Provisorium",
                   "Status": 20,
                   "Termin": "01.01.1601 00:00:00",
@@ -451,7 +515,7 @@
                   "ProtokollId": "1DTNIA",
                   "Position": "25",
                   "Positionstitel": "",
-                  "Positionstext": "Hr. Zahn schickt PING eine Auflistung der zu liefernden Komponeten:\r\nVor Ort wurden folgen Messbereiche für die beiden MID's besprochen (0-100m³\/h) Typ Waterflux 3100C\r\nHr. Zahn schickt PING Pumpendatenblätter zur Prüfung ",
+                  "Positionstext": "Hr. Zahn schickt PING eine Auflistung der zu liefernden Komponeten:\r\nVor Ort wurden folgen Messbereiche für die beiden MID's besprochen (0-100m³/h) Typ Waterflux 3100C\r\nHr. Zahn schickt PING Pumpendatenblätter zur Prüfung ",
                   "Thema": "Anlagentechnik",
                   "Status": 20,
                   "Termin": "01.01.1601 00:00:00",
@@ -772,7 +836,7 @@
                   "ProtokollId": "1GAJZE",
                   "Position": "44",
                   "Positionstitel": "",
-                  "Positionstext": "Die Eingangstüre wird ohne Türschloss\/ Schließzylinder geliefert.\r\nZVJST bittet um Zusendung der Schlossmaße, zur Bestellung des entsprechenden Schließzylinders für das bestehende Schließsystem.      ",
+                  "Positionstext": "Die Eingangstüre wird ohne Türschloss/ Schließzylinder geliefert.\r\nZVJST bittet um Zusendung der Schlossmaße, zur Bestellung des entsprechenden Schließzylinders für das bestehende Schließsystem.      ",
                   "Thema": "ZPW Aue",
                   "Status": 10,
                   "Termin": "04.07.2025 00:00:00",
@@ -862,7 +926,7 @@
                   "ProtokollId": "1GAJZE",
                   "Position": "50",
                   "Positionstitel": "",
-                  "Positionstext": "Zur Schließung der Maueröffnung im Bereich der Glasbausteine wird eine externe Firma beauftragt. \r\n\r\nLIPP montiert in diesem Bereich lediglich das Lüftungsgitter. \r\n\r\nLIPP informiert, dass die Öffnung zur Montage des Lüftungsgitters etwas größer gehalten werden soll und der Zwischenraum nach Montage des Lüftungsgitters mit Wärmedämmung\/ Isolierung ausgefüllt werden soll. \r\n\r\nDurch die Ausführung wird die Wärmebrücke in diesem Bereich minimiert. \r\n\r\nZVJST stimmt der Ausführung zu. \r\n\r\nLIPP übersendet die genauen Maße des Lüftungsgitters. ",
+                  "Positionstext": "Zur Schließung der Maueröffnung im Bereich der Glasbausteine wird eine externe Firma beauftragt. \r\n\r\nLIPP montiert in diesem Bereich lediglich das Lüftungsgitter. \r\n\r\nLIPP informiert, dass die Öffnung zur Montage des Lüftungsgitters etwas größer gehalten werden soll und der Zwischenraum nach Montage des Lüftungsgitters mit Wärmedämmung/ Isolierung ausgefüllt werden soll. \r\n\r\nDurch die Ausführung wird die Wärmebrücke in diesem Bereich minimiert. \r\n\r\nZVJST stimmt der Ausführung zu. \r\n\r\nLIPP übersendet die genauen Maße des Lüftungsgitters. ",
                   "Thema": "ZPW Aue",
                   "Status": 10,
                   "Termin": "01.01.1601 00:00:00",
@@ -982,7 +1046,7 @@
                   "ProtokollId": "1GAJZE",
                   "Position": "58",
                   "Positionstitel": "",
-                  "Positionstext": "Folgender Zeitplan ergibt sich für den weiteren Projektablauf: \r\n\r\nKW 26 - Demontage durch die Fa. LIPP\r\nKW 27 \/ 28 - Fliesenarbeiten Fa. Buberl\r\nKW 28\/29 - Montage hydraulische Installation und Stahlbau Fa. LIPP\r\nKW 30\/31 - Aufbau Schaltschränke und Installation E-Technik Fa. Mersch",
+                  "Positionstext": "Folgender Zeitplan ergibt sich für den weiteren Projektablauf: \r\n\r\nKW 26 - Demontage durch die Fa. LIPP\r\nKW 27 / 28 - Fliesenarbeiten Fa. Buberl\r\nKW 28/29 - Montage hydraulische Installation und Stahlbau Fa. LIPP\r\nKW 30/31 - Aufbau Schaltschränke und Installation E-Technik Fa. Mersch",
                   "Thema": "Allgemein ",
                   "Status": 21,
                   "Termin": "01.01.1601 00:00:00",
@@ -1030,7 +1094,7 @@
                   "ProtokollId": "1GITH9",
                   "Position": "60",
                   "Positionstitel": "",
-                  "Positionstext": "Die Malerarbeiten werden durch einen Meisterbetrieb ausgeführt. Ausführung erfolgt durch die Firma\r\n\r\nMalerbetrieb Kurt  Schieferdecker\r\nEckamnnshofener Str. 38\r\n91177 Thalmässing\r\nTelefon: 09173\/479\r\nE-Mail: info@maler-Schieferdecker.de",
+                  "Positionstext": "Die Malerarbeiten werden durch einen Meisterbetrieb ausgeführt. Ausführung erfolgt durch die Firma\r\n\r\nMalerbetrieb Kurt  Schieferdecker\r\nEckamnnshofener Str. 38\r\n91177 Thalmässing\r\nTelefon: 09173/479\r\nE-Mail: info@maler-Schieferdecker.de",
                   "Thema": "ZPW Aue",
                   "Status": 0,
                   "Termin": "11.07.2025 00:00:00",
@@ -1093,7 +1157,7 @@
                   "ProtokollId": "1CY6ES",
                   "Position": "1",
                   "Positionstitel": "",
-                  "Positionstext": "Wetter: Sonnig\r\nTemperatur: 16 °C\r\nBaufirmen: KREI\r\nAnzahl Arbeitskräfte: 0 \r\n\r\nBaustand: Bauanlaufgespräch\/ Vorabstimmung ",
+                  "Positionstext": "Wetter: Sonnig\r\nTemperatur: 16 °C\r\nBaufirmen: KREI\r\nAnzahl Arbeitskräfte: 0 \r\n\r\nBaustand: Bauanlaufgespräch/ Vorabstimmung ",
                   "Thema": "BT1",
                   "Status": 20,
                   "Termin": "06.03.2025 00:00:00",
@@ -1108,7 +1172,7 @@
                   "ProtokollId": "1CY6ES",
                   "Position": "2",
                   "Positionstitel": "",
-                  "Positionstext": "Wetter: Sonnig, bewölkt, windig\r\nTemperatur: 9 °C\r\nBaufirmen: LIPP\r\nAnzahl Arbeitskräfte: 0 \r\n\r\nBaustand: Bauanlaufgespräch\/ Vorabstimmung ",
+                  "Positionstext": "Wetter: Sonnig, bewölkt, windig\r\nTemperatur: 9 °C\r\nBaufirmen: LIPP\r\nAnzahl Arbeitskräfte: 0 \r\n\r\nBaustand: Bauanlaufgespräch/ Vorabstimmung ",
                   "Thema": "BT2",
                   "Status": 20,
                   "Termin": "17.03.2025 00:00:00",
@@ -1228,7 +1292,7 @@
                   "ProtokollId": "1CY6ES",
                   "Position": "10",
                   "Positionstitel": "",
-                  "Positionstext": "Wetter: bewölkt\r\nTemperatur: 14 °C\r\nBaufirmen: KREI\r\nAnzahl Arbeitskräfte: 5 \r\n\r\nBaustand: Ein-\/ Umbindung Pumpwerk",
+                  "Positionstext": "Wetter: bewölkt\r\nTemperatur: 14 °C\r\nBaufirmen: KREI\r\nAnzahl Arbeitskräfte: 5 \r\n\r\nBaustand: Ein-/ Umbindung Pumpwerk",
                   "Thema": "BT8",
                   "Status": 0,
                   "Termin": "01.10.2025 00:00:00",
@@ -1261,7 +1325,7 @@
                   "ProtokollId": "1CY6E6",
                   "Position": "MK1",
                   "Positionstitel": "",
-                  "Positionstext": "ZVJST wünscht den Einbau von DN 50 Schiebern anstatt eines Kugelhahns vor den beiden Sicherheitsventilen. Hierdurch entstehen Mehrkosten in Höhe von 716 EUR\/netto.",
+                  "Positionstext": "ZVJST wünscht den Einbau von DN 50 Schiebern anstatt eines Kugelhahns vor den beiden Sicherheitsventilen. Hierdurch entstehen Mehrkosten in Höhe von 716 EUR/netto.",
                   "Thema": "-",
                   "Status": 0,
                   "Termin": "01.01.1601 00:00:00",
@@ -1276,7 +1340,7 @@
                   "ProtokollId": "1CY6E6",
                   "Position": "MK2",
                   "Positionstitel": "",
-                  "Positionstext": "Errichtung des Pumpenfundamentes als Edelstahlkonsole und nicht als Betonfundament. Kosten nach 1. Abschätzung ca. 800 EUR\/netto. ",
+                  "Positionstext": "Errichtung des Pumpenfundamentes als Edelstahlkonsole und nicht als Betonfundament. Kosten nach 1. Abschätzung ca. 800 EUR/netto. ",
                   "Thema": "",
                   "Status": 0,
                   "Termin": "01.01.1601 00:00:00",

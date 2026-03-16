@@ -76,7 +76,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
   if (!gruppe) return <div className="p-6 text-gray-500">Laden...</div>;
 
   return (
-    <div className="h-screen bg-ping-bg flex flex-col">
+    <div className="h-[100dvh] bg-ping-bg flex flex-col overflow-hidden">
       {/* Header */}
       <div className="bg-ping-blue text-white p-3">
         <div className="flex items-center justify-between mb-1">

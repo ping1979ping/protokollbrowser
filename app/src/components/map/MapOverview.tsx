@@ -94,10 +94,10 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0" style={{ minHeight: 200 }}>
       <div className="flex-1 relative min-h-0">
         {mitGps.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full min-h-[200px]">
             <p className="text-gray-400 text-sm">Keine Elemente mit GPS-Position vorhanden.</p>
           </div>
         ) : (
