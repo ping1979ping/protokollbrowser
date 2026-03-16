@@ -34,22 +34,30 @@ npm install -D @types/leaflet
 
 ### 1.2 Offline-Kacheln: Service Worker Cache
 
-Die App nutzt bereits `vite-plugin-pwa` mit Workbox. Kartenkacheln werden ueber eine `runtimeCaching`-Regel automatisch gecacht:
+Die App nutzt `vite-plugin-pwa` mit Workbox. Kartenkacheln werden ueber `runtimeCaching`-Regeln automatisch gecacht:
 
 ```ts
-// vite.config.ts — Ergaenzung in workbox-Konfiguration
-runtimeCaching: [{
-  urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\//,
-  handler: 'CacheFirst',
-  options: {
-    cacheName: 'map-tiles',
-    expiration: {
-      maxEntries: 2000,        // ~20 MB
-      maxAgeSeconds: 30 * 24 * 60 * 60  // 30 Tage
+// vite.config.ts — workbox-Konfiguration
+runtimeCaching: [
+  {
+    urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\//,
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'map-tiles-osm',
+      expiration: { maxEntries: 5000, maxAgeSeconds: 30 * 24 * 60 * 60 },
+      cacheableResponse: { statuses: [0, 200] },
     },
-    cacheableResponse: { statuses: [0, 200] },
   },
-}],
+  {
+    urlPattern: /^https:\/\/wmtsod\d\.bayernwolke\.de\//,
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'map-tiles-bayern',
+      expiration: { maxEntries: 5000, maxAgeSeconds: 30 * 24 * 60 * 60 },
+      cacheableResponse: { statuses: [0, 200] },
+    },
+  },
+],
 ```
 
 **Funktionsweise:**
@@ -58,18 +66,36 @@ runtimeCaching: [{
 - Kein Custom-TileLayer noetig — Workbox faengt die Fetch-Requests transparent ab
 - LRU-Strategie: aelteste Kacheln werden bei Ueberschreitung des Limits entfernt
 
-**Spaetere Erweiterung:** "Bereich herunterladen"-Button, der Kacheln fuer einen Kartenausschnitt auf Zoom-Level 15-19 vorlaedt.
+### 1.3 Offline-Cache-Manager (TileCacheManager)
 
-### 1.3 Kartendienst
+Ueber den Button "Offline-Karten verwalten" in der Kartenuebersicht kann ein Projektgebiet gezielt gecacht werden:
 
-**Phase 1 (MVP):** OpenStreetMap-Kacheln (`https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`)
-- Kostenlos, keine API-Keys
-- Gute Detailtiefe fuer Baustellen in Deutschland
-- Attribution: "© OpenStreetMap contributors"
+- **Modus "Sichtbarer Bereich"**: cached den aktuellen Kartenausschnitt
+- **Modus "Punkt + Radius"**: Klick auf die Karte + Radius-Slider (100–2000m)
+- **Zoom-Bereich**: wahlbar von Zoom 10 bis 19
+- **Layer-Auswahl**: OSM, Bayern Luftbild oder Bayern Topographisch
+- **Fortschrittsanzeige**: Anzahl Kacheln und geschaetzter Speicherbedarf (~15 KB/Kachel)
+- Kacheln werden in 6er-Batches parallel gefetcht; der Service Worker cached automatisch
 
-**Spaetere Optionen:**
-- BayernAtlas WMS-Layer (hohe Aufloesung fuer Bayern)
-- Eigene Plaene als DXF-Layer (georeferenziert)
+**Testen:** DevTools → Application → Cache Storage → `map-tiles-osm` / `map-tiles-bayern`
+
+### 1.4 Kartendienste (Layer-System)
+
+Die App unterstuetzt drei Basiskarten, umschaltbar ueber ein Layer-Panel (oben rechts):
+
+| Layer | URL-Pattern | maxNativeZoom | Format |
+|-------|-----------|---------------|--------|
+| OpenStreetMap | `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png` | 19 | png |
+| Bayern Orthophoto (Luftbild) | `https://wmtsod{s}.bayernwolke.de/wmts/by_dop/WebMercator/{z}/{x}/{y}.jpeg` | 19 | jpeg |
+| Bayern Topographisch | `https://wmtsod{s}.bayernwolke.de/wmts/by_amtl_karte/WebMercator/{z}/{x}/{y}.png` | 19 | png |
+
+**BayernAtlas-Details:**
+- Subdomains: `1` bis `9` (z.B. `wmtsod3.bayernwolke.de`)
+- Lizenz: CC BY 4.0 — Bayerische Vermessungsverwaltung (geodaten.bayern.de)
+- maxZoom auf TileLayer: 20 (Leaflet skaliert Zoom-19-Tiles hoch)
+- Transparenz-Slider (20–100%) fuer die aktive Basiskarte
+
+**Zoom-Anzeige:** Ein kleines Overlay unten rechts zeigt die aktuelle Zoom-Stufe an (ZoomDisplay-Komponente).
 
 ---
 
@@ -104,11 +130,13 @@ Neu (mit Heading): `"50.3245, 11.285 (5 m) ↗ 45°"`
 
 ```
 src/components/map/
-  MapBase.tsx             — Gemeinsamer Leaflet MapContainer mit OSM-Kacheln
   MapEditorModal.tsx      — Vollbild-Modal fuer Einzelelement-Bearbeitung
   MapOverview.tsx         — Uebersichtskarte aller Elemente
-  DirectionMarker.tsx     — Benutzerdefinierter Marker mit Richtungspfeil
-  mapUtils.ts             — Koordinaten-Hilfsfunktionen, Bounds, Defaults
+  DirectionMarker.tsx     — Benutzerdefinierter Marker mit Richtungspfeil + erweitertem Popup
+  mapUtils.ts             — Koordinaten-Hilfsfunktionen, Bounds, Layer-Definitionen, Tile-Berechnung
+  LayerControl.tsx        — Panel zum Umschalten der Basiskarte + Transparenz-Slider
+  ZoomDisplay.tsx         — Zoom-Level-Anzeige auf der Karte
+  TileCacheManager.tsx    — Offline-Bereich herunterladen (Viewport oder Punkt+Radius)
 ```
 
 ### 3.1 MapBase.tsx
@@ -362,10 +390,17 @@ Bedingte Darstellung:
 3. Bearbeiten-Modus mit Batch-Speicherung
 4. Filter-Integration
 
-### Phase 3: Erweiterungen
+### Phase 3: Erweiterungen (implementiert)
 1. Geraetekompass-Integration (DeviceOrientationEvent)
-2. "Bereich herunterladen" fuer gezieltes Offline-Caching
-3. BayernAtlas WMS-Layer als Alternative/Ergaenzung
+2. Layer-System mit OSM + BayernAtlas Orthophoto + BayernAtlas Topographisch
+3. Transparenz-Slider fuer Basiskarten
+4. TileCacheManager: Projektgebiet gezielt offline cachen (Viewport oder Punkt+Radius)
+5. Zoom bis Level 20, Zoom-Anzeige auf Karte
+6. Erweitertes Marker-Popup: Status-Badge, Firma, Termin, "Details"-Button
+7. Karte-Button im Header neben Export
+8. Gefilterte Prev/Next-Navigation im ElementDetail
+9. Thema-Vorschlaege via HTML5 `<datalist>` aus Projektthemen
+10. Verantwortliche aus IndexedDB (DB_VERSION 3)
 
 ### Phase 4: DXF-Planoverlay (spaeter)
 1. DXF-Parser und Georeferenzierung

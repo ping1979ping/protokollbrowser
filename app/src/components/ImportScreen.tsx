@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { importPakete, clearAll } from '../db';
+import { importPakete, importVerantwortliche, clearAll } from '../db';
 import { decodeText, parseDfJson } from '../dfimport';
 import logo from '../assets/ping-logo.png';
 
@@ -17,13 +17,14 @@ export default function ImportScreen({ onImported }: Props) {
       const buffer = await file.arrayBuffer();
       const text = decodeText(buffer);
       const raw = JSON.parse(text);
-      const { pakete } = parseDfJson(raw);
+      const { pakete, verantwortliche } = parseDfJson(raw);
       if (pakete.length === 0) {
         alert('Keine Protokolle in der Datei gefunden.');
         return;
       }
       await clearAll();
       await importPakete(pakete);
+      if (verantwortliche.length > 0) await importVerantwortliche(verantwortliche);
       onImported();
     } catch (err) {
       alert('Fehler beim Import: ' + (err as Error).message);
@@ -37,9 +38,10 @@ export default function ImportScreen({ onImported }: Props) {
       const buffer = await resp.arrayBuffer();
       const text = decodeText(buffer);
       const raw = JSON.parse(text);
-      const { pakete } = parseDfJson(raw);
+      const { pakete, verantwortliche } = parseDfJson(raw);
       await clearAll();
       await importPakete(pakete);
+      if (verantwortliche.length > 0) await importVerantwortliche(verantwortliche);
       onImported();
     } catch (err) {
       alert('Fehler beim Laden der Testdaten: ' + (err as Error).message);

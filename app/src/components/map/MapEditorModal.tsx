@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import DirectionMarker from './DirectionMarker';
-import { DEFAULT_CENTER, DETAIL_ZOOM, formatCoord } from './mapUtils';
+import ZoomDisplay from './ZoomDisplay';
+import LayerControl from './LayerControl';
+import { DEFAULT_CENTER, DETAIL_ZOOM, LAYERS, formatCoord } from './mapUtils';
+import type { LayerDef } from './mapUtils';
 import 'leaflet/dist/leaflet.css';
 
 interface Props {
@@ -12,7 +15,6 @@ interface Props {
   onCancel: () => void;
 }
 
-// Klick auf Karte setzt Marker-Position
 function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lon: number) => void }) {
   useMapEvents({
     click(e) {
@@ -28,8 +30,9 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
   );
   const [heading, setHeading] = useState<number | null>(initialHeading);
   const [locating, setLocating] = useState(false);
+  const [activeLayer, setActiveLayer] = useState<LayerDef>(LAYERS[0]);
+  const [layerOpacity, setLayerOpacity] = useState(100);
 
-  // Geräteposition als Fallback
   useEffect(() => {
     if (pos) return;
     if (!navigator.geolocation) return;
@@ -60,7 +63,6 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
       alert('Kompass nicht verfügbar auf diesem Gerät.');
       return;
     }
-    // iOS 13+ braucht Permission
     const DOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
     if (DOE.requestPermission) {
       DOE.requestPermission().then((result) => {
@@ -75,8 +77,6 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
   function readCompass() {
     function handler(e: DeviceOrientationEvent) {
       if (e.alpha != null) {
-        // alpha = 0 means north on Android, on iOS it's different
-        // webkitCompassHeading is iOS-specific
         const iosHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
         setHeading(Math.round(iosHeading ?? (360 - e.alpha)));
       }
@@ -110,14 +110,27 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
         <MapContainer
           center={center}
           zoom={zoom}
+          maxZoom={20}
           className="w-full h-full"
           zoomControl={false}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            key={activeLayer.id}
+            attribution={activeLayer.attribution}
+            url={activeLayer.url}
+            maxZoom={20}
+            maxNativeZoom={activeLayer.maxNativeZoom}
+            opacity={layerOpacity / 100}
+            subdomains={activeLayer.subdomains || 'abc'}
           />
           <MapClickHandler onMapClick={handleMapClick} />
+          <ZoomDisplay />
+          <LayerControl
+            activeLayer={activeLayer.id}
+            opacity={layerOpacity}
+            onLayerChange={setActiveLayer}
+            onOpacityChange={setLayerOpacity}
+          />
           {pos && (
             <DirectionMarker
               lat={pos[0]}
@@ -133,12 +146,10 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
 
       {/* Untere Leiste */}
       <div className="bg-white border-t p-2 space-y-2 shrink-0">
-        {/* Koordinaten */}
         <p className="text-[10px] text-gray-500 text-center font-mono">
           {pos ? formatCoord(pos[0], pos[1], null, heading) : 'Tippen Sie auf die Karte oder erfassen Sie GPS'}
         </p>
 
-        {/* Richtungs-Slider */}
         <div className="flex items-center gap-2">
           <label className="text-[10px] text-gray-400 whitespace-nowrap">Richtung:</label>
           <input
@@ -157,7 +168,7 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
             className="bg-ping-blue-light text-ping-blue px-2 py-1 rounded text-[10px] font-medium"
             title="Kompass"
           >
-            🧭
+            Kompass
           </button>
           {heading != null && (
             <button
@@ -165,12 +176,11 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
               className="text-gray-400 hover:text-red-500 text-[10px]"
               title="Richtung entfernen"
             >
-              ✕
+              X
             </button>
           )}
         </div>
 
-        {/* GPS-Taste */}
         <div className="flex gap-2">
           <button
             onClick={() => {

@@ -3,10 +3,16 @@ import type { IDBPDatabase } from 'idb';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket } from './types';
 
 const DB_NAME = 'protokoll-app';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export interface ProtokollMitGruppe extends Protokoll {
   GruppeId: string;
+}
+
+export interface Verantwortlicher {
+  ID: string;
+  Kuerzel: string;
+  Name: string;
 }
 
 async function getDb(): Promise<IDBPDatabase> {
@@ -16,6 +22,7 @@ async function getDb(): Promise<IDBPDatabase> {
       if (db.objectStoreNames.contains('protokolle')) db.deleteObjectStore('protokolle');
       if (db.objectStoreNames.contains('elemente')) db.deleteObjectStore('elemente');
       if (db.objectStoreNames.contains('fotos')) db.deleteObjectStore('fotos');
+      if (db.objectStoreNames.contains('verantwortliche')) db.deleteObjectStore('verantwortliche');
 
       db.createObjectStore('protokollgruppen', { keyPath: 'Id' });
       const protStore = db.createObjectStore('protokolle', { keyPath: 'Id' });
@@ -24,6 +31,7 @@ async function getDb(): Promise<IDBPDatabase> {
       elemStore.createIndex('byProtokoll', 'ProtokollId');
       const fotoStore = db.createObjectStore('fotos', { keyPath: 'fotoId' });
       fotoStore.createIndex('byElement', 'elementId');
+      db.createObjectStore('verantwortliche', { keyPath: 'ID' });
     },
   });
 }
@@ -40,6 +48,20 @@ export async function importPakete(pakete: ProtokollPaket[]): Promise<void> {
     }
   }
   await tx.done;
+}
+
+export async function importVerantwortliche(firmen: { ID: string; Kürzel: string; Name: string }[]): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('verantwortliche', 'readwrite');
+  for (const f of firmen) {
+    await tx.objectStore('verantwortliche').put({ ID: f.ID, Kuerzel: f['Kürzel'], Name: f.Name });
+  }
+  await tx.done;
+}
+
+export async function getVerantwortliche(): Promise<Verantwortlicher[]> {
+  const db = await getDb();
+  return db.getAll('verantwortliche');
 }
 
 export async function getAllGruppen(): Promise<Protokollgruppe[]> {
@@ -109,10 +131,11 @@ export async function findNachfolger(vorgaengerId: string): Promise<Protokollele
 
 export async function clearAll(): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente', 'fotos'], 'readwrite');
+  const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente', 'fotos', 'verantwortliche'], 'readwrite');
   await tx.objectStore('protokollgruppen').clear();
   await tx.objectStore('protokolle').clear();
   await tx.objectStore('elemente').clear();
   await tx.objectStore('fotos').clear();
+  await tx.objectStore('verantwortliche').clear();
   await tx.done;
 }

@@ -1,12 +1,14 @@
-import { useState, useRef } from 'react';
-import type { Protokoll, Protokollelement } from '../types';
+import { useState, useRef, useEffect } from 'react';
+import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
-import { addElement, getElemente, saveFoto } from '../db';
+import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
+import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord } from './map/mapUtils';
 
 interface Props {
   protokoll: Protokoll;
+  gruppe: Protokollgruppe;
   vorgaenger?: Protokollelement;
   onBack: () => void;
   onSaved: () => void;
@@ -20,29 +22,52 @@ const SCHNELLTYPEN = [
 
 const AENDERBARE_STATUS = [0, 10, 19, 20, 11, 25];
 
-export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }: Props) {
+export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, onSaved }: Props) {
   const [typ, setTyp] = useState(vorgaenger?.Thema === 'Mangel' ? 1 : 0);
   const [position, setPosition] = useState('');
   const [thema, setThema] = useState(vorgaenger?.Thema || SCHNELLTYPEN[0].thema);
   const [positionstext, setPositionstext] = useState('');
   const [status, setStatus] = useState(vorgaenger?.Thema === 'Mangel' ? 11 : 0);
   const [termin, setTermin] = useState('');
-  const [verantwFirmaOid, setVerantwFirmaOid] = useState(vorgaenger?.VerantwortlicherFirmaOid || protokoll.Teilnehmer[0]?.Oid || '');
+  const [verantwFirmaOid, setVerantwFirmaOid] = useState(vorgaenger?.VerantwortlicherFirmaOid || '');
   const [bemerkung, setBemerkung] = useState('');
   const [titel, setTitel] = useState('');
-  const [geoText, setGeoText] = useState('');
-  const [geoLat, setGeoLat] = useState<number | null>(null);
-  const [geoLon, setGeoLon] = useState<number | null>(null);
-  const [geoAcc, setGeoAcc] = useState<number | null>(null);
-  const [geoHeading, setGeoHeading] = useState<number | null>(null);
+  const [geoText, setGeoText] = useState(vorgaenger?.MobileErfassung.GeoText || '');
+  const [geoLat, setGeoLat] = useState<number | null>(vorgaenger?.MobileErfassung.GeoLat ?? null);
+  const [geoLon, setGeoLon] = useState<number | null>(vorgaenger?.MobileErfassung.GeoLon ?? null);
+  const [geoAcc, setGeoAcc] = useState<number | null>(vorgaenger?.MobileErfassung.GeoAccuracy ?? null);
+  const [geoHeading, setGeoHeading] = useState<number | null>(vorgaenger?.MobileErfassung.GeoHeading ?? null);
   const [karteOffen, setKarteOffen] = useState(false);
   const [tempFotos, setTempFotos] = useState<File[]>([]);
+  const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
+  const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
   const fotoRef = useRef<HTMLInputElement>(null);
 
-  const alleFirmen = [
-    ...protokoll.Teilnehmer,
-    ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
-  ];
+  useEffect(() => {
+    getVerantwortliche().then(setFirmen);
+    // Thema-Vorschläge aus allen Elementen der Gruppe laden
+    (async () => {
+      const prots = await getProtokolleByGruppe(gruppe.Id);
+      const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
+      const themen = [...new Set(alleElems.map(e => e.Thema).filter(Boolean))];
+      themen.sort();
+      setThemenVorschlaege(themen);
+    })();
+  }, []);
+
+  // Set default firma after loading
+  useEffect(() => {
+    if (!verantwFirmaOid && alleFirmen.length > 0) {
+      setVerantwFirmaOid(alleFirmen[0].Oid);
+    }
+  }, [firmen]);
+
+  const alleFirmen = firmen.length > 0
+    ? firmen.map(f => ({ Oid: f.ID, Name: f.Name }))
+    : [
+        ...protokoll.Teilnehmer,
+        ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
+      ];
 
   function schnelltyp(i: number) {
     setTyp(i);
@@ -160,8 +185,11 @@ export default function NeuesElement({ protokoll, vorgaenger, onBack, onSaved }:
           </div>
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
-            <input type="text" value={thema} onChange={(e) => setThema(e.target.value)} placeholder="z.B. Tiefbau"
+            <input type="text" list="themen-liste" value={thema} onChange={(e) => setThema(e.target.value)} placeholder="z.B. Tiefbau"
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+            <datalist id="themen-liste">
+              {themenVorschlaege.map(t => <option key={t} value={t} />)}
+            </datalist>
           </div>
         </div>
 

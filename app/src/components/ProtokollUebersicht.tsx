@@ -6,7 +6,7 @@ import MapOverview from './map/MapOverview';
 
 interface Props {
   gruppeId: string;
-  onSelectElement: (element: Protokollelement, protokoll: Protokoll, gruppe: Protokollgruppe) => void;
+  onSelectElement: (element: Protokollelement, protokoll: Protokoll, gruppe: Protokollgruppe, filteredIds?: string[]) => void;
   onNeuesElement: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
   onExport: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
   onZurueck: () => void;
@@ -81,14 +81,22 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
       <div className="bg-ping-blue text-white p-3">
         <div className="flex items-center justify-between mb-1">
           <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-sm">&larr; Projekte</button>
-          {aktivProt && (
+          <div className="flex gap-1.5">
             <button
-              onClick={() => onExport(aktivProt, gruppe)}
+              onClick={() => setAnsicht('karte')}
               className="bg-ping-blue-dark hover:bg-ping-blue px-3 py-1 rounded-lg text-xs"
             >
-              Export
+              Karte
             </button>
-          )}
+            {aktivProt && (
+              <button
+                onClick={() => onExport(aktivProt, gruppe)}
+                className="bg-ping-blue-dark hover:bg-ping-blue px-3 py-1 rounded-lg text-xs"
+              >
+                Export
+              </button>
+            )}
+          </div>
         </div>
         <h1 className="text-base font-bold leading-tight">{gruppe.ProjektName}</h1>
         <p className="text-ping-blue-light text-xs">{gruppe.Name}</p>
@@ -166,7 +174,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
       {ansicht === 'karte' ? (
         <MapOverview
           elemente={aktuelleElemente}
-          onElementClick={(elem) => aktivProt && onSelectElement(elem, protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe)}
+          onElementClick={(elem) => aktivProt && onSelectElement(elem, protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
           onRefresh={laden}
         />
       ) : (
@@ -198,7 +206,7 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
                 return (
                   <tr
                     key={elem.Id}
-                    onClick={() => aktivProt && onSelectElement(elem, ansicht === 'einzeln' ? aktivProt : protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe)}
+                    onClick={() => aktivProt && onSelectElement(elem, ansicht === 'einzeln' ? aktivProt : protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
                     className="border-b border-gray-100 hover:bg-ping-blue-light active:bg-ping-blue-light cursor-pointer"
                   >
                     <td className="px-2 py-1.5 font-mono text-gray-400">{elem.Position}</td>

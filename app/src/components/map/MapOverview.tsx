@@ -5,7 +5,11 @@ import type { Protokollelement } from '../../types';
 import { STATUS_MAP } from '../../types';
 import { updateElement } from '../../db';
 import DirectionMarker from './DirectionMarker';
-import { DEFAULT_CENTER, elementeWithGps } from './mapUtils';
+import ZoomDisplay from './ZoomDisplay';
+import LayerControl from './LayerControl';
+import TileCacheManager from './TileCacheManager';
+import { DEFAULT_CENTER, elementeWithGps, LAYERS } from './mapUtils';
+import type { LayerDef } from './mapUtils';
 import 'leaflet/dist/leaflet.css';
 
 interface Props {
@@ -26,6 +30,9 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
   const [editMode, setEditMode] = useState(false);
   const [changes, setChanges] = useState<Map<string, { lat: number; lon: number }>>(new Map());
   const [saving, setSaving] = useState(false);
+  const [activeLayer, setActiveLayer] = useState<LayerDef>(LAYERS[0]);
+  const [layerOpacity, setLayerOpacity] = useState(100);
+  const [showTileCache, setShowTileCache] = useState(false);
 
   const mitGps = useMemo(() => elementeWithGps(elemente), [elemente]);
   const ohneGps = useMemo(() => elemente.filter(e => e.MobileErfassung.GeoLat == null || e.MobileErfassung.GeoLon == null), [elemente]);
@@ -94,14 +101,27 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
           <MapContainer
             center={bounds ? bounds.getCenter() : DEFAULT_CENTER}
             zoom={16}
+            maxZoom={20}
             className="w-full h-full"
             zoomControl={false}
           >
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              key={activeLayer.id}
+              attribution={activeLayer.attribution}
+              url={activeLayer.url}
+              maxZoom={20}
+              maxNativeZoom={activeLayer.maxNativeZoom}
+              opacity={layerOpacity / 100}
+              subdomains={activeLayer.subdomains || 'abc'}
             />
             <FitBounds bounds={bounds} />
+            <ZoomDisplay />
+            <LayerControl
+              activeLayer={activeLayer.id}
+              opacity={layerOpacity}
+              onLayerChange={setActiveLayer}
+              onOpacityChange={setLayerOpacity}
+            />
             {mitGps.map(elem => {
               const [lat, lon] = getPos(elem);
               return (
@@ -112,10 +132,13 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
                   heading={elem.MobileErfassung.GeoHeading}
                   position={elem.Position}
                   status={elem.Status}
-                  label={elem.Positionstext?.slice(0, 60)}
+                  label={elem.Positionstext?.slice(0, 80)}
+                  firma={elem.VerantwortlicherFirmaName}
+                  termin={elem.Termin}
                   draggable={editMode}
                   onDragEnd={(newLat, newLon) => handleDrag(elem.Id, newLat, newLon)}
-                  onClick={() => !editMode && onElementClick(elem)}
+                  onClick={editMode ? undefined : undefined}
+                  onDetail={editMode ? undefined : () => onElementClick(elem)}
                 />
               );
             })}
@@ -148,6 +171,18 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
             </>
           )}
         </div>
+        <button
+          onClick={() => setShowTileCache(true)}
+          className="w-full text-[10px] text-gray-400 hover:text-ping-blue py-1"
+        >
+          Offline-Karten verwalten
+        </button>
+        {showTileCache && (
+          <TileCacheManager
+            initialCenter={bounds ? [bounds.getCenter().lat, bounds.getCenter().lng] : undefined}
+            onClose={() => setShowTileCache(false)}
+          />
+        )}
         {ohneGps.length > 0 && (
           <div>
             <button

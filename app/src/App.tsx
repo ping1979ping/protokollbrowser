@@ -12,7 +12,7 @@ type Screen =
   | { name: 'import' }
   | { name: 'projektauswahl' }
   | { name: 'uebersicht'; gruppeId: string }
-  | { name: 'detail'; element: Protokollelement; protokoll: Protokoll; gruppe: Protokollgruppe }
+  | { name: 'detail'; element: Protokollelement; protokoll: Protokoll; gruppe: Protokollgruppe; filteredIds?: string[] }
   | { name: 'neu'; protokoll: Protokoll; gruppe: Protokollgruppe; vorgaenger?: Protokollelement }
   | { name: 'export'; protokoll: Protokoll; gruppe: Protokollgruppe };
 
@@ -37,7 +37,7 @@ export default function App() {
         <ProtokollUebersicht
           key={key}
           gruppeId={screen.gruppeId}
-          onSelectElement={(elem, prot, grp) => setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: grp })}
+          onSelectElement={(elem, prot, grp, filteredIds) => setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: grp, filteredIds })}
           onNeuesElement={(prot, grp) => setScreen({ name: 'neu', protokoll: prot, gruppe: grp })}
           onExport={(prot, grp) => setScreen({ name: 'export', protokoll: prot, gruppe: grp })}
           onZurueck={() => setScreen({ name: 'projektauswahl' })}
@@ -50,17 +50,17 @@ export default function App() {
           element={screen.element}
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
+          filteredIds={screen.filteredIds}
           onBack={() => { refresh(); setScreen({ name: 'uebersicht', gruppeId: screen.gruppe.Id }); }}
           onNachfolger={(vorgaenger) => setScreen({ name: 'neu', protokoll: screen.protokoll, gruppe: screen.gruppe, vorgaenger })}
           onNavigate={async (elem) => {
-            // Element könnte in anderem Protokoll sein — richtiges Protokoll suchen
             let prot = screen.protokoll;
             if (elem.ProtokollId !== screen.protokoll.Id) {
               const prots = await getProtokolleByGruppe(screen.gruppe.Id);
               const found = prots.find(p => p.Id === elem.ProtokollId);
               if (found) prot = found;
             }
-            setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: screen.gruppe });
+            setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: screen.gruppe, filteredIds: screen.filteredIds });
           }}
         />
       );
@@ -68,6 +68,7 @@ export default function App() {
       return (
         <NeuesElement
           protokoll={screen.protokoll}
+          gruppe={screen.gruppe}
           vorgaenger={screen.vorgaenger}
           onBack={() => setScreen({ name: 'uebersicht', gruppeId: screen.gruppe.Id })}
           onSaved={() => { refresh(); setScreen({ name: 'uebersicht', gruppeId: screen.gruppe.Id }); }}

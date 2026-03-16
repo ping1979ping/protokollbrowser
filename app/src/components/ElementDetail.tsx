@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
-import { updateElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente } from '../db';
+import { updateElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe } from '../db';
+import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord } from './map/mapUtils';
 
@@ -9,6 +10,7 @@ interface Props {
   element: Protokollelement;
   protokoll: Protokoll;
   gruppe: Protokollgruppe;
+  filteredIds?: string[];
   onBack: () => void;
   onNachfolger: (vorgaenger: Protokollelement) => void;
   onNavigate: (element: Protokollelement) => void;
@@ -16,7 +18,7 @@ interface Props {
 
 const AENDERBARE_STATUS = [0, 10, 19, 20, 11, 25];
 
-export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onBack, onNachfolger, onNavigate }: Props) {
+export default function ElementDetail({ element, protokoll, gruppe, filteredIds, onBack, onNachfolger, onNavigate }: Props) {
   const [elem, setElem] = useState<Protokollelement>({ ...element });
   const [fotos, setFotos] = useState<{ fotoId: string; blob: Blob; fileName: string; url?: string }[]>([]);
   const [gespeichert, setGespeichert] = useState(false);
@@ -26,6 +28,8 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
   const [nextElem, setNextElem] = useState<Protokollelement | null>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
   const [karteOffen, setKarteOffen] = useState(false);
+  const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
+  const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
 
   const istNeu = !!elem._neu;
 
@@ -33,6 +37,8 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
     ladenFotos();
     ladenVerweise();
     ladenGeschwister();
+    ladenFirmen();
+    ladenThemen();
     return () => { fotos.forEach(f => f.url && URL.revokeObjectURL(f.url)); };
   }, [element.Id]);
 
@@ -42,26 +48,58 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
   }
 
   async function ladenVerweise() {
-    // Vorgänger laden (aus Verweise-Array)
     const vorg: Protokollelement[] = [];
     for (const oid of (elem.Verweise || [])) {
       const e = await getElement(oid);
       if (e) vorg.push(e);
     }
     setVorgaenger(vorg);
-
-    // Nachfolger suchen (andere Elemente die auf dieses verweisen)
     const nachf = await findNachfolger(elem.Id);
     setNachfolger(nachf);
   }
 
   async function ladenGeschwister() {
     const alle = await getElemente(protokoll.Id);
-    alle.sort((a, b) => a.Position.localeCompare(b.Position, undefined, { numeric: true }));
-    const idx = alle.findIndex(e => e.Id === elem.Id);
-    setPrevElem(idx > 0 ? alle[idx - 1] : null);
-    setNextElem(idx < alle.length - 1 ? alle[idx + 1] : null);
+    let liste = alle;
+    // Wenn gefilterte IDs vorhanden, nur diese verwenden
+    if (filteredIds && filteredIds.length > 0) {
+      liste = alle.filter(e => filteredIds.includes(e.Id));
+    }
+    liste.sort((a, b) => a.Position.localeCompare(b.Position, undefined, { numeric: true }));
+    const idx = liste.findIndex(e => e.Id === elem.Id);
+    setPrevElem(idx > 0 ? liste[idx - 1] : null);
+    setNextElem(idx < liste.length - 1 ? liste[idx + 1] : null);
   }
+
+  async function ladenFirmen() {
+    const v = await getVerantwortliche();
+    if (v.length > 0) {
+      setFirmen(v);
+    }
+  }
+
+  async function ladenThemen() {
+    // Alle Themen aus allen Protokollen der Gruppe sammeln
+    const prots = await getProtokolleByGruppe(gruppe.Id);
+    const themen = new Set<string>();
+    for (const p of prots) {
+      const elems = await getElemente(p.Id);
+      for (const e of elems) {
+        if (e.Thema?.trim()) themen.add(e.Thema.trim());
+      }
+    }
+    setThemenVorschlaege([...themen].sort());
+  }
+
+  // Firmen-Liste: DB-Verantwortliche oder Fallback auf Protokoll-Teilnehmer
+  const alleFirmen = firmen.length > 0
+    ? firmen.map(f => ({ Oid: f.ID, Name: f.Name }))
+    : [
+        ...protokoll.Teilnehmer.map(t => ({ Oid: t.Oid, Name: t.Name })),
+        ...protokoll.Verteiler
+          .filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid))
+          .map(v => ({ Oid: v.Oid, Name: v.Name })),
+      ];
 
   function updateStatus(status: number) {
     setElem(prev => ({ ...prev, Status: status, _geaendert: true }));
@@ -69,7 +107,7 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
   }
 
   function update(patch: Partial<Protokollelement>) {
-    if (!istNeu) return; // alte Elemente: nur Status
+    if (!istNeu) return;
     setElem(prev => ({ ...prev, ...patch, _geaendert: true }));
     setGespeichert(false);
   }
@@ -118,11 +156,6 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
     await deleteFoto(fotoId);
     await ladenFotos();
   }
-
-  const alleFirmen = [
-    ...protokoll.Teilnehmer,
-    ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
-  ];
 
   const st = STATUS_MAP[elem.Status];
 
@@ -215,8 +248,13 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
             {istNeu ? (
-              <input type="text" value={elem.Thema} onChange={(e) => update({ Thema: e.target.value })}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+              <>
+                <input type="text" list="themen-liste" value={elem.Thema} onChange={(e) => update({ Thema: e.target.value })}
+                  className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                <datalist id="themen-liste">
+                  {themenVorschlaege.map(t => <option key={t} value={t} />)}
+                </datalist>
+              </>
             ) : (
               <p className="text-xs text-gray-700">{elem.Thema || '—'}</p>
             )}
@@ -273,7 +311,7 @@ export default function ElementDetail({ element, protokoll, gruppe: _gruppe, onB
           )}
         </div>
 
-        {/* GPS — immer verfügbar (Standort nachträglich festlegen) */}
+        {/* GPS — immer verfügbar */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
             <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
