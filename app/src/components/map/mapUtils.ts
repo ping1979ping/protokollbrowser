@@ -68,7 +68,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'ortho',
     name: 'Bayern Luftbild',
-    url: 'https://wmtsod{s}.bayernwolke.de/wmts/by_dop/smerc/{z}/{x}/{y}.jpeg',
+    url: 'https://wmtsod{s}.bayernwolke.de/wmts/by_dop/smerc/{z}/{x}/{y}',
     attribution: '&copy; <a href="https://geodaten.bayern.de">Bayerische Vermessungsverwaltung</a> – CC BY 4.0',
     maxNativeZoom: 19,
     subdomains: '123456789',
@@ -76,7 +76,7 @@ export const LAYERS: LayerDef[] = [
   {
     id: 'topo',
     name: 'Bayern Topographisch',
-    url: 'https://wmtsod{s}.bayernwolke.de/wmts/by_amtl_karte/smerc/{z}/{x}/{y}.png',
+    url: 'https://wmtsod{s}.bayernwolke.de/wmts/by_amtl_karte/smerc/{z}/{x}/{y}',
     attribution: '&copy; <a href="https://geodaten.bayern.de">Bayerische Vermessungsverwaltung</a> – CC BY 4.0',
     maxNativeZoom: 19,
     subdomains: '123456789',
