@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer } from 'react-leaflet';
 import DirectionMarker from './DirectionMarker';
 import ZoomDisplay from './ZoomDisplay';
 import LayerControl from './LayerControl';
@@ -13,15 +13,6 @@ interface Props {
   heading: number | null;
   onSave: (lat: number, lon: number, heading: number | null) => void;
   onCancel: () => void;
-}
-
-function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lon: number) => void }) {
-  useMapEvents({
-    click(e) {
-      onMapClick(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
 }
 
 export default function MapEditorModal({ lat, lon, heading: initialHeading, onSave, onCancel }: Props) {
@@ -45,10 +36,6 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
       () => setLocating(false),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
-  }, []);
-
-  const handleMapClick = useCallback((newLat: number, newLon: number) => {
-    setPos([newLat, newLon]);
   }, []);
 
   const handleDragEnd = useCallback((newLat: number, newLon: number) => {
@@ -123,7 +110,6 @@ export default function MapEditorModal({ lat, lon, heading: initialHeading, onSa
             opacity={layerOpacity / 100}
             subdomains={activeLayer.subdomains || 'abc'}
           />
-          <MapClickHandler onMapClick={handleMapClick} />
           <ZoomDisplay />
           <LayerControl
             activeLayer={activeLayer.id}

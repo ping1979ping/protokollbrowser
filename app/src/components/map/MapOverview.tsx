@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import type { Protokollelement } from '../../types';
@@ -20,9 +20,12 @@ interface Props {
 
 function FitBounds({ bounds }: { bounds: L.LatLngBounds | null }) {
   const map = useMap();
-  if (bounds && bounds.isValid()) {
-    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
-  }
+  useEffect(() => {
+    if (bounds && bounds.isValid()) {
+      // Timeout ensures map is fully initialized before fitting
+      setTimeout(() => map.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 }), 100);
+    }
+  }, [map, bounds]);
   return null;
 }
 
@@ -91,8 +94,8 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
   }
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="flex-1 relative">
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 relative min-h-0">
         {mitGps.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-gray-400 text-sm">Keine Elemente mit GPS-Position vorhanden.</p>

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import L from 'leaflet';
 import { LAYERS } from './mapUtils';
 import type { LayerDef } from './mapUtils';
 
@@ -11,6 +12,15 @@ interface Props {
 
 export default function LayerControl({ activeLayer, opacity, onLayerChange, onOpacityChange }: Props) {
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Prevent Leaflet from capturing mouse/touch events on the panel
+  useEffect(() => {
+    if (panelRef.current) {
+      L.DomEvent.disableClickPropagation(panelRef.current);
+      L.DomEvent.disableScrollPropagation(panelRef.current);
+    }
+  }, [open]);
 
   return (
     <div className="leaflet-top leaflet-right" style={{ pointerEvents: 'none' }}>
@@ -20,11 +30,11 @@ export default function LayerControl({ activeLayer, opacity, onLayerChange, onOp
           className="bg-white shadow rounded-lg w-8 h-8 flex items-center justify-center text-gray-600 hover:text-ping-blue text-sm font-bold"
           title="Kartenebenen"
         >
-          ☰
+          &#9776;
         </button>
 
         {open && (
-          <div className="mt-1 bg-white rounded-lg shadow-lg p-2.5 w-48 space-y-2">
+          <div ref={panelRef} className="mt-1 bg-white rounded-lg shadow-lg p-2.5 w-48 space-y-2">
             <p className="text-[10px] text-gray-400 font-medium uppercase">Basiskarte</p>
             {LAYERS.map(layer => (
               <button
