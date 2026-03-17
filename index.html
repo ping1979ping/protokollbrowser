@@ -4,26 +4,41 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Protokoll-App</title>
-    <script type="module" crossorigin src="/protokollbrowser/assets/index-Dej3q3Kh.js"></script>
-    <link rel="stylesheet" crossorigin href="/protokollbrowser/assets/index-DczPgZFz.css">
+    <script type="module" crossorigin src="/protokollbrowser/assets/index-C1jMZtRu.js"></script>
+    <link rel="stylesheet" crossorigin href="/protokollbrowser/assets/index-CqhEFMNj.css">
   <link rel="manifest" href="/protokollbrowser/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/protokollbrowser/registerSW.js"></script></head>
   <body>
     <div id="root"></div>
     <script>
-      // v2: Force nuke old service workers and caches
-      var APP_VERSION = '20260316b';
-      if ('serviceWorker' in navigator && localStorage.getItem('app_version') !== APP_VERSION) {
-        caches.keys().then(function(names) {
-          names.forEach(function(name) { if (name.indexOf('map-tiles') === -1) caches.delete(name); });
-        });
-        navigator.serviceWorker.getRegistrations().then(function(regs) {
-          var p = regs.map(function(r) { return r.unregister(); });
-          Promise.all(p).then(function() {
-            localStorage.setItem('app_version', APP_VERSION);
-            location.reload();
-          });
-        });
-      }
+      // Dev auto-refresh: fetch version.txt bypassing ALL caches (including SW)
+      // If version changed → nuke old SWs + caches → hard reload
+      (function() {
+        if (!('serviceWorker' in navigator)) return;
+        fetch('version.txt', { cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.text() : null; })
+          .then(function(v) {
+            if (!v) return;
+            var stored = localStorage.getItem('app_v');
+            if (stored && stored !== v) {
+              console.log('[AutoRefresh] Neue Version:', v, '(war:', stored, ')');
+              caches.keys().then(function(names) {
+                return Promise.all(names.map(function(n) {
+                  return n.indexOf('map-tiles') === -1 ? caches.delete(n) : null;
+                }));
+              }).then(function() {
+                return navigator.serviceWorker.getRegistrations();
+              }).then(function(regs) {
+                return Promise.all(regs.map(function(r) { return r.unregister(); }));
+              }).then(function() {
+                localStorage.setItem('app_v', v);
+                location.reload();
+              });
+            } else {
+              localStorage.setItem('app_v', v);
+            }
+          })
+          .catch(function() {});
+      })();
     </script>
   </body>
 </html>

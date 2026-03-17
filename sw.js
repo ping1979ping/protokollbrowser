@@ -1,1 +1,10 @@
-if(!self.define){let e,s={};const n=(n,i)=>(n=new URL(n+".js",i).href,s[n]||new Promise(s=>{if("document"in self){const e=document.createElement("script");e.src=n,e.onload=s,document.head.appendChild(e)}else e=n,importScripts(n),s()}).then(()=>{let e=s[n];if(!e)throw new Error(`Module ${n} didn’t register its module`);return e}));self.define=(i,t)=>{const r=e||("document"in self?document.currentScript.src:"")||location.href;if(s[r])return;let o={};const a=e=>n(e,r),c={module:{uri:r},exports:o,require:a};s[r]=Promise.all(i.map(e=>c[e]||a(e))).then(e=>(t(...e),o))}}define(["./workbox-1d305bb8"],function(e){"use strict";self.skipWaiting(),e.clientsClaim(),e.precacheAndRoute([{url:"vite.svg",revision:"8e3a10e157f75ada21ab742c022d5430"},{url:"testdata.json",revision:"38fa7d39eb2490a04f688708d57c8bdd"},{url:"registerSW.js",revision:"f50c8edb06cf796a8be61f322fbc25bf"},{url:"index.html",revision:"62853c09fbfadd8cef4080592392bff3"},{url:"icons/icon.svg",revision:"203f763f4e12b5d5a9ad17ea80355b6f"},{url:"assets/ping-logo-CkCQZmfo.png",revision:null},{url:"assets/index-Dej3q3Kh.js",revision:null},{url:"assets/index-DczPgZFz.css",revision:null},{url:"icons/icon.svg",revision:"203f763f4e12b5d5a9ad17ea80355b6f"},{url:"manifest.webmanifest",revision:"dac9f02f8d54c35cfc9a30e136bf976a"}],{}),e.cleanupOutdatedCaches(),e.registerRoute(new e.NavigationRoute(e.createHandlerBoundToURL("index.html"))),e.registerRoute(/^https:\/\/[abc]\.tile\.openstreetmap\.org\//,new e.CacheFirst({cacheName:"map-tiles-osm",plugins:[new e.ExpirationPlugin({maxEntries:5e3,maxAgeSeconds:2592e3}),new e.CacheableResponsePlugin({statuses:[0,200]})]}),"GET"),e.registerRoute(/^https:\/\/wmtsod\d\.bayernwolke\.de\//,new e.CacheFirst({cacheName:"map-tiles-bayern",plugins:[new e.ExpirationPlugin({maxEntries:5e3,maxAgeSeconds:2592e3}),new e.CacheableResponsePlugin({statuses:[0,200]})]}),"GET")});
+// Self-destructing service worker.
+// Replaces any old cached sw.js — on activation, clears caches and unregisters itself.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', async () => {
+  const keys = await caches.keys();
+  await Promise.all(keys.map(k => caches.delete(k)));
+  const clients = await self.clients.matchAll({ type: 'window' });
+  await self.registration.unregister();
+  clients.forEach(c => c.navigate(c.url));
+});
