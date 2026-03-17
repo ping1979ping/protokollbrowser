@@ -1,26 +1,46 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
 import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll } from '../db';
 import MapOverview from './map/MapOverview';
 
+export interface UebersichtState {
+  ansicht: 'alle' | 'einzeln' | 'karte';
+  filter: string;
+  statusFilter: number | null;
+  gewaehlteProtId: string | null;
+}
+
 interface Props {
   gruppeId: string;
+  initialState?: UebersichtState;
+  onStateChange?: (state: UebersichtState) => void;
   onSelectElement: (element: Protokollelement, protokoll: Protokoll, gruppe: Protokollgruppe, filteredIds?: string[]) => void;
   onNeuesElement: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
   onExport: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
   onZurueck: () => void;
 }
 
-export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeuesElement, onExport, onZurueck }: Props) {
+export default function ProtokollUebersicht({ gruppeId, initialState, onStateChange, onSelectElement, onNeuesElement, onExport, onZurueck }: Props) {
   const [gruppe, setGruppe] = useState<Protokollgruppe | null>(null);
   const [protokolle, setProtokolle] = useState<Protokoll[]>([]);
   const [gewaehltesProt, setGewaehltesProt] = useState<Protokoll | null>(null);
   const [elemente, setElemente] = useState<Protokollelement[]>([]);
   const [alleElemente, setAlleElemente] = useState<(Protokollelement & { _protName: string })[]>([]);
-  const [ansicht, setAnsicht] = useState<'alle' | 'einzeln' | 'karte'>('einzeln');
-  const [filter, setFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<number | null>(null);
+  const [ansicht, setAnsicht] = useState<'alle' | 'einzeln' | 'karte'>(initialState?.ansicht ?? 'einzeln');
+  const [filter, setFilter] = useState(initialState?.filter ?? '');
+  const [statusFilter, setStatusFilter] = useState<number | null>(initialState?.statusFilter ?? null);
+  const restoredProtId = useRef(initialState?.gewaehlteProtId ?? null);
+
+  // Filterzustand nach oben melden bei jeder Änderung
+  useEffect(() => {
+    onStateChange?.({
+      ansicht,
+      filter,
+      statusFilter,
+      gewaehlteProtId: gewaehltesProt?.Id ?? null,
+    });
+  }, [ansicht, filter, statusFilter, gewaehltesProt]);
 
   useEffect(() => { laden(); }, []);
 
@@ -31,13 +51,15 @@ export default function ProtokollUebersicht({ gruppeId, onSelectElement, onNeues
     const prots = await getProtokolleByGruppe(gruppeId);
     prots.sort((a, b) => b.Nummer - a.Nummer);
     setProtokolle(prots);
-    // Bevorzugt das Draft-Protokoll auswählen, sonst das erste
+
+    // Protokoll-Tab wiederherstellen: gespeichertes > Draft > erstes
+    const restored = restoredProtId.current ? prots.find(p => p.Id === restoredProtId.current) : null;
     const draftProt = prots.find(p => (p as typeof p & { _neu?: boolean })._neu);
-    if (draftProt) {
-      await ladeElemente(draftProt);
-    } else if (prots.length > 0) {
-      await ladeElemente(prots[0]);
+    const selectProt = restored || draftProt || prots[0];
+    if (selectProt) {
+      await ladeElemente(selectProt);
     }
+
     // Alle Elemente aller Protokolle laden
     const alle: (Protokollelement & { _protName: string })[] = [];
     for (const p of prots) {

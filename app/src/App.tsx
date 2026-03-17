@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from './types';
 import { getProtokolleByGruppe, getOrCreateDraftProtokoll } from './db';
 import ImportScreen from './components/ImportScreen';
 import ProjektAuswahl from './components/ProjektAuswahl';
 import ProtokollUebersicht from './components/ProtokollUebersicht';
+import type { UebersichtState } from './components/ProtokollUebersicht';
 import ElementDetail from './components/ElementDetail';
 import NeuesElement from './components/NeuesElement';
 import ExportScreen from './components/ExportScreen';
@@ -19,8 +20,13 @@ type Screen =
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'import' });
   const [key, setKey] = useState(0);
+  const uebersichtStateRef = useRef<UebersichtState | undefined>(undefined);
 
   function refresh() { setKey(k => k + 1); }
+
+  function goUebersicht(gruppeId: string) {
+    setScreen({ name: 'uebersicht', gruppeId });
+  }
 
   switch (screen.name) {
     case 'import':
@@ -28,7 +34,7 @@ export default function App() {
     case 'projektauswahl':
       return (
         <ProjektAuswahl
-          onSelect={(gruppeId) => setScreen({ name: 'uebersicht', gruppeId })}
+          onSelect={(gruppeId) => { uebersichtStateRef.current = undefined; setScreen({ name: 'uebersicht', gruppeId }); }}
           onZurueck={() => setScreen({ name: 'import' })}
         />
       );
@@ -37,6 +43,8 @@ export default function App() {
         <ProtokollUebersicht
           key={key}
           gruppeId={screen.gruppeId}
+          initialState={uebersichtStateRef.current}
+          onStateChange={(s) => { uebersichtStateRef.current = s; }}
           onSelectElement={(elem, prot, grp, filteredIds) => setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: grp, filteredIds })}
           onNeuesElement={(prot, grp) => setScreen({ name: 'neu', protokoll: prot, gruppe: grp })}
           onExport={(prot, grp) => setScreen({ name: 'export', protokoll: prot, gruppe: grp })}
@@ -51,7 +59,7 @@ export default function App() {
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
           filteredIds={screen.filteredIds}
-          onBack={() => { refresh(); setScreen({ name: 'uebersicht', gruppeId: screen.gruppe.Id }); }}
+          onBack={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
           onNachfolger={async (vorgaenger) => {
             const draft = await getOrCreateDraftProtokoll(screen.gruppe.Id, {
               Name: screen.protokoll.Name,
@@ -77,15 +85,15 @@ export default function App() {
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
           vorgaenger={screen.vorgaenger}
-          onBack={() => setScreen({ name: 'uebersicht', gruppeId: screen.gruppe.Id })}
-          onSaved={() => { refresh(); setScreen({ name: 'uebersicht', gruppeId: screen.gruppe.Id }); }}
+          onBack={() => goUebersicht(screen.gruppe.Id)}
+          onSaved={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
         />
       );
     case 'export':
       return (
         <ExportScreen
           protokoll={screen.protokoll}
-          onBack={() => setScreen({ name: 'uebersicht', gruppeId: screen.gruppe.Id })}
+          onBack={() => goUebersicht(screen.gruppe.Id)}
         />
       );
   }
