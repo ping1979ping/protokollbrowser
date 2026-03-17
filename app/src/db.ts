@@ -3,7 +3,7 @@ import type { IDBPDatabase } from 'idb';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket } from './types';
 
 const DB_NAME = 'protokoll-app';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export interface ProtokollMitGruppe extends Protokoll {
   GruppeId: string;
@@ -32,6 +32,9 @@ async function getDb(): Promise<IDBPDatabase> {
       const fotoStore = db.createObjectStore('fotos', { keyPath: 'fotoId' });
       fotoStore.createIndex('byElement', 'elementId');
       db.createObjectStore('verantwortliche', { keyPath: 'ID' });
+      if (!db.objectStoreNames.contains('syncMeta')) {
+        db.createObjectStore('syncMeta', { keyPath: 'gruppeId' });
+      }
     },
   });
 }
@@ -172,11 +175,64 @@ export async function findNachfolger(vorgaengerId: string): Promise<Protokollele
 
 export async function clearAll(): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente', 'fotos', 'verantwortliche'], 'readwrite');
+  const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente', 'fotos', 'verantwortliche', 'syncMeta'], 'readwrite');
   await tx.objectStore('protokollgruppen').clear();
   await tx.objectStore('protokolle').clear();
   await tx.objectStore('elemente').clear();
   await tx.objectStore('fotos').clear();
   await tx.objectStore('verantwortliche').clear();
+  await tx.objectStore('syncMeta').clear();
   await tx.done;
+}
+
+export async function clearProjekt(gruppeId: string): Promise<void> {
+  const db = await getDb();
+  // Alle Protokolle dieser Gruppe finden
+  const prots = await db.getAllFromIndex('protokolle', 'byGruppe', gruppeId);
+  const protIds = new Set(prots.map(p => p.Id));
+
+  const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente', 'fotos', 'syncMeta'], 'readwrite');
+
+  // Gruppe löschen
+  await tx.objectStore('protokollgruppen').delete(gruppeId);
+
+  // Protokolle löschen
+  for (const prot of prots) {
+    await tx.objectStore('protokolle').delete(prot.Id);
+  }
+
+  // Elemente und zugehörige Fotos löschen
+  const alleElemente = await tx.objectStore('elemente').getAll();
+  for (const elem of alleElemente) {
+    if (protIds.has(elem.ProtokollId)) {
+      // Fotos dieses Elements löschen
+      const fotos = await tx.objectStore('fotos').index('byElement').getAll(elem.Id);
+      for (const foto of fotos) {
+        await tx.objectStore('fotos').delete(foto.fotoId);
+      }
+      await tx.objectStore('elemente').delete(elem.Id);
+    }
+  }
+
+  // Sync-Meta löschen
+  await tx.objectStore('syncMeta').delete(gruppeId);
+
+  await tx.done;
+}
+
+export interface SyncMeta {
+  gruppeId: string;
+  serverUrl?: string;
+  lastSync?: string;
+  autoSync?: boolean;
+}
+
+export async function getSyncMeta(gruppeId: string): Promise<SyncMeta | undefined> {
+  const db = await getDb();
+  return db.get('syncMeta', gruppeId);
+}
+
+export async function setSyncMeta(meta: SyncMeta): Promise<void> {
+  const db = await getDb();
+  await db.put('syncMeta', meta);
 }

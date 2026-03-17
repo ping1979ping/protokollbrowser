@@ -36,6 +36,7 @@ export default function App() {
         <ProjektAuswahl
           onSelect={(gruppeId) => { uebersichtStateRef.current = undefined; setScreen({ name: 'uebersicht', gruppeId }); }}
           onZurueck={() => setScreen({ name: 'import' })}
+          onNeuesImport={() => setScreen({ name: 'import' })}
         />
       );
     case 'uebersicht':

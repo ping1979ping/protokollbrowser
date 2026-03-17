@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { importPakete, importVerantwortliche, clearAll } from '../db';
+import { importPakete, importVerantwortliche, clearAll, getAllGruppen } from '../db';
 import { decodeText, parseDfJson } from '../dfimport';
 import logo from '../assets/ping-logo.png';
 
@@ -32,7 +32,6 @@ export default function ImportScreen({ onImported }: Props) {
         alert('Keine Protokolle in der Datei gefunden.');
         return;
       }
-      await clearAll();
       await importPakete(pakete);
       if (verantwortliche.length > 0) await importVerantwortliche(verantwortliche);
       onImported();
@@ -49,7 +48,6 @@ export default function ImportScreen({ onImported }: Props) {
       const text = decodeText(buffer);
       const raw = JSON.parse(text);
       const { pakete, verantwortliche } = parseDfJson(raw);
-      await clearAll();
       await importPakete(pakete);
       if (verantwortliche.length > 0) await importVerantwortliche(verantwortliche);
       onImported();
@@ -94,6 +92,19 @@ export default function ImportScreen({ onImported }: Props) {
             className="w-full bg-ping-blue-light text-ping-blue py-3 px-4 rounded-xl font-medium hover:bg-ping-gold-light hover:text-ping-gold-dark transition"
           >
             Testdaten laden
+          </button>
+
+          <button
+            onClick={async () => {
+              const gruppen = await getAllGruppen();
+              if (gruppen.length === 0) { alert('Keine Daten vorhanden.'); return; }
+              if (!confirm(`Wirklich alle Daten löschen? (${gruppen.length} Projekt${gruppen.length !== 1 ? 'e' : ''})`)) return;
+              await clearAll();
+              alert('Alle Daten gelöscht.');
+            }}
+            className="w-full text-red-500 py-2 px-4 rounded-xl text-sm hover:bg-red-50 transition"
+          >
+            Alle Daten löschen
           </button>
         </div>
       </div>

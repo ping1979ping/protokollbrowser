@@ -32,15 +32,41 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
   const [statusFilter, setStatusFilter] = useState<number | null>(initialState?.statusFilter ?? null);
   const restoredProtId = useRef(initialState?.gewaehlteProtId ?? null);
 
-  // Filterzustand nach oben melden bei jeder Änderung
-  useEffect(() => {
+  // Refs für synchronen Zugriff auf aktuellen State (vermeidet Race Conditions)
+  const ansichtRef = useRef(ansicht);
+  const filterRef = useRef(filter);
+  const statusFilterRef = useRef(statusFilter);
+  const gewaehlteProtRef = useRef(gewaehltesProt);
+  ansichtRef.current = ansicht;
+  filterRef.current = filter;
+  statusFilterRef.current = statusFilter;
+  gewaehlteProtRef.current = gewaehltesProt;
+
+  // State synchron sichern — wird VOR jeder Navigation aufgerufen
+  function saveState() {
     onStateChange?.({
-      ansicht,
-      filter,
-      statusFilter,
-      gewaehlteProtId: gewaehltesProt?.Id ?? null,
+      ansicht: ansichtRef.current,
+      filter: filterRef.current,
+      statusFilter: statusFilterRef.current,
+      gewaehlteProtId: gewaehlteProtRef.current?.Id ?? null,
     });
-  }, [ansicht, filter, statusFilter, gewaehltesProt]);
+  }
+
+  // Navigations-Wrapper: State synchron sichern, dann weiterleiten
+  function handleSelectElement(elem: Protokollelement, prot: Protokoll, grp: Protokollgruppe, filteredIds?: string[]) {
+    saveState();
+    onSelectElement(elem, prot, grp, filteredIds);
+  }
+
+  function handleNeuesElement(prot: Protokoll, grp: Protokollgruppe) {
+    saveState();
+    onNeuesElement(prot, grp);
+  }
+
+  function handleExport(prot: Protokoll, grp: Protokollgruppe) {
+    saveState();
+    onExport(prot, grp);
+  }
 
   useEffect(() => { laden(); }, []);
 
@@ -116,7 +142,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
             </button>
             {aktivProt && (
               <button
-                onClick={() => onExport(aktivProt, gruppe)}
+                onClick={() => handleExport(aktivProt, gruppe)}
                 className="bg-ping-blue-dark hover:bg-ping-blue px-3 py-1 rounded-lg text-xs"
               >
                 Export
@@ -209,7 +235,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
       {ansicht === 'karte' ? (
         <MapOverview
           elemente={aktuelleElemente}
-          onElementClick={(elem) => aktivProt && onSelectElement(elem, protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
+          onElementClick={(elem) => aktivProt && handleSelectElement(elem, protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
           onRefresh={laden}
         />
       ) : (
@@ -241,7 +267,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                 return (
                   <tr
                     key={elem.Id}
-                    onClick={() => aktivProt && onSelectElement(elem, ansicht === 'einzeln' ? aktivProt : protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
+                    onClick={() => aktivProt && handleSelectElement(elem, ansicht === 'einzeln' ? aktivProt : protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
                     className="border-b border-gray-100 hover:bg-ping-blue-light active:bg-ping-blue-light cursor-pointer"
                   >
                     <td className={`px-2 py-1.5 font-mono ${elem.MobileErfassung?.GeoLat != null ? 'text-ping-blue font-semibold' : 'text-gray-400'}`}>{elem.Position}</td>
@@ -284,7 +310,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
               Ort: aktivProt.Ort,
               Autor: aktivProt.Autor,
             });
-            onNeuesElement(draft, gruppe);
+            handleNeuesElement(draft, gruppe);
           }}
           className="fixed bottom-4 right-4 bg-ping-blue text-white w-12 h-12 rounded-full shadow-lg hover:bg-ping-blue-dark active:bg-ping-blue-dark text-xl font-light flex items-center justify-center"
         >
