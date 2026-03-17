@@ -5,6 +5,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: '/protokollbrowser/',
+  define: {
+    'import.meta.env.VITE_BUILD_TIME': JSON.stringify(Date.now().toString()),
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -15,6 +18,8 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+        globIgnores: ['**/version.txt'],
+        navigateFallbackDenylist: [/version\.txt$/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\//,

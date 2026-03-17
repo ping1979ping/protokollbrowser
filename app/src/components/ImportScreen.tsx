@@ -1,7 +1,9 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { importPakete, importVerantwortliche, clearAll } from '../db';
 import { decodeText, parseDfJson } from '../dfimport';
 import logo from '../assets/ping-logo.png';
+
+const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || '?';
 
 interface Props {
   onImported: () => void;
@@ -9,6 +11,14 @@ interface Props {
 
 export default function ImportScreen({ onImported }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [version, setVersion] = useState(BUILD_TIME);
+
+  useEffect(() => {
+    fetch(import.meta.env.BASE_URL + 'version.txt', { cache: 'no-store' })
+      .then(r => r.ok ? r.text() : null)
+      .then(v => { if (v) setVersion(v.trim()); })
+      .catch(() => {});
+  }, []);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -87,6 +97,7 @@ export default function ImportScreen({ onImported }: Props) {
           </button>
         </div>
       </div>
+      <p className="mt-4 text-[10px] text-gray-400 font-mono">Build: {version}</p>
     </div>
   );
 }
