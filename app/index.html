@@ -7,6 +7,22 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // v2: Force nuke old service workers and caches
+      var APP_VERSION = '20260316b';
+      if ('serviceWorker' in navigator && localStorage.getItem('app_version') !== APP_VERSION) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) { if (name.indexOf('map-tiles') === -1) caches.delete(name); });
+        });
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          var p = regs.map(function(r) { return r.unregister(); });
+          Promise.all(p).then(function() {
+            localStorage.setItem('app_version', APP_VERSION);
+            location.reload();
+          });
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -10,6 +10,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      filename: 'sw2.js',
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
