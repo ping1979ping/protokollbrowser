@@ -7,9 +7,11 @@ const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || '?';
 
 interface Props {
   onImported: () => void;
+  onServerImport?: () => void;
+  onSettings?: () => void;
 }
 
-export default function ImportScreen({ onImported }: Props) {
+export default function ImportScreen({ onImported, onServerImport, onSettings }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [version, setVersion] = useState(BUILD_TIME);
 
@@ -78,6 +80,15 @@ export default function ImportScreen({ onImported }: Props) {
             className="hidden"
           />
 
+          {onServerImport && (
+            <button
+              onClick={onServerImport}
+              className="w-full bg-ping-blue text-white py-3 px-4 rounded-xl font-medium hover:bg-ping-blue-dark active:brightness-90 transition"
+            >
+              Vom Server laden
+            </button>
+          )}
+
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200" />
@@ -107,6 +118,14 @@ export default function ImportScreen({ onImported }: Props) {
             Alle Daten löschen
           </button>
         </div>
+        {onSettings && (
+          <button
+            onClick={onSettings}
+            className="mt-4 text-ping-text-light text-xs hover:text-ping-blue transition"
+          >
+            Server-Einstellungen
+          </button>
+        )}
       </div>
       <p className="mt-4 text-[10px] text-gray-400 font-mono">Build: {version}</p>
     </div>

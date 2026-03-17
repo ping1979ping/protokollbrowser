@@ -80,6 +80,10 @@
   //FilePath = "C:\\Temp\\Protokolle.json"; // für den Produktivbetrieb muss diese Zeile aktiv sein!!!
   FilePath = "T:\\Temp\\WEBE\\Protokolle.json"; // nur für Entwicklung, wenn fertig ist diese Zeile zu löschen!!!
 
+  // --- Exchange-Server Pfad (fuer Sync mit App) ---
+  // Anpassen an tatsaechlichen Pfad! Leer lassen = kein Server-Export
+  STRING ExchangeBasePath = "C:\\daten\\python\\protokollbrowser\\server\\data\\export";
+
   // --- JSON-Array aufbauen ---
   JSon.Construct();
 
@@ -237,7 +241,42 @@
   File.Open( FilePath, FILE_MODE_CREATE | FILE_MODE_WRITE );
   FileWriteString( File, Txt );
   File.Close();
-  
+
+  // --- Zusaetzlich fuer Exchange-Server schreiben ---
+  STRING ExchangeProjPath;
+  STRING ExchangeJsonPath;
+  STRING ExchangeManifestPath;
+  STRING ManifestTxt;
+  HJSON ManifestJSon;
+
+  IF( ExchangeBasePath != "" )
+    ExchangeProjPath = ExchangeBasePath + "\\" + GruppeOid;
+    MakePath( ExchangeProjPath );
+
+    // protokolle.json
+    ExchangeJsonPath = ExchangeProjPath + "\\protokolle.json";
+    File.Open( ExchangeJsonPath, FILE_MODE_CREATE | FILE_MODE_WRITE );
+    FileWriteString( File, Txt );
+    File.Close();
+
+    // manifest.json
+    ManifestJSon.Construct();
+    ManifestJSon.GetMember( "projektName", TRUE ).SetString( ProtGrp._Projekt.Name );
+    ManifestJSon.GetMember( "gruppeName", TRUE ).SetString( ProtGrp._Name );
+    ManifestJSon.GetMember( "gruppeId", TRUE ).SetString( GruppeOid );
+    ManifestJSon.GetMember( "projektId", TRUE ).SetString( ProtGrp._Projekt.Nummer );
+    ManifestJSon.GetMember( "timestamp", TRUE ).SetString( Now().EditFormatDateTime() );
+    ManifestJSon.GetMember( "anzahlProtokolle", TRUE ).SetNumber( ProtSet.GetCount().ToFloat() );
+    ManifestTxt = ManifestJSon.GetText( TRUE );
+    ExchangeManifestPath = ExchangeProjPath + "\\manifest.json";
+    File.Open( ExchangeManifestPath, FILE_MODE_CREATE | FILE_MODE_WRITE );
+    FileWriteString( File, ManifestTxt );
+    File.Close();
+    ManifestJSon.Destruct();
+
+    Trace( strace + "Exchange-Export nach: %1", ExchangeProjPath );
+  ENDIF
+
   JSon.Destruct();
 
   MessageBox( "Export abgeschlossen.\n\nDatei: " + FilePath + "\n\nAnzahl Protokolle: " + ProtSet.GetCount().ToStr(), MB_OK | MB_ICONINFORMATION );

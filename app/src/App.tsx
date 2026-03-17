@@ -8,10 +8,14 @@ import type { UebersichtState } from './components/ProtokollUebersicht';
 import ElementDetail from './components/ElementDetail';
 import NeuesElement from './components/NeuesElement';
 import ExportScreen from './components/ExportScreen';
+import ServerImportScreen from './components/ServerImportScreen';
+import SyncSettings from './components/SyncSettings';
 
 type Screen =
   | { name: 'import' }
   | { name: 'projektauswahl' }
+  | { name: 'server-import' }
+  | { name: 'sync-settings' }
   | { name: 'uebersicht'; gruppeId: string }
   | { name: 'detail'; element: Protokollelement; protokoll: Protokoll; gruppe: Protokollgruppe; filteredIds?: string[] }
   | { name: 'neu'; protokoll: Protokoll; gruppe: Protokollgruppe; vorgaenger?: Protokollelement }
@@ -30,7 +34,23 @@ export default function App() {
 
   switch (screen.name) {
     case 'import':
-      return <ImportScreen onImported={() => setScreen({ name: 'projektauswahl' })} />;
+      return (
+        <ImportScreen
+          onImported={() => setScreen({ name: 'projektauswahl' })}
+          onServerImport={() => setScreen({ name: 'server-import' })}
+          onSettings={() => setScreen({ name: 'sync-settings' })}
+        />
+      );
+    case 'server-import':
+      return (
+        <ServerImportScreen
+          onImported={() => setScreen({ name: 'projektauswahl' })}
+          onZurueck={() => setScreen({ name: 'import' })}
+          onSettings={() => setScreen({ name: 'sync-settings' })}
+        />
+      );
+    case 'sync-settings':
+      return <SyncSettings onBack={() => setScreen({ name: 'import' })} />;
     case 'projektauswahl':
       return (
         <ProjektAuswahl
