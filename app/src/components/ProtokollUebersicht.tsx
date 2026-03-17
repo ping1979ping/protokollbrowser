@@ -244,7 +244,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                     onClick={() => aktivProt && onSelectElement(elem, ansicht === 'einzeln' ? aktivProt : protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
                     className="border-b border-gray-100 hover:bg-ping-blue-light active:bg-ping-blue-light cursor-pointer"
                   >
-                    <td className="px-2 py-1.5 font-mono text-gray-400">{elem.Position}</td>
+                    <td className={`px-2 py-1.5 font-mono ${elem.MobileErfassung?.GeoLat != null ? 'text-ping-blue font-semibold' : 'text-gray-400'}`}>{elem.Position}</td>
                     <td className="px-1 py-1.5 text-gray-600 text-[10px] leading-tight break-all overflow-hidden">{elem.Thema || '-'}</td>
                     <td className="px-1 py-1.5 text-gray-800">
                       <div className="leading-tight line-clamp-2">{elem.Positionstext || elem.Positionstitel || '—'}</div>
