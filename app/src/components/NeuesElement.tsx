@@ -320,6 +320,10 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
               <div className="flex gap-1">
                 <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
                 <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
+                {geoLat != null && (
+                  <button onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
+                    className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px]">Löschen</button>
+                )}
               </div>
             </div>
             {geoText ? <p className="text-[10px] text-gray-600">{geoText}</p> : <p className="text-[10px] text-gray-300">{autoGps ? 'Wird ermittelt...' : 'Kein Standort'}</p>}

@@ -318,6 +318,10 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             <div className="flex gap-1">
               <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
               <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
+              {elem.MobileErfassung.GeoLat != null && (
+                <button onClick={() => updateMobile({ GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoHeading: null, GeoText: null })}
+                  className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px]">Löschen</button>
+              )}
             </div>
           </div>
           {elem.MobileErfassung.GeoLat != null
