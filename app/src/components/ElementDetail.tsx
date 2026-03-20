@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
-import { updateElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe } from '../db';
+import { updateElement, deleteElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord } from './map/mapUtils';
+import BautagebuchWizard from './BautagebuchWizard';
 
 interface Props {
   element: Protokollelement;
@@ -52,8 +53,10 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
   const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
   const [showWeitereStatus, setShowWeitereStatus] = useState(false);
+  const [showBtWizard, setShowBtWizard] = useState(false);
 
   const istNeu = !!elem._neu;
+  const istBautagebuch = elem.Thema === 'Bautagebuch';
 
   const swipe = useSwipe(
     () => nextElem && onNavigate(nextElem),
@@ -111,7 +114,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
     for (const p of prots) {
       const elems = await getElemente(p.Id);
       for (const e of elems) {
-        if (e.Thema?.trim()) themen.add(e.Thema.trim());
+        if (e.Thema?.trim() && e.Thema.trim() !== 'Bautagebuch') themen.add(e.Thema.trim());
       }
     }
     setThemenVorschlaege([...themen].sort());
@@ -201,6 +204,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </button>
           <div className="text-center">
             <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Übersicht</button>
+            <p className="text-[10px] text-ping-blue-light/70 mt-0.5">{protokoll.Name}</p>
             <div className="flex items-center gap-2 justify-center mt-0.5">
               <span className="text-xs text-ping-blue-light">Pos. {elem.Position}</span>
               {st && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${st.css}`}>{st.label}</span>}
@@ -212,7 +216,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </button>
         </div>
         {!istNeu && <p className="text-xs text-ping-blue-light text-center mt-1">Nur Status änderbar</p>}
-        {istNeu && <p className="text-xs text-green-300 text-center mt-1">Neues Element — alle Felder editierbar</p>}
+        {istNeu && <p className="text-xs text-green-300 text-center mt-1">&#9998; Neues Element — editierbar</p>}
       </div>
 
       {/* Buttons direkt unter Header */}
@@ -264,8 +268,10 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <label className="text-[10px] text-gray-400 font-medium uppercase">Positionstext</label>
           {istNeu ? (
-            <textarea value={elem.Positionstext} onChange={(e) => update({ Positionstext: e.target.value })} rows={6}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none mt-0.5" />
+            <textarea value={elem.Positionstext} onChange={(e) => update({ Positionstext: e.target.value })}
+              onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+              ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
+              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none mt-0.5 min-h-[9rem] max-h-[50vh] overflow-auto" />
           ) : (
             <p className="text-sm text-gray-700 mt-0.5">{elem.Positionstext || '—'}</p>
           )}
@@ -407,7 +413,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <div className="flex items-center justify-between mb-1">
               <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
-              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px]">Hinzufügen</button>
+              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
               <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple onChange={fotoHinzufuegen} className="hidden" />
             </div>
             {fotos.length > 0 && (
@@ -460,8 +466,32 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </div>
         )}
 
+        {/* Bautagebuch bearbeiten */}
+        {istBautagebuch && (
+          <button
+            onClick={() => setShowBtWizard(true)}
+            className="w-full py-2.5 rounded-lg font-medium text-sm bg-amber-600 text-white hover:bg-amber-700 transition"
+          >
+            Bautagebuch bearbeiten
+          </button>
+        )}
+
+        {/* Löschen (nur neue Elemente) */}
+        {istNeu && (
+          <button
+            onClick={async () => {
+              if (!confirm('Diesen Punkt wirklich löschen?')) return;
+              await deleteElement(elem.Id);
+              onBack();
+            }}
+            className="w-full py-2.5 rounded-lg font-medium text-sm bg-red-600 text-white hover:bg-red-700 transition"
+          >
+            Punkt löschen
+          </button>
+        )}
+
         {/* Nachfolger + Klonen */}
-        {!istNeu && (
+        {!istNeu && !istBautagebuch && (
           <div className="flex gap-2">
             <button onClick={() => onNachfolger(elem)}
               className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-ping-gold text-white hover:bg-ping-gold-dark transition">
@@ -483,6 +513,38 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </div>
         )}
       </div>
+
+      {/* Bautagebuch Wizard Modal */}
+      {showBtWizard && (
+        <BautagebuchWizard
+          gruppe={gruppe}
+          existingElement={elem}
+          onUebernehmen={(result) => {
+            const patch: Partial<Protokollelement> = {
+              Positionstext: result.positionstext,
+              Termin: result.datum + 'T00:00:00',
+              _geaendert: true,
+            };
+            if (result.geoLat != null) {
+              setElem(prev => ({
+                ...prev,
+                ...patch,
+                MobileErfassung: {
+                  ...prev.MobileErfassung,
+                  GeoLat: result.geoLat,
+                  GeoLon: result.geoLon,
+                  GeoAccuracy: result.geoAcc,
+                },
+              }));
+            } else {
+              setElem(prev => ({ ...prev, ...patch }));
+            }
+            markDirty();
+            setShowBtWizard(false);
+          }}
+          onAbbrechen={() => setShowBtWizard(false)}
+        />
+      )}
     </div>
   );
 }

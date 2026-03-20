@@ -2,7 +2,7 @@
  * Sync-Service: PWA ↔ Exchange Server
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport } from './db';
 import { parseDfJson } from './dfimport';
 import { getDeviceId, getDeviceName, getUserName } from './deviceIdentity';
 
@@ -82,8 +82,16 @@ export async function downloadProject(projectId: string): Promise<void> {
   await importPakete(pakete);
   if (verantwortliche.length > 0) await importVerantwortliche(verantwortliche);
 
-  // Sync-Meta aktualisieren
+  // Alte PendingExports dieser Gruppe aufräumen (Daten sind jetzt im Server)
   const gruppeId = pakete[0].Protokollgruppe.Id;
+  try {
+    const pending = await getPendingExports();
+    for (const exp of pending) {
+      if (exp.gruppeId === gruppeId) await deletePendingExport(exp.id);
+    }
+  } catch { /* ignore */ }
+
+  // Sync-Meta aktualisieren
   await setSyncMeta({
     gruppeId,
     serverUrl: getServerUrl(),

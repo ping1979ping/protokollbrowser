@@ -166,6 +166,19 @@ export async function getElement(id: string): Promise<Protokollelement | undefin
   return db.get('elemente', id);
 }
 
+export async function deleteElement(id: string): Promise<void> {
+  const db = await getDb();
+  // Element löschen
+  await db.delete('elemente', id);
+  // Zugehörige Fotos löschen
+  const fotos = await db.getAllFromIndex('fotos', 'byElement', id);
+  const tx = db.transaction('fotos', 'readwrite');
+  for (const foto of fotos) {
+    await tx.objectStore('fotos').delete(foto.fotoId);
+  }
+  await tx.done;
+}
+
 export async function getAllElemente(): Promise<Protokollelement[]> {
   const db = await getDb();
   return db.getAll('elemente');
@@ -286,4 +299,24 @@ export async function getPendingExports(): Promise<PendingExport[]> {
 export async function deletePendingExport(id: string): Promise<void> {
   const db = await getDb();
   await db.delete('pendingExports', id);
+}
+
+export async function findBautagebuchProtokoll(gruppeId: string): Promise<ProtokollMitGruppe | null> {
+  const prots = await getProtokolleByGruppe(gruppeId);
+  // Anhangprotokolle (negative Nummer) mit "Bautagebuch" im Namen
+  const found = prots.find(p =>
+    p.Nummer < 0 && p.Name.toLowerCase().includes('bautagebuch')
+  );
+  return found ?? null;
+}
+
+export async function getLetzteBautagebuchElemente(gruppeId: string): Promise<Protokollelement[]> {
+  const btProt = await findBautagebuchProtokoll(gruppeId);
+  if (!btProt) return [];
+  const elems = await getElemente(btProt.Id);
+  if (elems.length === 0) return [];
+  // Alle Elemente im BT-Protokoll, sortiert nach Position absteigend (neueste zuerst)
+  // Nicht nur Thema=Bautagebuch filtern — im Anhangprotokoll ist alles relevant
+  elems.sort((a, b) => b.Position.localeCompare(a.Position, undefined, { numeric: true }));
+  return elems;
 }

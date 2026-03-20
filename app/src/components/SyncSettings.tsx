@@ -12,6 +12,13 @@ export default function SyncSettings({ onBack }: Props) {
   const [userName, setUserNameLocal] = useState(getUserName());
   const [deviceName, setDeviceNameLocal] = useState(getDeviceName());
   const deviceId = getDeviceId();
+  const [autoBackup, setAutoBackup] = useState(() => localStorage.getItem('autoBackup') !== 'false');
+
+  function toggleAutoBackup() {
+    const next = !autoBackup;
+    setAutoBackup(next);
+    localStorage.setItem('autoBackup', String(next));
+  }
 
   async function handleTest() {
     setServerUrl(url);
@@ -90,6 +97,21 @@ export default function SyncSettings({ onBack }: Props) {
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue"
           />
           <p className="text-xs text-gray-400 mt-1">Zur Unterscheidung bei mehreren Geräten</p>
+        </div>
+
+        {/* Export-Einstellungen */}
+        <hr className="border-gray-200" />
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="block text-sm font-medium text-ping-text">Lokale Sicherungskopie</label>
+            <p className="text-xs text-gray-400 mt-0.5">ZIP-Datei beim Export auf Gerät herunterladen</p>
+          </div>
+          <button
+            onClick={toggleAutoBackup}
+            className={`relative w-11 h-6 rounded-full transition ${autoBackup ? 'bg-green-500' : 'bg-gray-300'}`}
+          >
+            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoBackup ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          </button>
         </div>
 
         {/* Device-ID */}

@@ -5,12 +5,14 @@ import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, sav
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord } from './map/mapUtils';
+import BautagebuchWizard from './BautagebuchWizard';
 
 interface Props {
   protokoll: Protokoll;
   gruppe: Protokollgruppe;
   vorgaenger?: Protokollelement;
   clone?: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string };
+  isBautagebuch?: boolean;
   onBack: () => void;
   onSaved: () => void;
   onSavedAndNew?: () => void;
@@ -26,12 +28,43 @@ const SCHNELLTYPEN = [
 const HAUPT_STATUS = [0, 10, 20];
 const WEITERE_STATUS = [19, 11, 25, 17, 21];
 
-export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onBack, onSaved, onSavedAndNew, onSavedAndClone }: Props) {
+/**
+ * Erkennt das Positions-Nummernschema im Bautagebuch-Protokoll und setzt fort.
+ * Beispiele: "1","2","3" → "4" | "BT-001","BT-002" → "BT-003" | "1.1","1.2" → "1.3"
+ */
+function naechsteBtPosition(elems: { Position: string }[]): string {
+  if (elems.length === 0) return '1';
+
+  const positionen = elems.map(e => e.Position).filter(Boolean);
+  positionen.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  const letzte = positionen[positionen.length - 1];
+
+  // Pattern: Prefix + Zahl (evtl. mit führenden Nullen)
+  const match = letzte.match(/^(.*?)(\d+)$/);
+  if (match) {
+    const prefix = match[1];
+    const numStr = match[2];
+    const nextNum = parseInt(numStr, 10) + 1;
+    // Führende Nullen beibehalten
+    const padded = String(nextNum).padStart(numStr.length, '0');
+    return prefix + padded;
+  }
+
+  // Fallback: rein numerisch max + 1
+  let maxNum = 0;
+  for (const p of positionen) {
+    const n = parseFloat(p);
+    if (n > maxNum) maxNum = n;
+  }
+  return `${Math.floor(maxNum) + 1}`;
+}
+
+export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isBautagebuch, onBack, onSaved, onSavedAndNew, onSavedAndClone }: Props) {
   const [typ, setTyp] = useState(clone ? (clone.thema === 'Mangel' ? 1 : 0) : vorgaenger?.Thema === 'Mangel' ? 1 : 0);
   const [position, setPosition] = useState('');
   const [thema, setThema] = useState(clone?.thema ?? vorgaenger?.Thema ?? SCHNELLTYPEN[0].thema);
   const [positionstext, setPositionstext] = useState('');
-  const [status, setStatus] = useState(clone?.status ?? (vorgaenger?.Thema === 'Mangel' ? 11 : 0));
+  const [status, setStatus] = useState(clone?.status ?? (isBautagebuch ? 20 : vorgaenger?.Thema === 'Mangel' ? 11 : 0));
   const [termin, setTermin] = useState(clone?.termin ?? '');
   const [verantwFirmaOid, setVerantwFirmaOid] = useState(clone?.verantwOid ?? vorgaenger?.VerantwortlicherFirmaOid ?? '');
   const [bemerkung, setBemerkung] = useState('');
@@ -48,11 +81,12 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
   const [autoGps, setAutoGps] = useState(() => localStorage.getItem('autoGps') !== 'false');
   const [showWeitereStatus, setShowWeitereStatus] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [showBtWizard, setShowBtWizard] = useState(!!isBautagebuch);
   const fotoRef = useRef<HTMLInputElement>(null);
 
   // Auto-GPS
   useEffect(() => {
-    if (autoGps && !clone && geoLat == null && navigator.geolocation) {
+    if (autoGps && !clone && geoLat == null && protokoll.Nummer >= 0 && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (p) => {
           const lat = p.coords.latitude, lon = p.coords.longitude;
@@ -68,7 +102,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
 
   // Auto-Kompass
   useEffect(() => {
-    if (!autoGps) return;
+    if (!autoGps || protokoll.Nummer < 0) return;
     if (!('DeviceOrientationEvent' in window)) return;
     let captured = false;
     const handler = (e: DeviceOrientationEvent) => {
@@ -103,7 +137,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
     (async () => {
       const prots = await getProtokolleByGruppe(gruppe.Id);
       const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
-      const themen = [...new Set(alleElems.map(e => e.Thema).filter(Boolean))];
+      const themen = [...new Set(alleElems.map(e => e.Thema).filter(t => t && t !== 'Bautagebuch'))];
       themen.sort();
       setThemenVorschlaege(themen);
     })();
@@ -151,16 +185,22 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
 
     let pos = position.trim();
     if (!pos) {
-      const allProts = await getProtokolleByGruppe(gruppe.Id);
-      let maxPos = 0;
-      for (const p of allProts) {
-        const elems = await getElemente(p.Id);
-        for (const e of elems) {
-          const num = parseFloat(e.Position);
-          if (num > maxPos) maxPos = num;
+      if (protokoll.Nummer < 0) {
+        // Anhangprotokoll (BT, Mehrkosten, QM): Nummernschema innerhalb des Protokolls fortsetzen
+        const protElems = await getElemente(protokoll.Id);
+        pos = naechsteBtPosition(protElems);
+      } else {
+        const allProts = await getProtokolleByGruppe(gruppe.Id);
+        let maxPos = 0;
+        for (const p of allProts) {
+          const elems = await getElemente(p.Id);
+          for (const e of elems) {
+            const num = parseFloat(e.Position);
+            if (num > maxPos) maxPos = num;
+          }
         }
+        pos = `${Math.floor(maxPos) + 1}`;
       }
-      pos = `${Math.floor(maxPos) + 1}`;
     }
 
     const verantw = alleFirmen.find(t => t.Oid === verantwFirmaOid);
@@ -232,7 +272,11 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
       {/* Header */}
       <div className="bg-ping-blue text-white p-3">
         <div className="text-center">
-          <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Übersicht</button>
+          <button onClick={() => {
+            if (dirty && !confirm('Änderungen werden nicht gespeichert. Zur Übersicht?')) return;
+            onBack();
+          }} className="text-ping-blue-light hover:text-white text-xs">&larr; Übersicht</button>
+          <p className="text-[10px] text-ping-blue-light/70 mt-0.5">{protokoll.Name}</p>
           <h1 className="text-base font-bold mt-0.5">
             {vorgaenger ? 'Nachfolger erstellen' : 'Neues Element'}
           </h1>
@@ -247,21 +291,17 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
       {/* Buttons direkt unter Header */}
       <div className="px-3 pt-2 flex gap-1.5">
         <button onClick={speichern}
-          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-xs transition ${
+          className={`flex-[2] py-2.5 rounded-lg font-bold text-white text-xs transition ${
             dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-ping-blue hover:bg-ping-blue-dark'
           }`}>
           Speichern
         </button>
         <button onClick={speichernUndNeu}
-          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-xs transition ${
-            dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'
-          }`}>
+          className="flex-1 py-2.5 rounded-lg font-medium text-xs transition bg-gray-200 text-gray-700 hover:bg-gray-300">
           & Neu
         </button>
         <button onClick={speichernUndKlonen}
-          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-xs transition ${
-            dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-700'
-          }`}>
+          className="flex-1 py-2.5 rounded-lg font-medium text-xs transition bg-gray-200 text-gray-700 hover:bg-gray-300">
           & Klonen
         </button>
       </div>
@@ -287,9 +327,11 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
         {/* Positionstext */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Positionstext *</label>
-          <textarea value={positionstext} onChange={(e) => { setPositionstext(e.target.value); setDirty(true); }} rows={6}
+          <textarea value={positionstext} onChange={(e) => { setPositionstext(e.target.value); setDirty(true); }}
+            onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+            ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
             placeholder="Beschreibung des Punktes..."
-            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none min-h-[9rem] max-h-[50vh] overflow-auto" />
         </div>
 
         {/* Status — Neu/Offen/Erledigt direkt, Rest unter "..." */}
@@ -413,7 +455,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
             <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({tempFotos.length})</label>
-            <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px]">Hinzufügen</button>
+            <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
             <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple
               onChange={(e) => { if (e.target.files) setTempFotos(prev => [...prev, ...Array.from(e.target.files!)]); }}
               className="hidden" />
@@ -445,6 +487,30 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onB
             className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
         </div>
       </div>
+
+      {/* Bautagebuch Wizard */}
+      {showBtWizard && (
+        <BautagebuchWizard
+          gruppe={gruppe}
+          onUebernehmen={(result) => {
+            setPositionstext(result.positionstext);
+            setThema('Bautagebuch');
+            setTermin(result.datum);
+            if (result.geoLat != null) {
+              setGeoLat(result.geoLat);
+              setGeoLon(result.geoLon);
+              setGeoAcc(result.geoAcc);
+              setGeoText(result.geoLat != null ? `${result.geoLat.toFixed(7)}, ${result.geoLon!.toFixed(7)}` : '');
+            }
+            setDirty(true);
+            setShowBtWizard(false);
+          }}
+          onAbbrechen={() => {
+            setShowBtWizard(false);
+            if (isBautagebuch) onBack();
+          }}
+        />
+      )}
     </div>
   );
 }

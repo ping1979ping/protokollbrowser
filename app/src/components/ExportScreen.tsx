@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { Protokoll, Protokollgruppe } from '../types';
-import { getElemente, getFotos, clearSyncFlags, getProtokolleByGruppe, savePendingExport, getPendingExports, deletePendingExport } from '../db';
+import { getElemente, getFotos, clearSyncFlags, getProtokolleByGruppe, savePendingExport, getPendingExports, deletePendingExport, updateElement } from '../db';
 import { checkConnectivity, uploadZip } from '../syncService';
+import { fetchWeather } from '../weatherService';
 import JSZip from 'jszip';
 
 interface Props {
@@ -19,6 +20,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   const [stats, setStats] = useState<{ geaendert: number; neu: number } | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [exported, setExported] = useState(false);
+  const [wetterStatus, setWetterStatus] = useState<string | null>(null);
 
   useEffect(() => {
     // Stats laden
@@ -46,6 +48,31 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         alert('Keine Änderungen zum Exportieren vorhanden.');
         setExporting(false);
         return;
+      }
+
+      // Bautagebuch-Elemente ohne Wetter nachladen
+      const btOhneWetter = relevante.filter(e =>
+        e.Thema === 'Bautagebuch' &&
+        e.Positionstext.includes('Wetter: —') &&
+        e.MobileErfassung?.GeoLat != null
+      );
+      if (btOhneWetter.length > 0) {
+        setWetterStatus(`Wetter für ${btOhneWetter.length} Eintrag/Einträge nachladen...`);
+        for (const btElem of btOhneWetter) {
+          try {
+            const datumMatch = btElem.Termin?.slice(0, 10);
+            const w = await fetchWeather(
+              btElem.MobileErfassung.GeoLat!,
+              btElem.MobileErfassung.GeoLon!,
+              datumMatch || undefined
+            );
+            if (w) {
+              btElem.Positionstext = btElem.Positionstext.replace('Wetter: —', `Wetter: ${w}`);
+              await updateElement(btElem);
+            }
+          } catch { /* ignore */ }
+        }
+        setWetterStatus(null);
       }
 
       const gruppeId = gruppe.Id;
@@ -157,13 +184,15 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         setExported(true);
       }
 
-      // Lokaler Download als Backup
-      const url = URL.createObjectURL(content);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      // Lokaler Download als Backup (falls in Einstellungen aktiviert)
+      if (localStorage.getItem('autoBackup') !== 'false') {
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
     } catch (err) {
       alert('Export-Fehler: ' + (err as Error).message);
     } finally {
@@ -237,7 +266,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
           disabled={exporting || exported}
           className="w-full bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 active:bg-green-800 transition disabled:opacity-50"
         >
-          {exporting ? 'Exportiere...' : exported ? 'Exportiert' : 'ZIP exportieren'}
+          {exporting ? (wetterStatus || 'Exportiere...') : exported ? 'Exportiert' : 'ZIP exportieren'}
         </button>
 
         {uploadResult === 'ok' && (

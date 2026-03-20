@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import type { Protokollelement } from '../../types';
 import { STATUS_MAP } from '../../types';
@@ -36,6 +36,18 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
   const [activeLayer, setActiveLayer] = useState<LayerDef>(LAYERS[0]);
   const [layerOpacity, setLayerOpacity] = useState(60);
   const [showTileCache, setShowTileCache] = useState(false);
+  const [currentPos, setCurrentPos] = useState<[number, number] | null>(null);
+
+  // Aktuellen Standort ermitteln
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (p) => setCurrentPos([p.coords.latitude, p.coords.longitude]),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      );
+    }
+  }, []);
 
   const mitGps = useMemo(() => elementeWithGps(elemente), [elemente]);
   const ohneGps = useMemo(() => elemente.filter(e => e.MobileErfassung.GeoLat == null || e.MobileErfassung.GeoLon == null), [elemente]);
@@ -96,14 +108,14 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
   return (
     <div className="flex-1 flex flex-col min-h-0" style={{ minHeight: 200 }}>
       <div className="flex-1 relative min-h-0">
-        {mitGps.length === 0 ? (
+        {mitGps.length === 0 && !currentPos ? (
           <div className="flex items-center justify-center h-full min-h-[200px]">
-            <p className="text-gray-400 text-sm">Keine Elemente mit GPS-Position vorhanden.</p>
+            <p className="text-gray-400 text-sm">Keine Elemente mit GPS-Position. Standort wird ermittelt...</p>
           </div>
         ) : (
           <MapContainer
-            center={bounds ? bounds.getCenter() : DEFAULT_CENTER}
-            zoom={16}
+            center={bounds ? bounds.getCenter() : currentPos ? L.latLng(currentPos[0], currentPos[1]) : DEFAULT_CENTER}
+            zoom={mitGps.length === 0 ? 15 : 16}
             maxZoom={20}
             className="w-full h-full"
             zoomControl={false}
@@ -125,6 +137,12 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
               onLayerChange={setActiveLayer}
               onOpacityChange={setLayerOpacity}
             />
+            {currentPos && mitGps.length === 0 && (
+              <FitBounds bounds={L.latLngBounds([currentPos, currentPos])} />
+            )}
+            {currentPos && (
+              <CircleMarker center={currentPos} radius={8} pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.8, weight: 2 }} />
+            )}
             {mitGps.map(elem => {
               const [lat, lon] = getPos(elem);
               return (

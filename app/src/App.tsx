@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from './types';
-import { getProtokolleByGruppe, getOrCreateDraftProtokoll } from './db';
+import { getProtokolleByGruppe, getOrCreateDraftProtokoll, findBautagebuchProtokoll } from './db';
 import ImportScreen from './components/ImportScreen';
 import ProjektAuswahl from './components/ProjektAuswahl';
 import ProtokollUebersicht from './components/ProtokollUebersicht';
@@ -8,6 +8,7 @@ import type { UebersichtState } from './components/ProtokollUebersicht';
 import ElementDetail from './components/ElementDetail';
 import NeuesElement from './components/NeuesElement';
 import ExportScreen from './components/ExportScreen';
+import SchnellErstellung from './components/SchnellErstellung';
 import ServerImportScreen from './components/ServerImportScreen';
 import SyncSettings from './components/SyncSettings';
 
@@ -18,8 +19,9 @@ type Screen =
   | { name: 'sync-settings' }
   | { name: 'uebersicht'; gruppeId: string }
   | { name: 'detail'; element: Protokollelement; protokoll: Protokoll; gruppe: Protokollgruppe; filteredIds?: string[] }
-  | { name: 'neu'; protokoll: Protokoll; gruppe: Protokollgruppe; vorgaenger?: Protokollelement; clone?: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string } }
-  | { name: 'export'; protokoll: Protokoll; gruppe: Protokollgruppe };
+  | { name: 'neu'; protokoll: Protokoll; gruppe: Protokollgruppe; vorgaenger?: Protokollelement; clone?: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string }; isBautagebuch?: boolean }
+  | { name: 'export'; protokoll: Protokoll; gruppe: Protokollgruppe }
+  | { name: 'schnell'; protokoll: Protokoll; gruppe: Protokollgruppe };
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'import' });
@@ -68,6 +70,15 @@ export default function App() {
           onStateChange={(s) => { uebersichtStateRef.current = s; }}
           onSelectElement={(elem, prot, grp, filteredIds) => setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: grp, filteredIds })}
           onNeuesElement={(prot, grp) => setScreen({ name: 'neu', protokoll: prot, gruppe: grp })}
+          onBautagebuch={async (grp) => {
+            const btProt = await findBautagebuchProtokoll(grp.Id);
+            if (!btProt) {
+              alert('Kein Bautagebuch-Protokoll in diesem Projekt gefunden.');
+              return;
+            }
+            setScreen({ name: 'neu', protokoll: btProt, gruppe: grp, isBautagebuch: true });
+          }}
+          onSchnellErstellung={(prot, grp) => setScreen({ name: 'schnell', protokoll: prot, gruppe: grp })}
           onExport={(prot, grp) => setScreen({ name: 'export', protokoll: prot, gruppe: grp })}
           onZurueck={() => setScreen({ name: 'projektauswahl' })}
         />
@@ -82,12 +93,12 @@ export default function App() {
           filteredIds={screen.filteredIds}
           onBack={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
           onNachfolger={async (vorgaenger) => {
-            const draft = await getOrCreateDraftProtokoll(screen.gruppe.Id, {
+            const prot = screen.protokoll.Nummer < 0 ? screen.protokoll : await getOrCreateDraftProtokoll(screen.gruppe.Id, {
               Name: screen.protokoll.Name,
               Ort: screen.protokoll.Ort,
               Autor: screen.protokoll.Autor,
             });
-            setScreen({ name: 'neu', protokoll: draft, gruppe: screen.gruppe, vorgaenger });
+            setScreen({ name: 'neu', protokoll: prot, gruppe: screen.gruppe, vorgaenger });
           }}
           onNavigate={async (elem) => {
             let prot = screen.protokoll;
@@ -99,12 +110,12 @@ export default function App() {
             setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: screen.gruppe, filteredIds: screen.filteredIds });
           }}
           onClone={async (clone) => {
-            const draft = await getOrCreateDraftProtokoll(screen.gruppe.Id, {
+            const prot = screen.protokoll.Nummer < 0 ? screen.protokoll : await getOrCreateDraftProtokoll(screen.gruppe.Id, {
               Name: screen.protokoll.Name,
               Ort: screen.protokoll.Ort,
               Autor: screen.protokoll.Autor,
             });
-            setScreen({ name: 'neu', protokoll: draft, gruppe: screen.gruppe, clone });
+            setScreen({ name: 'neu', protokoll: prot, gruppe: screen.gruppe, clone });
           }}
         />
       );
@@ -116,6 +127,7 @@ export default function App() {
           gruppe={screen.gruppe}
           vorgaenger={screen.vorgaenger}
           clone={screen.clone}
+          isBautagebuch={screen.isBautagebuch}
           onBack={() => goUebersicht(screen.gruppe.Id)}
           onSaved={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
           onSavedAndNew={() => { refresh(); setScreen({ name: 'neu', protokoll: screen.protokoll, gruppe: screen.gruppe }); }}
@@ -128,6 +140,15 @@ export default function App() {
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
           onBack={() => goUebersicht(screen.gruppe.Id)}
+        />
+      );
+    case 'schnell':
+      return (
+        <SchnellErstellung
+          protokoll={screen.protokoll}
+          gruppe={screen.gruppe}
+          onBack={() => goUebersicht(screen.gruppe.Id)}
+          onDone={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
         />
       );
   }

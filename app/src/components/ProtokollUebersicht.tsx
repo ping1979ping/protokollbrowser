@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
-import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll } from '../db';
+import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll, findBautagebuchProtokoll } from '../db';
 import MapOverview from './map/MapOverview';
 import SyncIndicator from './SyncIndicator';
 import { useSyncStatus } from '../useSyncStatus';
@@ -19,11 +19,13 @@ interface Props {
   onStateChange?: (state: UebersichtState) => void;
   onSelectElement: (element: Protokollelement, protokoll: Protokoll, gruppe: Protokollgruppe, filteredIds?: string[]) => void;
   onNeuesElement: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
+  onBautagebuch?: (gruppe: Protokollgruppe) => void;
+  onSchnellErstellung?: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
   onExport: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
   onZurueck: () => void;
 }
 
-export default function ProtokollUebersicht({ gruppeId, initialState, onStateChange, onSelectElement, onNeuesElement, onExport, onZurueck }: Props) {
+export default function ProtokollUebersicht({ gruppeId, initialState, onStateChange, onSelectElement, onNeuesElement, onBautagebuch, onSchnellErstellung, onExport, onZurueck }: Props) {
   const [gruppe, setGruppe] = useState<Protokollgruppe | null>(null);
   const [protokolle, setProtokolle] = useState<Protokoll[]>([]);
   const [gewaehltesProt, setGewaehltesProt] = useState<Protokoll | null>(null);
@@ -34,6 +36,12 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
   const [statusFilter, setStatusFilter] = useState<number | null>(initialState?.statusFilter ?? null);
   const restoredProtId = useRef(initialState?.gewaehlteProtId ?? null);
   const sync = useSyncStatus(gruppeId);
+  const [hatBautagebuch, setHatBautagebuch] = useState(false);
+  const [hatAenderungen, setHatAenderungen] = useState(false);
+  const [anzahlGeaendert, setAnzahlGeaendert] = useState(0);
+  const [anzahlNeu, setAnzahlNeu] = useState(0);
+  const [zeigeAenderungen, setZeigeAenderungen] = useState(false);
+  const activeTabRef = useRef<HTMLButtonElement>(null);
 
   // Refs für synchronen Zugriff auf aktuellen State (vermeidet Race Conditions)
   const ansichtRef = useRef(ansicht);
@@ -71,6 +79,13 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
     onExport(prot, grp);
   }
 
+  // Aktiven Tab ins Sichtfeld scrollen
+  useEffect(() => {
+    if (activeTabRef.current) {
+      activeTabRef.current.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' });
+    }
+  }, [gewaehltesProt?.Id, ansicht]);
+
   useEffect(() => { laden(); }, []);
 
   async function laden() {
@@ -99,6 +114,17 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
     }
     alle.sort((a, b) => a.Position.localeCompare(b.Position, undefined, { numeric: true }));
     setAlleElemente(alle);
+
+    // Bautagebuch-Protokoll prüfen
+    const btProt = await findBautagebuchProtokoll(gruppeId);
+    setHatBautagebuch(!!btProt);
+
+    // Exportierbare Änderungen prüfen
+    const geaendert = alle.filter(e => e._geaendert && !e._neu).length;
+    const neu = alle.filter(e => e._neu).length;
+    setAnzahlGeaendert(geaendert);
+    setAnzahlNeu(neu);
+    setHatAenderungen(geaendert + neu > 0);
   }
 
   async function ladeElemente(prot: Protokoll) {
@@ -138,16 +164,22 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
           <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-sm">&larr; Projekte</button>
           <div className="flex items-center gap-2">
             <SyncIndicator sync={sync} />
-            <button
-              onClick={() => setAnsicht('karte')}
-              className="bg-ping-blue-dark hover:bg-ping-blue px-3 py-1 rounded-lg text-xs"
-            >
-              Karte
-            </button>
+            {hatAenderungen && (
+              <button
+                onClick={() => setZeigeAenderungen(!zeigeAenderungen)}
+                className="bg-orange-500 text-white px-3 h-7 rounded-lg text-[10px] font-bold flex items-center"
+              >
+                {anzahlGeaendert > 0 && <span>{anzahlGeaendert}*</span>}
+                {anzahlGeaendert > 0 && anzahlNeu > 0 && ' '}
+                {anzahlNeu > 0 && <span>+{anzahlNeu}</span>}
+              </button>
+            )}
             {aktivProt && (
               <button
                 onClick={() => handleExport(aktivProt, gruppe)}
-                className="bg-ping-blue-dark hover:bg-ping-blue px-3 py-1 rounded-lg text-xs"
+                className={`px-3 h-7 rounded-lg text-xs text-white flex items-center ${
+                  hatAenderungen ? 'bg-red-500 hover:bg-red-600' : 'bg-ping-blue-dark hover:bg-ping-blue'
+                }`}
               >
                 Export
               </button>
@@ -164,7 +196,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
           <button
             onClick={() => setAnsicht('alle')}
             className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
-              ansicht === 'alle' ? 'border-ping-gold text-ping-gold-dark bg-ping-gold-light' : 'border-transparent text-ping-gold-dark bg-ping-gold-light/40'
+              ansicht === 'alle' ? 'border-ping-gold-dark bg-ping-gold-dark text-white' : 'border-transparent text-ping-gold-dark bg-ping-gold-light/40'
             }`}
           >
             Gesamt
@@ -172,7 +204,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
           <button
             onClick={() => setAnsicht('karte')}
             className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
-              ansicht === 'karte' ? 'border-ping-gold text-ping-gold-dark bg-ping-gold-light' : 'border-transparent text-ping-gold-dark bg-ping-gold-light/40'
+              ansicht === 'karte' ? 'border-ping-gold-dark bg-ping-gold-dark text-white' : 'border-transparent bg-ping-blue-light text-ping-blue'
             }`}
           >
             Karte
@@ -182,18 +214,19 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
             return (
               <button
                 key={p.Id}
+                ref={ansicht === 'einzeln' && gewaehltesProt?.Id === p.Id ? activeTabRef : undefined}
                 onClick={() => { setAnsicht('einzeln'); ladeElemente(p); }}
                 className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
                   ansicht === 'einzeln' && gewaehltesProt?.Id === p.Id
-                    ? isDraft ? 'border-green-500 text-green-700' : 'border-ping-blue text-ping-blue'
+                    ? isDraft ? 'border-green-600 bg-green-600 text-white' : 'border-ping-blue bg-ping-blue text-white'
                     : isDraft ? 'border-transparent text-green-600' : 'border-transparent text-gray-500'
                 }`}
               >
-                Nr. {p.Nummer}
+                {p.Nummer < 0
+                  ? p.Name.replace(/\s*-?\d+\s*[-–]\s*\d+$/, '').trim() || p.Name
+                  : <>Nr. {p.Nummer}<span className="text-gray-400 ml-1">{new Date(p.Datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</span></>
+                }
                 {isDraft && <span className="text-green-500 ml-0.5">*</span>}
-                <span className="text-gray-400 ml-1">
-                  {new Date(p.Datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
-                </span>
               </button>
             );
           })}
@@ -232,6 +265,39 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         <div className="px-3 py-1.5 bg-ping-blue-light border-b text-xs text-gray-600">
           <span className="font-medium">{aktivProt.Name}</span> &middot; {new Date(aktivProt.Datum).toLocaleDateString('de-DE')} &middot; {aktivProt.Ort} &middot; {aktivProt.Autor}
           {aktivProt.Erledigt && <span className="ml-2 text-green-600 font-medium">erledigt</span>}
+        </div>
+      )}
+
+      {/* Änderungsübersicht */}
+      {zeigeAenderungen && (
+        <div className="bg-orange-50 border-b border-orange-200 max-h-[40vh] overflow-auto">
+          <div className="px-3 py-1.5 flex items-center justify-between sticky top-0 bg-orange-50">
+            <span className="text-xs font-medium text-orange-800">
+              {anzahlGeaendert} geändert, {anzahlNeu} neu
+            </span>
+            <button onClick={() => setZeigeAenderungen(false)} className="text-orange-400 hover:text-orange-600 text-sm px-1">×</button>
+          </div>
+          {alleElemente.filter(e => e._geaendert || e._neu).map(elem => {
+            const st = STATUS_MAP[elem.Status];
+            return (
+              <button
+                key={elem.Id}
+                onClick={() => {
+                  const prot = protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt;
+                  if (prot) handleSelectElement(elem, prot, gruppe, undefined);
+                  setZeigeAenderungen(false);
+                }}
+                className="w-full text-left px-3 py-1.5 border-t border-orange-100 hover:bg-orange-100 flex items-center gap-2"
+              >
+                <span className="text-[10px] font-mono text-gray-400 w-8 shrink-0">{elem.Position}</span>
+                {elem._neu && <span className="text-[9px] bg-green-100 text-green-700 px-1 rounded shrink-0">+neu</span>}
+                {elem._geaendert && !elem._neu && <span className="text-[9px] bg-orange-100 text-orange-700 px-1 rounded shrink-0">*</span>}
+                {st && <span className={`text-[9px] px-1 rounded shrink-0 ${st.css}`}>{st.label}</span>}
+                <span className="text-xs text-gray-700 truncate">{elem.Positionstext?.slice(0, 60) || elem.Positionstitel || '—'}</span>
+                <span className="text-[9px] text-gray-400 shrink-0 ml-auto">{elem._protName}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -305,21 +371,46 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         </div>
       )}
 
-      {/* FAB */}
+      {/* FABs */}
       {aktivProt && gruppe && (
-        <button
-          onClick={async () => {
-            const draft = await getOrCreateDraftProtokoll(gruppe.Id, {
-              Name: aktivProt.Name,
-              Ort: aktivProt.Ort,
-              Autor: aktivProt.Autor,
-            });
-            handleNeuesElement(draft, gruppe);
-          }}
-          className="fixed bottom-4 right-4 bg-ping-blue text-white w-12 h-12 rounded-full shadow-lg hover:bg-ping-blue-dark active:bg-ping-blue-dark text-xl font-light flex items-center justify-center"
-        >
-          +
-        </button>
+        <div className="fixed bottom-4 right-4 flex flex-row gap-2 items-center">
+          {hatBautagebuch && onBautagebuch && (
+            <button
+              onClick={() => {
+                saveState();
+                onBautagebuch(gruppe);
+              }}
+              className="bg-amber-600 text-white w-12 h-12 rounded-full shadow-lg hover:bg-amber-700 active:bg-amber-700 text-xs font-bold flex items-center justify-center"
+            >
+              BT
+            </button>
+          )}
+          {onSchnellErstellung && (
+            <button
+              onClick={async () => {
+                const prot = aktivProt.Nummer < 0 ? aktivProt : await getOrCreateDraftProtokoll(gruppe.Id, {
+                  Name: aktivProt.Name, Ort: aktivProt.Ort, Autor: aktivProt.Autor,
+                });
+                saveState();
+                onSchnellErstellung(prot, gruppe);
+              }}
+              className="bg-purple-600 text-white w-12 h-12 rounded-full shadow-lg hover:bg-purple-700 active:bg-purple-700 text-lg flex items-center justify-center"
+            >
+              &#9889;
+            </button>
+          )}
+          <button
+            onClick={async () => {
+              const prot = aktivProt.Nummer < 0 ? aktivProt : await getOrCreateDraftProtokoll(gruppe.Id, {
+                Name: aktivProt.Name, Ort: aktivProt.Ort, Autor: aktivProt.Autor,
+              });
+              handleNeuesElement(prot, gruppe);
+            }}
+            className="bg-ping-blue text-white w-12 h-12 rounded-full shadow-lg hover:bg-ping-blue-dark active:bg-ping-blue-dark text-xl font-light flex items-center justify-center"
+          >
+            +
+          </button>
+        </div>
       )}
     </div>
   );
