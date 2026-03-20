@@ -10,8 +10,11 @@ interface Props {
   protokoll: Protokoll;
   gruppe: Protokollgruppe;
   vorgaenger?: Protokollelement;
+  clone?: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string };
   onBack: () => void;
   onSaved: () => void;
+  onSavedAndNew?: () => void;
+  onSavedAndClone?: (clone: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string }) => void;
 }
 
 const SCHNELLTYPEN = [
@@ -20,33 +23,36 @@ const SCHNELLTYPEN = [
   { label: 'Info', thema: 'Info', status: 0 },
 ];
 
-const AENDERBARE_STATUS = [0, 10, 19, 20, 11, 25];
+const HAUPT_STATUS = [0, 10, 20];
+const WEITERE_STATUS = [19, 11, 25, 17, 21];
 
-export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, onSaved }: Props) {
-  const [typ, setTyp] = useState(vorgaenger?.Thema === 'Mangel' ? 1 : 0);
+export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, onBack, onSaved, onSavedAndNew, onSavedAndClone }: Props) {
+  const [typ, setTyp] = useState(clone ? (clone.thema === 'Mangel' ? 1 : 0) : vorgaenger?.Thema === 'Mangel' ? 1 : 0);
   const [position, setPosition] = useState('');
-  const [thema, setThema] = useState(vorgaenger?.Thema || SCHNELLTYPEN[0].thema);
+  const [thema, setThema] = useState(clone?.thema ?? vorgaenger?.Thema ?? SCHNELLTYPEN[0].thema);
   const [positionstext, setPositionstext] = useState('');
-  const [status, setStatus] = useState(vorgaenger?.Thema === 'Mangel' ? 11 : 0);
-  const [termin, setTermin] = useState('');
-  const [verantwFirmaOid, setVerantwFirmaOid] = useState(vorgaenger?.VerantwortlicherFirmaOid || '');
+  const [status, setStatus] = useState(clone?.status ?? (vorgaenger?.Thema === 'Mangel' ? 11 : 0));
+  const [termin, setTermin] = useState(clone?.termin ?? '');
+  const [verantwFirmaOid, setVerantwFirmaOid] = useState(clone?.verantwOid ?? vorgaenger?.VerantwortlicherFirmaOid ?? '');
   const [bemerkung, setBemerkung] = useState('');
   const [titel, setTitel] = useState('');
-  const [geoText, setGeoText] = useState(vorgaenger?.MobileErfassung.GeoText || '');
-  const [geoLat, setGeoLat] = useState<number | null>(vorgaenger?.MobileErfassung.GeoLat ?? null);
-  const [geoLon, setGeoLon] = useState<number | null>(vorgaenger?.MobileErfassung.GeoLon ?? null);
-  const [geoAcc, setGeoAcc] = useState<number | null>(vorgaenger?.MobileErfassung.GeoAccuracy ?? null);
-  const [geoHeading, setGeoHeading] = useState<number | null>(vorgaenger?.MobileErfassung.GeoHeading ?? null);
+  const [geoText, setGeoText] = useState(clone?.geoText ?? vorgaenger?.MobileErfassung.GeoText ?? '');
+  const [geoLat, setGeoLat] = useState<number | null>(clone?.geoLat ?? vorgaenger?.MobileErfassung.GeoLat ?? null);
+  const [geoLon, setGeoLon] = useState<number | null>(clone?.geoLon ?? vorgaenger?.MobileErfassung.GeoLon ?? null);
+  const [geoAcc, setGeoAcc] = useState<number | null>(clone?.geoAcc ?? vorgaenger?.MobileErfassung.GeoAccuracy ?? null);
+  const [geoHeading, setGeoHeading] = useState<number | null>(clone?.geoHeading ?? vorgaenger?.MobileErfassung.GeoHeading ?? null);
   const [karteOffen, setKarteOffen] = useState(false);
   const [tempFotos, setTempFotos] = useState<File[]>([]);
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
   const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
   const [autoGps, setAutoGps] = useState(() => localStorage.getItem('autoGps') !== 'false');
+  const [showWeitereStatus, setShowWeitereStatus] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
 
-  // Auto-GPS: bei Erstellung automatisch aktuelle Position erfassen
+  // Auto-GPS
   useEffect(() => {
-    if (autoGps && geoLat == null && navigator.geolocation) {
+    if (autoGps && !clone && geoLat == null && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (p) => {
           const lat = p.coords.latitude, lon = p.coords.longitude;
@@ -60,7 +66,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
     }
   }, []);
 
-  // Auto-Kompass: Heading automatisch erfassen wenn verfügbar
+  // Auto-Kompass
   useEffect(() => {
     if (!autoGps) return;
     if (!('DeviceOrientationEvent' in window)) return;
@@ -78,9 +84,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
     const DOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
     if (DOE.requestPermission) {
       DOE.requestPermission().then((result) => {
-        if (result === 'granted') {
-          window.addEventListener('deviceorientation', handler as EventListener);
-        }
+        if (result === 'granted') window.addEventListener('deviceorientation', handler as EventListener);
       });
     } else {
       window.addEventListener('deviceorientation', handler as EventListener);
@@ -96,7 +100,6 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
 
   useEffect(() => {
     getVerantwortliche().then(setFirmen);
-    // Thema-Vorschläge aus allen Elementen der Gruppe laden
     (async () => {
       const prots = await getProtokolleByGruppe(gruppe.Id);
       const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
@@ -106,7 +109,6 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
     })();
   }, []);
 
-  // Set default firma after loading
   useEffect(() => {
     if (!verantwFirmaOid && alleFirmen.length > 0) {
       setVerantwFirmaOid(alleFirmen[0].Oid);
@@ -124,6 +126,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
     setTyp(i);
     setThema(SCHNELLTYPEN[i].thema);
     setStatus(SCHNELLTYPEN[i].status);
+    setDirty(true);
   }
 
   function gpsErfassen() {
@@ -140,10 +143,12 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
     );
   }
 
-  async function speichern() {
-    if (!positionstext.trim()) { alert('Bitte Positionstext eingeben.'); return; }
+  const istWeitererStatus = WEITERE_STATUS.includes(status);
+  const terminUeberfaellig = termin && [0, 10].includes(status) && new Date(termin) < new Date(new Date().toDateString());
 
-    // Position: manuell oder auto-generiert (über ALLE Protokolle der Gruppe)
+  async function doSave(): Promise<boolean> {
+    if (!positionstext.trim()) { alert('Bitte Positionstext eingeben.'); return false; }
+
     let pos = position.trim();
     if (!pos) {
       const allProts = await getProtokolleByGruppe(gruppe.Id);
@@ -161,7 +166,6 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
     const verantw = alleFirmen.find(t => t.Oid === verantwFirmaOid);
     const elemId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-    // Fotos speichern
     const fotoRefs = [];
     for (let i = 0; i < tempFotos.length; i++) {
       const fotoId = `foto-${Date.now()}-${i}`;
@@ -170,10 +174,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
       fotoRefs.push({ FileName: fileName, RelativePath: `photos/${fileName}`, ZielPfad: '' });
     }
 
-    // Verweise: wenn Nachfolger, dann OID des Vorgängers
     const verweise: string[] = vorgaenger ? [vorgaenger.Id] : [];
-
-    console.log('[NeuesElement] Speichere in Protokoll:', protokoll.Id, protokoll.Name, 'Nr.', protokoll.Nummer, '_neu:', (protokoll as typeof protokoll & { _neu?: boolean })._neu);
 
     const neuesElem: Protokollelement = {
       Id: elemId,
@@ -192,27 +193,77 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
       Verweise: verweise,
       MobileErfassung: {
         GeoLat: geoLat, GeoLon: geoLon, GeoAccuracy: geoAcc,
-        GeoText: geoText || null, GeoHeading: geoHeading, Fotos: fotoRefs,
+        GeoText: geoText || null, GeoHeading: geoHeading, GeoAltitude: null, Fotos: fotoRefs,
       },
       _neu: true,
     };
 
     await addElement(neuesElem);
-    onSaved();
+    setDirty(false);
+    return true;
+  }
+
+  async function speichern() {
+    if (await doSave()) onSaved();
+  }
+
+  async function speichernUndNeu() {
+    if (await doSave()) {
+      if (onSavedAndNew) onSavedAndNew();
+      else onSaved();
+    }
+  }
+
+  async function speichernUndKlonen() {
+    if (await doSave()) {
+      if (onSavedAndClone) {
+        onSavedAndClone({
+          thema, status, termin, verantwOid: verantwFirmaOid,
+          geoLat, geoLon, geoAcc, geoHeading, geoText,
+        });
+      } else {
+        onSaved();
+      }
+    }
   }
 
   return (
     <div className="min-h-screen bg-ping-bg">
+      {/* Header */}
       <div className="bg-ping-blue text-white p-3">
-        <button onClick={onBack} className="text-ping-blue-light hover:text-white text-sm">&larr; Zurück</button>
-        <h1 className="text-base font-bold mt-1">
-          {vorgaenger ? 'Nachfolger erstellen' : 'Neues Element'}
-        </h1>
-        {vorgaenger && (
-          <p className="text-xs text-ping-blue-light mt-0.5">
-            Vorgänger: Pos. {vorgaenger.Position} — {vorgaenger.Positionstext.slice(0, 50)}...
-          </p>
-        )}
+        <div className="text-center">
+          <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Übersicht</button>
+          <h1 className="text-base font-bold mt-0.5">
+            {vorgaenger ? 'Nachfolger erstellen' : 'Neues Element'}
+          </h1>
+          {vorgaenger && (
+            <p className="text-xs text-ping-blue-light mt-0.5">
+              Vorgänger: Pos. {vorgaenger.Position} — {vorgaenger.Positionstext.slice(0, 50)}...
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Buttons direkt unter Header */}
+      <div className="px-3 pt-2 flex gap-1.5">
+        <button onClick={speichern}
+          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-xs transition ${
+            dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-ping-blue hover:bg-ping-blue-dark'
+          }`}>
+          Speichern
+        </button>
+        <button onClick={speichernUndNeu}
+          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-xs transition ${
+            dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'
+          }`}>
+          & Neu
+        </button>
+        <button onClick={speichernUndKlonen}
+          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-xs transition ${
+            dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-amber-600 hover:bg-amber-700'
+          }`}>
+          & Klonen
+        </button>
       </div>
 
       <div className="p-3 space-y-2.5">
@@ -233,69 +284,115 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
           </div>
         </div>
 
-        {/* Position + Thema */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Position (leer = auto)</label>
-            <input type="text" value={position} onChange={(e) => setPosition(e.target.value)} placeholder="z.B. 4.1"
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-          </div>
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
-            <input type="text" list="themen-liste" value={thema} onChange={(e) => setThema(e.target.value)} placeholder="z.B. Tiefbau"
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-            <datalist id="themen-liste">
-              {themenVorschlaege.map(t => <option key={t} value={t} />)}
-            </datalist>
-          </div>
-        </div>
-
-        {/* Positionstext = Haupteingabefeld */}
+        {/* Positionstext */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Positionstext *</label>
-          <textarea value={positionstext} onChange={(e) => setPositionstext(e.target.value)} rows={3}
+          <textarea value={positionstext} onChange={(e) => { setPositionstext(e.target.value); setDirty(true); }} rows={6}
             placeholder="Beschreibung des Punktes..."
-            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
         </div>
 
-        {/* Status */}
+        {/* Status — Neu/Offen/Erledigt direkt, Rest unter "..." */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <label className="text-[10px] text-gray-400 font-medium uppercase mb-1.5 block">Status</label>
           <div className="flex gap-1 flex-wrap">
-            {AENDERBARE_STATUS.map(s => (
-              <button key={s} onClick={() => setStatus(s)}
-                className={`px-2 py-1 rounded text-[11px] font-medium transition ${
+            {HAUPT_STATUS.map(s => (
+              <button key={s} onClick={() => { setStatus(s); setShowWeitereStatus(false); }}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                   status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
                 }`}>
                 {STATUS_MAP[s].label}
               </button>
             ))}
+            <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
+              className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                istWeitererStatus && !showWeitereStatus ? STATUS_MAP[status].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
+              }`}>
+              {istWeitererStatus && !showWeitereStatus ? STATUS_MAP[status].label : '...'}
+            </button>
           </div>
+          {showWeitereStatus && (
+            <div className="flex gap-1 flex-wrap mt-1.5 pt-1.5 border-t border-gray-100">
+              {WEITERE_STATUS.map(s => STATUS_MAP[s] && (
+                <button key={s} onClick={() => { setStatus(s); setShowWeitereStatus(false); }}
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                    status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
+                  }`}>
+                  {STATUS_MAP[s].label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Termin + Verantwortlicher */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* Position / Thema / Termin in einer Zeile */}
+        <div className="grid grid-cols-3 gap-2">
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
-            <input type="date" value={termin} onChange={(e) => setTermin(e.target.value)}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Position</label>
+            <input type="text" value={position} onChange={(e) => setPosition(e.target.value)} placeholder="auto"
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ping-blue" />
           </div>
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
-            <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
+            <select value={themenVorschlaege.includes(thema) ? thema : '__custom'}
+              onChange={(e) => {
+                if (e.target.value === '__custom') {
+                  const val = prompt('Neues Thema eingeben:', thema);
+                  if (val != null) setThema(val);
+                } else {
+                  setThema(e.target.value);
+                }
+              }}
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-              {alleFirmen.map(t => (
-                <option key={t.Oid} value={t.Oid}>{t.Name}</option>
-              ))}
+              {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
+              <option value="__custom">{thema && !themenVorschlaege.includes(thema) ? `✎ ${thema}` : '✎ Anderes...'}</option>
             </select>
           </div>
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
+            <input type="date" value={termin} onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
+              className={`w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
+          </div>
         </div>
 
-        {/* Bemerkung */}
+        {/* Verantwortlich */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Bemerkung (intern)</label>
-          <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={2}
-            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
+          <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
+            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+            {alleFirmen.map(t => (
+              <option key={t.Oid} value={t.Oid}>{t.Name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* GPS */}
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
+            <div className="flex gap-1">
+              <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
+              <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
+              {geoLat != null && (
+                <button onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
+                  className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px]">Löschen</button>
+              )}
+            </div>
+          </div>
+          {geoText ? <p className="text-[10px] text-gray-600">{geoText}</p> : <p className="text-[10px] text-gray-300">{autoGps ? 'Wird ermittelt...' : 'Kein Standort'}</p>}
+          {karteOffen && (
+            <MapEditorModal
+              lat={geoLat}
+              lon={geoLon}
+              heading={geoHeading}
+              onSave={(lat, lon, heading) => {
+                setGeoLat(lat); setGeoLon(lon); setGeoHeading(heading);
+                setGeoText(formatCoord(lat, lon, null, heading));
+                setKarteOffen(false);
+              }}
+              onCancel={() => setKarteOffen(false)}
+            />
+          )}
         </div>
 
         {/* Auto-GPS Toggle */}
@@ -312,68 +409,41 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, onBack, on
           </button>
         </div>
 
-        {/* GPS + Fotos */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] text-gray-400 font-medium uppercase">GPS</label>
-              <div className="flex gap-1">
-                <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
-                <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
-                {geoLat != null && (
-                  <button onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
-                    className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px]">Löschen</button>
-                )}
-              </div>
-            </div>
-            {geoText ? <p className="text-[10px] text-gray-600">{geoText}</p> : <p className="text-[10px] text-gray-300">{autoGps ? 'Wird ermittelt...' : 'Kein Standort'}</p>}
-            {karteOffen && (
-              <MapEditorModal
-                lat={geoLat}
-                lon={geoLon}
-                heading={geoHeading}
-                onSave={(lat, lon, heading) => {
-                  setGeoLat(lat); setGeoLon(lon); setGeoHeading(heading);
-                  setGeoText(formatCoord(lat, lon, null, heading));
-                  setKarteOffen(false);
-                }}
-                onCancel={() => setKarteOffen(false)}
-              />
-            )}
+        {/* Fotos */}
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({tempFotos.length})</label>
+            <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px]">Hinzufügen</button>
+            <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple
+              onChange={(e) => { if (e.target.files) setTempFotos(prev => [...prev, ...Array.from(e.target.files!)]); }}
+              className="hidden" />
           </div>
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({tempFotos.length})</label>
-              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px]">Hinzufügen</button>
-              <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple
-                onChange={(e) => { if (e.target.files) setTempFotos(prev => [...prev, ...Array.from(e.target.files!)]); }}
-                className="hidden" />
+          {tempFotos.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {tempFotos.map((f, i) => (
+                <div key={i} className="relative w-10 h-10">
+                  <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover rounded" />
+                  <button onClick={() => setTempFotos(prev => prev.filter((_, j) => j !== i))}
+                    className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
+                </div>
+              ))}
             </div>
-            {tempFotos.length > 0 && (
-              <div className="flex gap-1 flex-wrap">
-                {tempFotos.map((f, i) => (
-                  <div key={i} className="relative w-10 h-10">
-                    <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover rounded" />
-                    <button onClick={() => setTempFotos(prev => prev.filter((_, j) => j !== i))}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* Titel (optional, ganz unten) */}
+        {/* Bemerkung (intern) — unten */}
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Bemerkung (intern)</label>
+          <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={2}
+            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+        </div>
+
+        {/* Titel — ganz unten */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel (optional, für Gestaltung)</label>
           <input type="text" value={titel} onChange={(e) => setTitel(e.target.value)}
             className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
         </div>
-
-        <button onClick={speichern}
-          className="w-full bg-ping-blue text-white py-2.5 rounded-lg font-medium text-sm hover:bg-ping-blue-dark active:bg-ping-blue-dark transition">
-          Speichern
-        </button>
       </div>
     </div>
   );

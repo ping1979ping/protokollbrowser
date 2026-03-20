@@ -4,7 +4,8 @@ echo.
 
 cd /d "%~dp0..\app"
 
-echo [1/3] PWA bauen...
+echo [1/3] PWA bauen (Server-Build mit base=./)...
+set VITE_BASE=server
 call npm run build
 if errorlevel 1 (
     echo FEHLER beim Build!

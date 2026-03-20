@@ -13,6 +13,7 @@ export interface MobileErfassung {
   GeoAccuracy: number | null;
   GeoText: string | null;
   GeoHeading: number | null; // Blickrichtung in Grad, 0=Nord, im Uhrzeigersinn
+  GeoAltitude: number | null; // Höhe über NN
   Fotos: FotoRef[];
 }
 
@@ -38,6 +39,14 @@ export interface Protokollelement {
   Wert: number;
   Verweise: string[]; // OIDs von verknüpften Vorgänger-Elementen
   MobileErfassung: MobileErfassung;
+  // DOCUframe-Metadaten (neue Custom-Felder)
+  FotoAnzahl?: number;
+  FotoPfad?: string;
+  MobilErfasst?: boolean;
+  MobilDatum?: string;
+  MobilUser?: string;
+  Notiz?: string;
+  Info?: string;
   // App-intern
   _geaendert?: boolean;
   _neu?: boolean;

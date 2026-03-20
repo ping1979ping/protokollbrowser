@@ -3,7 +3,7 @@ import type { IDBPDatabase } from 'idb';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket } from './types';
 
 const DB_NAME = 'protokoll-app';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export interface ProtokollMitGruppe extends Protokoll {
   GruppeId: string;
@@ -34,6 +34,9 @@ async function getDb(): Promise<IDBPDatabase> {
       db.createObjectStore('verantwortliche', { keyPath: 'ID' });
       if (!db.objectStoreNames.contains('syncMeta')) {
         db.createObjectStore('syncMeta', { keyPath: 'gruppeId' });
+      }
+      if (!db.objectStoreNames.contains('pendingExports')) {
+        db.createObjectStore('pendingExports', { keyPath: 'id' });
       }
     },
   });
@@ -227,6 +230,28 @@ export interface SyncMeta {
   autoSync?: boolean;
 }
 
+export async function clearSyncFlags(elementIds: string[]): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('elemente', 'readwrite');
+  for (const id of elementIds) {
+    const elem = await tx.objectStore('elemente').get(id);
+    if (elem) {
+      elem._geaendert = false;
+      elem._neu = false;
+      await tx.objectStore('elemente').put(elem);
+    }
+  }
+  await tx.done;
+}
+
+export async function getPendingChangesCount(gruppeId: string): Promise<number> {
+  const db = await getDb();
+  const prots = await db.getAllFromIndex('protokolle', 'byGruppe', gruppeId);
+  const protIds = new Set(prots.map(p => p.Id));
+  const alle = await db.getAll('elemente');
+  return alle.filter(e => protIds.has(e.ProtokollId) && (e._geaendert || e._neu)).length;
+}
+
 export async function getSyncMeta(gruppeId: string): Promise<SyncMeta | undefined> {
   const db = await getDb();
   return db.get('syncMeta', gruppeId);
@@ -235,4 +260,30 @@ export async function getSyncMeta(gruppeId: string): Promise<SyncMeta | undefine
 export async function setSyncMeta(meta: SyncMeta): Promise<void> {
   const db = await getDb();
   await db.put('syncMeta', meta);
+}
+
+// --- Pending Exports (ZIP-Blobs die auf Upload warten) ---
+
+export interface PendingExport {
+  id: string;
+  gruppeId: string;
+  blob: Blob;
+  filename: string;
+  elementIds: string[];
+  createdAt: string;
+}
+
+export async function savePendingExport(exp: PendingExport): Promise<void> {
+  const db = await getDb();
+  await db.put('pendingExports', exp);
+}
+
+export async function getPendingExports(): Promise<PendingExport[]> {
+  const db = await getDb();
+  return db.getAll('pendingExports');
+}
+
+export async function deletePendingExport(id: string): Promise<void> {
+  const db = await getDb();
+  await db.delete('pendingExports', id);
 }

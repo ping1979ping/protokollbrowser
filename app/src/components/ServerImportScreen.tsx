@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getServerUrl, listRemoteProjects, downloadProject, checkConnectivity } from '../syncService';
+import { getServerUrl, listRemoteProjects, downloadProject, checkConnectivity, getSubscriptions, saveSubscriptions } from '../syncService';
 
 interface RemoteProject {
   id: string;
@@ -18,9 +18,11 @@ interface Props {
 
 export default function ServerImportScreen({ onImported, onZurueck, onSettings }: Props) {
   const [projekte, setProjekte] = useState<RemoteProject[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState('');
 
   const serverUrl = getServerUrl();
 
@@ -43,8 +45,14 @@ export default function ServerImportScreen({ onImported, onZurueck, onSettings }
         setLoading(false);
         return;
       }
-      const list = await listRemoteProjects();
-      setProjekte(list.filter(p => p.hasExport));
+      const [list, subs] = await Promise.all([
+        listRemoteProjects(),
+        getSubscriptions(),
+      ]);
+      const available = list.filter(p => p.hasExport);
+      setProjekte(available);
+      // Abonnierte Projekte vorauswählen
+      setSelected(new Set(subs.filter(id => available.some(p => p.id === id))));
       setLoading(false);
     } catch (err) {
       setError((err as Error).message);
@@ -52,14 +60,34 @@ export default function ServerImportScreen({ onImported, onZurueck, onSettings }
     }
   }
 
-  async function handleDownload(projectId: string) {
-    setDownloading(projectId);
+  function toggleProject(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleSubscribeAndLoad() {
+    if (selected.size === 0) return;
+    setDownloading(true);
     try {
-      await downloadProject(projectId);
+      // Abos speichern
+      await saveSubscriptions([...selected]);
+
+      // Projekte nacheinander laden
+      const ids = [...selected];
+      for (let i = 0; i < ids.length; i++) {
+        const p = projekte.find(p => p.id === ids[i]);
+        setProgress(`Lade ${p?.projektName || ids[i]} (${i + 1}/${ids.length})...`);
+        await downloadProject(ids[i]);
+      }
       onImported();
     } catch (err) {
       alert('Fehler beim Laden: ' + (err as Error).message);
-      setDownloading(null);
+      setDownloading(false);
+      setProgress('');
     }
   }
 
@@ -92,24 +120,49 @@ export default function ServerImportScreen({ onImported, onZurueck, onSettings }
           <p className="text-center text-ping-text-light py-8">Keine Projekte auf dem Server.</p>
         )}
 
-        {projekte.map(p => (
-          <div key={p.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="font-medium text-ping-text">{p.projektName || p.id}</p>
-            {p.gruppeName && <p className="text-sm text-ping-text-mid mt-0.5">{p.gruppeName}</p>}
-            {p.timestamp && (
-              <p className="text-xs text-ping-text-light mt-0.5">
-                Export: {new Date(p.timestamp).toLocaleString('de-DE')}
-              </p>
-            )}
+        {!loading && !error && projekte.length > 0 && (
+          <>
+            <p className="text-xs text-ping-text-light px-1">Projekte auswählen und abonnieren:</p>
+            {projekte.map(p => (
+              <label
+                key={p.id}
+                className={`flex items-start gap-3 bg-white rounded-xl shadow-sm border p-4 cursor-pointer transition ${
+                  selected.has(p.id) ? 'border-ping-blue ring-1 ring-ping-blue' : 'border-gray-100'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(p.id)}
+                  onChange={() => toggleProject(p.id)}
+                  disabled={downloading}
+                  className="mt-0.5 w-5 h-5 rounded border-gray-300 text-ping-blue focus:ring-ping-blue flex-shrink-0"
+                />
+                <div className="min-w-0">
+                  <p className="font-medium text-ping-text">{p.projektName || p.id}</p>
+                  {p.gruppeName && <p className="text-sm text-ping-text-mid mt-0.5">{p.gruppeName}</p>}
+                  {p.timestamp && (
+                    <p className="text-xs text-ping-text-light mt-0.5">
+                      Export: {p.timestamp}
+                    </p>
+                  )}
+                </div>
+              </label>
+            ))}
+
             <button
-              onClick={() => handleDownload(p.id)}
-              disabled={downloading !== null}
-              className="mt-2 w-full bg-ping-blue text-white py-2 px-4 rounded-lg text-sm font-medium disabled:opacity-50"
+              onClick={handleSubscribeAndLoad}
+              disabled={downloading || selected.size === 0}
+              className="w-full bg-ping-blue text-white py-3 rounded-xl font-medium disabled:opacity-50 mt-2"
             >
-              {downloading === p.id ? 'Wird geladen...' : 'Projekt laden'}
+              {downloading
+                ? progress
+                : selected.size === 0
+                  ? 'Bitte Projekte auswählen'
+                  : `${selected.size} Projekt${selected.size > 1 ? 'e' : ''} abonnieren & laden`
+              }
             </button>
-          </div>
-        ))}
+          </>
+        )}
       </div>
     </div>
   );

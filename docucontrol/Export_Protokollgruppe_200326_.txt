@@ -1,0 +1,236 @@
+  HJSON JSon;
+  HJSON PaketJSon;
+  HJSON GruppeJSon;
+  HJSON ProtoJSon;
+  HJSON ElemArray;
+  HJSON ElemJSon;
+  HJSON MobileJSon;
+  HJSON FotosArray;
+  HJSON TeilnArray;
+  HJSON TeilnJSon;
+  HJSON VerantwArray;
+  HJSON VerantwJSon;
+  HJSON VertArray;
+  HJSON VertJSon;
+  HFILE File;
+  STRING Txt;
+  STRING GruppeOid;
+  
+  // --- Exchange-Server Pfad (fuer Sync mit App) ---
+  // Anpassen an tatsaechlichen Pfad! Leer lassen = kein Server-Export
+  STRING ExchangeBasePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\export"; // SvDocu Produktiv
+  
+  // --- Zusaetzlich fuer Exchange-Server schreiben ---
+  STRING ExchangeProjPath;
+  STRING ExchangeJsonPath;
+  STRING ExchangeManifestPath;
+  STRING ManifestTxt;
+  HJSON ManifestJSon;
+  
+  _PINGProtokollgruppe ProtGrp;
+  _PINGProtokollSet ProtSet;
+  _PINGProtokoll Prot;
+  _PINGProtokollelementSet ElemSet;
+  _PINGProtokollelement Elem;
+  AdresseSet AdrSet;
+  Adresse Adr;
+  AnsprechpartnerSet TeilnSet;
+  Ansprechpartner Teiln;
+  FunktionelleRolleSet RoleSet;
+  FunktionelleRolle Role;
+  
+  // folgende sind nur für den Trace
+  STRING strace = "#### JSON-Export: ";
+
+  Trace( strace + "Object-ID ist: %1", Object.GetOID() );
+  Trace( strace + "Grp-Name  ist: %1", Object._Name );
+
+  // --- Protokollgruppe aus Selektion holen ---
+  ProtGrp = Object;
+  GruppeOid = ProtGrp.GetOID();
+
+  // --- JSON-Array aufbauen ---
+  JSon.Construct();
+
+  // === Verantwortliche (in jedem Paket identisch) ===
+  RoleSet = ProtGrp._Projekt.Vorgang.FunktionelleRollen;
+  PaketJSon = JSon.AddElement();
+  VerantwArray = PaketJSon.GetMember( "Verantwortliche", TRUE ).AddElement();
+  IF( RoleSet.Get( Role, 1, START ) )
+    REPEAT
+      IF( Role.Adresse.IsKindOfAddressNo() == TRUE )
+        VerantwJSon = VerantwArray.GetMember( "Verantwortlicher", TRUE ).AddElement();
+        VerantwJSon.GetMember( "ID", TRUE ).SetString( Role.Adresse.GetOID() );
+        VerantwJSon.GetMember( "Kürzel", TRUE ).SetString( Role.Adresse.Kuerzel );
+        VerantwJSon.GetMember( "Name", TRUE ).SetString( Role.Adresse.Name1 );
+      ENDIF
+    UNTIL( !RoleSet.Get( Role, 1, CURRENT ) )
+  ENDIF
+  
+  // === Protokollgruppe (in jedem Paket identisch) ===
+  PaketJSon = JSon.AddElement();
+  GruppeJSon = PaketJSon.GetMember( "Protokollgruppe", TRUE ).AddElement(); // AddElement eingefügt
+  GruppeJSon.GetMember( "Id", TRUE ).SetString( GruppeOid );
+  GruppeJSon.GetMember( "Name", TRUE ).SetString( ProtGrp._Name );
+  GruppeJSon.GetMember( "Protokollnummer", TRUE ).SetNumber( ProtGrp._Protokollnummer.ToFloat() ); // ist immer der selbe Wert
+  GruppeJSon.GetMember( "Vorwort", TRUE ).SetString( ProtGrp._Vorwort );
+  GruppeJSon.GetMember( "Nachwort", TRUE ).SetString( ProtGrp._Nachwort );
+  //GruppeJSon.GetMember( "Themen", TRUE ).SetString( ProtGrp._Themen ); // ist ein STRINGSET
+  GruppeJSon.GetMember( "Bemerkung", TRUE ).SetString( ProtGrp._Bemerkung );
+  GruppeJSon.GetMember( "ProjektId", TRUE ).SetString( ProtGrp._Projekt.Nummer );
+  GruppeJSon.GetMember( "ProjektName", TRUE ).SetString( ProtGrp._Projekt.Name );
+  GruppeJSon.GetMember( "ProjektStammverzeichnis", TRUE ).SetString( ProtGrp._Projekt._PINGPfadProjektDokumenteExtern );
+  
+  // --- Alle Protokolle der Gruppe durchlaufen ---
+  ProtSet = ProtGrp._Protokolle;
+  IF( ProtSet.Get( Prot, 1, START ) )
+    REPEAT
+      // === Protokoll ===
+      ProtoJSon = GruppeJSon.GetMember( "Protokoll", TRUE ).AddElement(); // AddElement eingefügt, ZUORDNUNG zu GruppeJSon
+      ProtoJSon.GetMember( "Id", TRUE ).SetString( Prot.GetOID() );
+      ProtoJSon.GetMember( "Name", TRUE ).SetString( Prot._Name );
+      ProtoJSon.GetMember( "Nummer", TRUE ).SetNumber( Prot._Nummer.ToFloat() );
+      ProtoJSon.GetMember( "Datum", TRUE ).SetString( Prot._Datum.EditFormatDateTime() );
+      ProtoJSon.GetMember( "Ort", TRUE ).SetString( Prot._Ort );
+      ProtoJSon.GetMember( "Autor", TRUE ).SetString( Prot._Autor );
+      ProtoJSon.GetMember( "Vorbemerkung", TRUE ).SetString( Prot._Vorbemerkung );
+      ProtoJSon.GetMember( "Nachbemerkung", TRUE ).SetString( Prot._Nachbemerkung );
+      ProtoJSon.GetMember( "Erledigt", TRUE ).SetBool( Prot._erledigt );
+      ProtoJSon.GetMember( "IstEinzelprotokoll", TRUE ).SetBool( Prot._istEinzelprotokoll );
+      ProtoJSon.GetMember( "Erstellt", TRUE ).SetBool( Prot._erstellt );
+      ProtoJSon.GetMember( "Signatur", TRUE ).SetString( Prot._Signatur );
+
+      /* ### START noch nicht aktiv
+
+      // --- Teilnehmer ---
+      TeilnArray = ProtoJSon.GetMember( "Teilnehmer", TRUE ).AddElement(); // AddElement eingefügt
+      TeilnSet = Prot._Teilnehmer;
+      IF( TeilnSet.Get( Teiln, 1, START ) )
+        REPEAT
+          TeilnJSon = TeilnArray.AddElement();
+          TeilnJSon.GetMember( "Oid", TRUE ).SetString( Teiln.GetOID() );
+          TeilnJSon.GetMember( "Nummer", TRUE ).SetString( Teiln.Nummer );
+          TeilnJSon.GetMember( "Name", TRUE ).SetString( Teiln.Name1 );
+          TeilnJSon.GetMember( "Rolle", TRUE ).SetString( "" );
+        UNTIL( !TeilnSet.Get( Teiln, 1, CURRENT ) )
+      ENDIF
+
+      // --- Verteiler ---
+      VertArray = ProtoJSon.GetMember( "Verteiler", TRUE );
+      TeilnSet = Prot._Verteiler;
+      IF( TeilnSet.Get( Teiln, 1, START ) )
+        REPEAT
+          VertJSon = VertArray.AddElement();
+          VertJSon.GetMember( "Oid", TRUE ).SetString( Teiln.GetOID() );
+          VertJSon.GetMember( "Nummer", TRUE ).SetString( Teiln.Nummer );
+          VertJSon.GetMember( "Name", TRUE ).SetString( Teiln.Name1 );
+          VertJSon.GetMember( "Rolle", TRUE ).SetString( "" );
+        UNTIL( !TeilnSet.Get( Teiln, 1, CURRENT ) )
+      ENDIF
+
+      */ // ### ENDE noch nicht aktiv
+
+      // === Protokollelemente ===
+      IF( Prot._Protokollelemente.GetCount() > 0 )
+        ElemArray = ProtoJSon.GetMember( "Protokollelemente", TRUE ).AddElement();
+        ElemSet = Prot._Protokollelemente;
+        IF( ElemSet.Get( Elem, 1, START ) )
+          REPEAT
+            ElemJSon = ElemArray.AddElement();
+            ElemJSon.GetMember( "Id", TRUE ).SetString( Elem.GetOID() ); // OidStr ersetzt durch Elem.GetOID()
+            ElemJSon.GetMember( "ProtokollId", TRUE ).SetString( Prot.GetOID() );
+            ElemJSon.GetMember( "Position", TRUE ).SetString( Elem._Position );
+            ElemJSon.GetMember( "Positionstitel", TRUE ).SetString( Elem._Positionstitel );
+            ElemJSon.GetMember( "Positionstext", TRUE ).SetString( Elem._Positionstext );
+            ElemJSon.GetMember( "Thema", TRUE ).SetString( Elem._Thema );
+            ElemJSon.GetMember( "Status", TRUE ).SetNumber( Elem._Status.ToFloat() );
+            ElemJSon.GetMember( "Termin", TRUE ).SetString( Elem._Termin.EditFormatDateTime() );
+            ElemJSon.GetMember( "Bemerkung", TRUE ).SetString( Elem._Bemerkung );
+            ElemJSon.GetMember( "Erinnerung", TRUE ).SetBool( Elem._Erinnerung );
+            ElemJSon.GetMember( "Wert", TRUE ).SetNumber( Elem._Wert );
+
+            // Verantwortlicher (Typ: Adresse)
+            IF( !Elem._Verantwortlicher.IsEmpty() ) // ### nicht notwendig
+              ElemJSon.GetMember( "VerantwortlicherOid", TRUE ).SetString( Elem._Verantwortlicher.GetOID() );
+              ElemJSon.GetMember( "VerantwortlicherName", TRUE ).SetString( Elem._Verantwortlicher.Name1 );
+            ELSE
+              ElemJSon.GetMember( "VerantwortlicherOid", TRUE ).SetString( "" );
+              ElemJSon.GetMember( "VerantwortlicherName", TRUE ).SetString( "" );
+            ENDIF
+            
+            // GeoDaten
+            ElemJSon.GetMember( "Breitengrad", TRUE ).SetNumber( Elem._PINGGeoLat );
+            ElemJSon.GetMember( "Längengrad", TRUE ).SetNumber( Elem._PINGGeoLon );
+            ElemJSon.GetMember( "Genauigkeit", TRUE ).SetNumber( Elem._PINGGeoAccuracy );
+            ElemJSon.GetMember( "Kompassrichtung", TRUE ).SetNumber( Elem._PINGGeoHeading );
+            ElemJSon.GetMember( "Standort-Anzeigetext", TRUE ).SetString( Elem._PINGGeoText );
+            ElemJSon.GetMember( "Höhe über NN", TRUE ).SetNumber( Elem._PINGGeoAltitude );
+            // Infos zu Fotos, mobile Erfassung und spezielle Felder
+            ElemJSon.GetMember( "Anzahl Fotos", TRUE ).SetNumber( Elem._PINGFotoAnzahl.ToFloat() );
+            ElemJSon.GetMember( "Pfad Foto-Ordner", TRUE ).SetString( Elem._PINGFotoPfad );
+            ElemJSon.GetMember( "Mobil erfasst/geändert", TRUE ).SetBool( Elem._PINGMobilErfasst );
+            ElemJSon.GetMember( "Datum Mobil", TRUE ).SetString( Elem._PINGMobilDatum.EditFormatDateTime() );
+            ElemJSon.GetMember( "Benutzer Kürzel", TRUE ).SetString( Elem._PINGMobilUser );
+            ElemJSon.GetMember( "Freitext-Notiz", TRUE ).SetString( Elem._PINGNotiz );
+            ElemJSon.GetMember( "Info", TRUE ).SetString( Elem._PINGInfo );
+            
+            // MobileErfassung - initial leer
+            /*
+          MobileJSon = ElemJSon.GetMember( "MobileErfassung", TRUE );
+          MobileJSon.GetMember( "GeoLat", TRUE );
+          MobileJSon.GetMember( "GeoLon", TRUE );
+          MobileJSon.GetMember( "GeoAccuracy", TRUE );
+          MobileJSon.GetMember( "GeoText", TRUE ).SetString( "" );
+          MobileJSon.GetMember( "Notiz", TRUE ).SetString( "" );
+          MobileJSon.GetMember( "Transkript", TRUE ).SetString( "" );
+          FotosArray = MobileJSon.GetMember( "Fotos", TRUE );
+          */
+            // Fotos-Array bleibt leer
+
+          UNTIL( !ElemSet.Get( Elem, 1, CURRENT ) )
+        ENDIF
+        
+      ENDIF
+      
+    UNTIL( !ProtSet.Get( Prot, 1, CURRENT ) )
+  ENDIF
+
+  // --- JSON in Datei schreiben ---
+  Txt = JSon.GetText( TRUE );
+  
+  Trace( strace + "Txt ist -> %1", Txt );
+  IF( ExchangeBasePath != "" )
+    ExchangeProjPath = ExchangeBasePath + "\\" + GruppeOid;
+    FileCreatePath( ExchangeProjPath ); // Neu
+    
+    // protokolle.json
+    ExchangeJsonPath = ExchangeProjPath + "\\protokolle.json";
+    Trace( strace + "ExchangeJsonPath -> %1", ExchangeJsonPath );
+    
+    File.Open( ExchangeJsonPath, FILE_MODE_CREATE | FILE_MODE_WRITE );
+    //FileWriteString( File, Txt ); // ersetzt durch nächste Zeile
+    File.WriteString( Txt ); // NEU
+    File.Close();
+
+    // manifest.json
+    ManifestJSon.Construct();
+    ManifestJSon.GetMember( "projektName", TRUE ).SetString( ProtGrp._Projekt.Name );
+    ManifestJSon.GetMember( "gruppeName", TRUE ).SetString( ProtGrp._Name );
+    ManifestJSon.GetMember( "gruppeId", TRUE ).SetString( GruppeOid );
+    ManifestJSon.GetMember( "projektId", TRUE ).SetString( ProtGrp._Projekt.Nummer );
+    ManifestJSon.GetMember( "timestamp", TRUE ).SetString( TimeGetCurrTime( FALSE ).FormatDateTime() );
+    ManifestJSon.GetMember( "anzahlProtokolle", TRUE ).SetNumber( ProtSet.GetCount().ToFloat() );
+    ManifestTxt = ManifestJSon.GetText( TRUE );
+    ExchangeManifestPath = ExchangeProjPath + "\\manifest.json";
+    
+    File.Open( ExchangeManifestPath, FILE_MODE_CREATE | FILE_MODE_WRITE );
+    //FileWriteString( File, ManifestTxt ); // ersetzt durch nächste Zeile
+    File.WriteString( ManifestTxt ); // NEU
+    File.Close();
+    
+    ManifestJSon.Destruct();
+  ENDIF
+  
+  JSon.Destruct();
+
+  MessageBox( "Export abgeschlossen.\n\nDatei: " + ExchangeBasePath + "\n\nAnzahl Protokolle: " + ProtSet.GetCount().ToStr(), MB_OK | MB_ICONINFORMATION );

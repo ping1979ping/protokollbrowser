@@ -18,7 +18,7 @@ type Screen =
   | { name: 'sync-settings' }
   | { name: 'uebersicht'; gruppeId: string }
   | { name: 'detail'; element: Protokollelement; protokoll: Protokoll; gruppe: Protokollgruppe; filteredIds?: string[] }
-  | { name: 'neu'; protokoll: Protokoll; gruppe: Protokollgruppe; vorgaenger?: Protokollelement }
+  | { name: 'neu'; protokoll: Protokoll; gruppe: Protokollgruppe; vorgaenger?: Protokollelement; clone?: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string } }
   | { name: 'export'; protokoll: Protokoll; gruppe: Protokollgruppe };
 
 export default function App() {
@@ -98,22 +98,35 @@ export default function App() {
             }
             setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: screen.gruppe, filteredIds: screen.filteredIds });
           }}
+          onClone={async (clone) => {
+            const draft = await getOrCreateDraftProtokoll(screen.gruppe.Id, {
+              Name: screen.protokoll.Name,
+              Ort: screen.protokoll.Ort,
+              Autor: screen.protokoll.Autor,
+            });
+            setScreen({ name: 'neu', protokoll: draft, gruppe: screen.gruppe, clone });
+          }}
         />
       );
     case 'neu':
       return (
         <NeuesElement
+          key={key}
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
           vorgaenger={screen.vorgaenger}
+          clone={screen.clone}
           onBack={() => goUebersicht(screen.gruppe.Id)}
           onSaved={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
+          onSavedAndNew={() => { refresh(); setScreen({ name: 'neu', protokoll: screen.protokoll, gruppe: screen.gruppe }); }}
+          onSavedAndClone={(clone) => { refresh(); setScreen({ name: 'neu', protokoll: screen.protokoll, gruppe: screen.gruppe, clone }); }}
         />
       );
     case 'export':
       return (
         <ExportScreen
           protokoll={screen.protokoll}
+          gruppe={screen.gruppe}
           onBack={() => goUebersicht(screen.gruppe.Id)}
         />
       );

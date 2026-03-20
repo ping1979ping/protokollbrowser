@@ -4,7 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: '/protokollbrowser/',
+  // './' fuer Exchange-Server, '/protokollbrowser/' fuer GitHub Pages
+  base: process.env.VITE_BASE === 'server' ? './' : '/protokollbrowser/',
   define: {
     'import.meta.env.VITE_BUILD_TIME': JSON.stringify(Date.now().toString()),
   },

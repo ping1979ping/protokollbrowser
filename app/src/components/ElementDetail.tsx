@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
 import { updateElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe } from '../db';
@@ -14,14 +14,35 @@ interface Props {
   onBack: () => void;
   onNachfolger: (vorgaenger: Protokollelement) => void;
   onNavigate: (element: Protokollelement) => void;
+  onClone?: (clone: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string }) => void;
 }
 
-const AENDERBARE_STATUS = [0, 10, 19, 20, 11, 25];
+const HAUPT_STATUS = [0, 10, 20];
+const WEITERE_STATUS = [19, 11, 25, 17, 21];
 
-export default function ElementDetail({ element, protokoll, gruppe, filteredIds, onBack, onNachfolger, onNavigate }: Props) {
+function useSwipe(onLeft: () => void, onRight: () => void, enabled: boolean) {
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, []);
+  const onTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStart.current || !enabled) return;
+    const dx = e.changedTouches[0].clientX - touchStart.current.x;
+    const dy = e.changedTouches[0].clientY - touchStart.current.y;
+    if (Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx > 0) onRight();
+      else onLeft();
+    }
+    touchStart.current = null;
+  }, [onLeft, onRight, enabled]);
+  return { onTouchStart, onTouchEnd };
+}
+
+export default function ElementDetail({ element, protokoll, gruppe, filteredIds, onBack, onNachfolger, onNavigate, onClone }: Props) {
   const [elem, setElem] = useState<Protokollelement>({ ...element });
   const [fotos, setFotos] = useState<{ fotoId: string; blob: Blob; fileName: string; url?: string }[]>([]);
   const [gespeichert, setGespeichert] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [vorgaenger, setVorgaenger] = useState<Protokollelement[]>([]);
   const [nachfolger, setNachfolger] = useState<Protokollelement[]>([]);
   const [prevElem, setPrevElem] = useState<Protokollelement | null>(null);
@@ -30,8 +51,15 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   const [karteOffen, setKarteOffen] = useState(false);
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
   const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
+  const [showWeitereStatus, setShowWeitereStatus] = useState(false);
 
   const istNeu = !!elem._neu;
+
+  const swipe = useSwipe(
+    () => nextElem && onNavigate(nextElem),
+    () => prevElem && onNavigate(prevElem),
+    !dirty,
+  );
 
   useEffect(() => {
     ladenFotos();
@@ -59,9 +87,10 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   }
 
   async function ladenGeschwister() {
-    const alle = await getElemente(protokoll.Id);
+    // Alle Elemente der ganzen Gruppe laden (wie in der Übersicht)
+    const prots = await getProtokolleByGruppe(gruppe.Id);
+    const alle = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
     let liste = alle;
-    // Wenn gefilterte IDs vorhanden, nur diese verwenden
     if (filteredIds && filteredIds.length > 0) {
       liste = alle.filter(e => filteredIds.includes(e.Id));
     }
@@ -73,13 +102,10 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
 
   async function ladenFirmen() {
     const v = await getVerantwortliche();
-    if (v.length > 0) {
-      setFirmen(v);
-    }
+    if (v.length > 0) setFirmen(v);
   }
 
   async function ladenThemen() {
-    // Alle Themen aus allen Protokollen der Gruppe sammeln
     const prots = await getProtokolleByGruppe(gruppe.Id);
     const themen = new Set<string>();
     for (const p of prots) {
@@ -91,7 +117,6 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
     setThemenVorschlaege([...themen].sort());
   }
 
-  // Firmen-Liste: DB-Verantwortliche oder Fallback auf Protokoll-Teilnehmer
   const alleFirmen = firmen.length > 0
     ? firmen.map(f => ({ Oid: f.ID, Name: f.Name }))
     : [
@@ -101,15 +126,18 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           .map(v => ({ Oid: v.Oid, Name: v.Name })),
       ];
 
+  function markDirty() { setDirty(true); setGespeichert(false); }
+
   function updateStatus(status: number) {
     setElem(prev => ({ ...prev, Status: status, _geaendert: true }));
-    setGespeichert(false);
+    markDirty();
+    setShowWeitereStatus(false);
   }
 
   function update(patch: Partial<Protokollelement>) {
     if (!istNeu) return;
     setElem(prev => ({ ...prev, ...patch, _geaendert: true }));
-    setGespeichert(false);
+    markDirty();
   }
 
   function updateMobile(patch: Partial<Protokollelement['MobileErfassung']>) {
@@ -117,12 +145,13 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
       ...prev, _geaendert: true,
       MobileErfassung: { ...prev.MobileErfassung, ...patch },
     }));
-    setGespeichert(false);
+    markDirty();
   }
 
   async function speichern() {
     await updateElement(elem);
     setGespeichert(true);
+    setDirty(false);
   }
 
   async function gpsErfassen() {
@@ -158,33 +187,47 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   }
 
   const st = STATUS_MAP[elem.Status];
+  const istWeitererStatus = WEITERE_STATUS.includes(elem.Status);
+  const terminUeberfaellig = elem.Termin && [0, 10].includes(elem.Status) && new Date(elem.Termin) < new Date(new Date().toDateString());
 
   return (
-    <div className="min-h-screen bg-ping-bg">
+    <div className="min-h-screen bg-ping-bg" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
+      {/* Header */}
       <div className="bg-ping-blue text-white p-3">
         <div className="flex items-center justify-between">
-          <button onClick={onBack} className="text-ping-blue-light hover:text-white text-sm">&larr; Zurück</button>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-ping-blue-light">Pos. {elem.Position}</span>
-            {st && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${st.css}`}>{st.label}</span>}
+          <button onClick={() => prevElem && !dirty && onNavigate(prevElem)} disabled={!prevElem || dirty}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium ${prevElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
+            &larr; Vorh.
+          </button>
+          <div className="text-center">
+            <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Übersicht</button>
+            <div className="flex items-center gap-2 justify-center mt-0.5">
+              <span className="text-xs text-ping-blue-light">Pos. {elem.Position}</span>
+              {st && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${st.css}`}>{st.label}</span>}
+            </div>
           </div>
+          <button onClick={() => nextElem && !dirty && onNavigate(nextElem)} disabled={!nextElem || dirty}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium ${nextElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
+            Nächst. &rarr;
+          </button>
         </div>
-        <div className="flex items-center justify-between mt-1">
-          <div>
-            {!istNeu && <p className="text-xs text-ping-blue-light">Nur Status änderbar</p>}
-            {istNeu && <p className="text-xs text-green-300">Neues Element — alle Felder editierbar</p>}
-          </div>
-          <div className="flex gap-1">
-            <button onClick={() => prevElem && onNavigate(prevElem)} disabled={!prevElem}
-              className={`px-2 py-0.5 rounded text-xs ${prevElem ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
-              &larr; Vorh.
-            </button>
-            <button onClick={() => nextElem && onNavigate(nextElem)} disabled={!nextElem}
-              className={`px-2 py-0.5 rounded text-xs ${nextElem ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
-              Nächst. &rarr;
-            </button>
-          </div>
-        </div>
+        {!istNeu && <p className="text-xs text-ping-blue-light text-center mt-1">Nur Status änderbar</p>}
+        {istNeu && <p className="text-xs text-green-300 text-center mt-1">Neues Element — alle Felder editierbar</p>}
+      </div>
+
+      {/* Buttons direkt unter Header */}
+      <div className="px-3 pt-2 flex gap-2">
+        <button onClick={speichern}
+          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-sm transition ${
+            gespeichert ? 'bg-green-600' : dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-ping-blue hover:bg-ping-blue-dark'
+          }`}>
+          {gespeichert ? 'Gespeichert' : dirty ? 'Speichern!' : 'Speichern'}
+        </button>
+        <button onClick={() => { setElem({ ...element }); setDirty(false); setGespeichert(false); }}
+          disabled={!dirty}
+          className={`flex-1 py-2.5 rounded-lg font-medium text-sm transition ${dirty ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-gray-100 text-gray-400 cursor-default'}`}>
+          Rückgängig
+        </button>
       </div>
 
       <div className="p-3 space-y-2.5">
@@ -217,48 +260,52 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </div>
         )}
 
-        {/* Positionstext = Hauptfeld */}
+        {/* Positionstext */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <label className="text-[10px] text-gray-400 font-medium uppercase">Positionstext</label>
           {istNeu ? (
-            <textarea value={elem.Positionstext} onChange={(e) => update({ Positionstext: e.target.value })} rows={3}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none mt-0.5" />
+            <textarea value={elem.Positionstext} onChange={(e) => update({ Positionstext: e.target.value })} rows={6}
+              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none mt-0.5" />
           ) : (
-            <p className="text-xs text-gray-700 mt-0.5">{elem.Positionstext || '—'}</p>
+            <p className="text-sm text-gray-700 mt-0.5">{elem.Positionstext || '—'}</p>
           )}
         </div>
 
-        {/* Status — immer editierbar */}
+        {/* Status */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <label className="text-[10px] text-gray-400 font-medium uppercase mb-1.5 block">Status</label>
           <div className="flex gap-1 flex-wrap">
-            {AENDERBARE_STATUS.map(s => (
+            {HAUPT_STATUS.map(s => (
               <button key={s} onClick={() => updateStatus(s)}
-                className={`px-2 py-1 rounded text-[11px] font-medium transition ${
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                   elem.Status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
                 }`}>
                 {STATUS_MAP[s].label}
               </button>
             ))}
+            <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
+              className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                istWeitererStatus && !showWeitereStatus ? STATUS_MAP[elem.Status].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
+              }`}>
+              {istWeitererStatus && !showWeitereStatus ? STATUS_MAP[elem.Status].label : '...'}
+            </button>
           </div>
+          {showWeitereStatus && (
+            <div className="flex gap-1 flex-wrap mt-1.5 pt-1.5 border-t border-gray-100">
+              {WEITERE_STATUS.map(s => STATUS_MAP[s] && (
+                <button key={s} onClick={() => updateStatus(s)}
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                    elem.Status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
+                  }`}>
+                  {STATUS_MAP[s].label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Readonly-Felder bei alten Elementen, editierbar bei neuen */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
-            {istNeu ? (
-              <>
-                <input type="text" list="themen-liste" value={elem.Thema} onChange={(e) => update({ Thema: e.target.value })}
-                  className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-                <datalist id="themen-liste">
-                  {themenVorschlaege.map(t => <option key={t} value={t} />)}
-                </datalist>
-              </>
-            ) : (
-              <p className="text-xs text-gray-700">{elem.Thema || '—'}</p>
-            )}
-          </div>
+        {/* Position / Thema / Termin */}
+        <div className="grid grid-cols-3 gap-2">
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Position</label>
             {istNeu ? (
@@ -268,9 +315,26 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               <p className="text-xs text-gray-700 font-mono">{elem.Position}</p>
             )}
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
+            {istNeu ? (
+              <select value={themenVorschlaege.includes(elem.Thema) ? elem.Thema : '__custom'}
+                onChange={(e) => {
+                  if (e.target.value === '__custom') {
+                    const val = prompt('Neues Thema eingeben:', elem.Thema);
+                    if (val != null) update({ Thema: val });
+                  } else {
+                    update({ Thema: e.target.value });
+                  }
+                }}
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
+                <option value="__custom">{elem.Thema && !themenVorschlaege.includes(elem.Thema) ? `✎ ${elem.Thema}` : '✎ Anderes...'}</option>
+              </select>
+            ) : (
+              <p className="text-xs text-gray-700">{elem.Thema || '—'}</p>
+            )}
+          </div>
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
             {istNeu ? (
@@ -278,40 +342,31 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
                 onChange={(e) => update({ Termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
                 className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
             ) : (
-              <p className="text-xs text-gray-700">{elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE') : '—'}</p>
-            )}
-          </div>
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich (Firma)</label>
-            {istNeu ? (
-              <select value={elem.VerantwortlicherFirmaOid}
-                onChange={(e) => {
-                  const t = alleFirmen.find(t => t.Oid === e.target.value);
-                  if (t) update({ VerantwortlicherFirmaOid: t.Oid, VerantwortlicherFirmaName: t.Name });
-                }}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-                {alleFirmen.map(t => (
-                  <option key={t.Oid} value={t.Oid}>{t.Name}</option>
-                ))}
-              </select>
-            ) : (
-              <p className="text-xs text-gray-700">{elem.VerantwortlicherFirmaName || '—'}</p>
+              <p className={`text-xs ${terminUeberfaellig ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>{elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE') : '—'}</p>
             )}
           </div>
         </div>
 
-        {/* Bemerkung */}
+        {/* Verantwortlich */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Bemerkung (intern)</label>
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich (Firma)</label>
           {istNeu ? (
-            <textarea value={elem.Bemerkung} onChange={(e) => update({ Bemerkung: e.target.value })} rows={2}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+            <select value={elem.VerantwortlicherFirmaOid}
+              onChange={(e) => {
+                const t = alleFirmen.find(t => t.Oid === e.target.value);
+                if (t) update({ VerantwortlicherFirmaOid: t.Oid, VerantwortlicherFirmaName: t.Name });
+              }}
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+              {alleFirmen.map(t => (
+                <option key={t.Oid} value={t.Oid}>{t.Name}</option>
+              ))}
+            </select>
           ) : (
-            <p className="text-xs text-gray-700">{elem.Bemerkung || '—'}</p>
+            <p className="text-xs text-gray-700">{elem.VerantwortlicherFirmaName || '—'}</p>
           )}
         </div>
 
-        {/* GPS — immer verfügbar */}
+        {/* GPS */}
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
             <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
@@ -347,7 +402,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           />
         )}
 
-        {/* Fotos — nur bei neuen Elementen */}
+        {/* Fotos */}
         {istNeu && (
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <div className="flex items-center justify-between mb-1">
@@ -368,25 +423,6 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             )}
           </div>
         )}
-
-        {/* Titel (optional, untergeordnet) */}
-        {istNeu && (
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel (optional, für Gestaltung)</label>
-            <input type="text" value={elem.Positionstitel} onChange={(e) => update({ Positionstitel: e.target.value })}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-          </div>
-        )}
-
-        {/* Titel readonly bei alten Elementen, wenn vorhanden */}
-        {!istNeu && elem.Positionstitel && (
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel</label>
-            <p className="text-xs text-gray-700">{elem.Positionstitel}</p>
-          </div>
-        )}
-
-        {/* Fotos readonly bei alten Elementen, wenn vorhanden */}
         {!istNeu && fotos.length > 0 && (
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
@@ -398,22 +434,54 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </div>
         )}
 
-        {/* Aktionen */}
-        <div className="space-y-2">
-          <button onClick={speichern}
-            className={`w-full py-2.5 rounded-lg font-medium text-white text-sm transition ${
-              gespeichert ? 'bg-green-600' : 'bg-ping-blue hover:bg-ping-blue-dark active:bg-ping-blue-dark'
-            }`}>
-            {gespeichert ? 'Gespeichert' : 'Speichern'}
-          </button>
-
-          {!istNeu && (
-            <button onClick={() => onNachfolger(elem)}
-              className="w-full py-2.5 rounded-lg font-medium text-sm bg-ping-gold text-white hover:bg-ping-gold-dark active:bg-ping-gold-dark transition">
-              Nachfolger erstellen
-            </button>
+        {/* Bemerkung (intern) */}
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Bemerkung (intern)</label>
+          {istNeu ? (
+            <textarea value={elem.Bemerkung} onChange={(e) => update({ Bemerkung: e.target.value })} rows={2}
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+          ) : (
+            <p className="text-xs text-gray-700">{elem.Bemerkung || '—'}</p>
           )}
         </div>
+
+        {/* Titel */}
+        {istNeu && (
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel (optional, für Gestaltung)</label>
+            <input type="text" value={elem.Positionstitel} onChange={(e) => update({ Positionstitel: e.target.value })}
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+          </div>
+        )}
+        {!istNeu && elem.Positionstitel && (
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel</label>
+            <p className="text-xs text-gray-700">{elem.Positionstitel}</p>
+          </div>
+        )}
+
+        {/* Nachfolger + Klonen */}
+        {!istNeu && (
+          <div className="flex gap-2">
+            <button onClick={() => onNachfolger(elem)}
+              className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-ping-gold text-white hover:bg-ping-gold-dark transition">
+              Nachfolger
+            </button>
+            {onClone && (
+              <button onClick={() => onClone({
+                thema: elem.Thema, status: elem.Status,
+                termin: elem.Termin ? elem.Termin.slice(0, 10) : '',
+                verantwOid: elem.VerantwortlicherFirmaOid,
+                geoLat: elem.MobileErfassung.GeoLat, geoLon: elem.MobileErfassung.GeoLon,
+                geoAcc: elem.MobileErfassung.GeoAccuracy, geoHeading: elem.MobileErfassung.GeoHeading,
+                geoText: elem.MobileErfassung.GeoText || '',
+              })}
+                className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-amber-600 text-white hover:bg-amber-700 transition">
+                Klonen
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -4,19 +4,22 @@ Leichtgewichtiger HTTP-Server für Sync zwischen DOCUframe und PWA.
 
 Verzeichnisstruktur:
   data/
-    export/{ProjektId}/          DOCUframe → App
+    subscriptions.json             Abo-Verwaltung (Device → Projekte)
+    export/{ProjektId}/            DOCUframe → App
       protokolle.json
       manifest.json
-    import/{ProjektId}/          App → DOCUframe
-      changes_{timestamp}.json
-      photos/
-    archive/{ProjektId}/         Verarbeitete Dateien
+    import/{ProjektId}/            App → DOCUframe
+      incoming/                      Staging (Server schreibt)
+      ready/                         Bereit für DOCUframe-Import
+      done/                          Von DOCUframe verarbeitet
 
 Starten: uvicorn server:app --host 0.0.0.0 --port 8080
 """
 
 import json
 import os
+import shutil
+import sys
 import time
 from pathlib import Path
 from datetime import datetime
@@ -26,15 +29,53 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-# Basis-Verzeichnis: data/ neben server.py, oder per Umgebungsvariable
-DATA_DIR = Path(os.environ.get("EXCHANGE_DATA_DIR", Path(__file__).parent / "data"))
+
+def read_json_auto_encoding(path: Path):
+    """JSON-Datei lesen mit automatischer Encoding-Erkennung (UTF-16LE / UTF-8)."""
+    raw = path.read_bytes()
+    if len(raw) == 0:
+        raise ValueError(f"Datei ist leer: {path}")
+
+    # UTF-16LE BOM (FF FE) oder ohne BOM (zweites Byte = 0x00 bei ASCII)
+    if (len(raw) >= 2 and raw[0] == 0xFF and raw[1] == 0xFE) or \
+       (len(raw) >= 2 and raw[1] == 0x00):
+        text = raw.decode("utf-16-le").lstrip("\ufeff")
+    else:
+        text = raw.decode("utf-8-sig")
+
+    return json.loads(text)
+
+# Bei PyInstaller-exe: sys.executable zeigt auf die exe, __file__ auf den temp-Ordner
+_script_dir = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent
+
+# Basis-Verzeichnis: data/ neben exe/server.py, oder per Umgebungsvariable
+DATA_DIR = Path(os.environ.get("EXCHANGE_DATA_DIR", _script_dir / "data"))
 EXPORT_DIR = DATA_DIR / "export"
 IMPORT_DIR = DATA_DIR / "import"
 ARCHIVE_DIR = DATA_DIR / "archive"
+SUBSCRIPTIONS_FILE = DATA_DIR / "subscriptions.json"
 
 # Verzeichnisse anlegen
 for d in [EXPORT_DIR, IMPORT_DIR, ARCHIVE_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
+
+def _read_subscriptions() -> dict:
+    """Subscriptions-Datei lesen (oder leeres Dict)."""
+    if not SUBSCRIPTIONS_FILE.exists():
+        return {"devices": {}}
+    try:
+        text = SUBSCRIPTIONS_FILE.read_text(encoding="utf-8")
+        return json.loads(text)
+    except (json.JSONDecodeError, OSError):
+        return {"devices": {}}
+
+
+def _write_subscriptions(data: dict):
+    """Subscriptions-Datei atomar schreiben."""
+    tmp = SUBSCRIPTIONS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    shutil.move(str(tmp), str(SUBSCRIPTIONS_FILE))
 
 app = FastAPI(title="Protokollbrowser Exchange Server")
 
@@ -73,17 +114,17 @@ def list_projects():
 
         if manifest_path.exists():
             try:
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest = read_json_auto_encoding(manifest_path)
                 info["projektName"] = manifest.get("projektName", projekt_dir.name)
                 info["timestamp"] = manifest.get("timestamp")
                 info["gruppeName"] = manifest.get("gruppeName")
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, ValueError, OSError):
                 info["projektName"] = projekt_dir.name
 
-        # Pending changes (App → DOCUframe) zählen
-        import_dir = IMPORT_DIR / projekt_dir.name
-        if import_dir.exists():
-            changes = list(import_dir.glob("changes_*.json"))
+        # Pending changes (App → DOCUframe) aus ready/ zählen
+        ready_dir = IMPORT_DIR / projekt_dir.name / "ready"
+        if ready_dir.exists():
+            changes = list(ready_dir.glob("changes_*.json"))
             info["pendingChanges"] = len(changes)
         else:
             info["pendingChanges"] = 0
@@ -101,8 +142,8 @@ def get_export(project_id: str):
         raise HTTPException(404, f"Kein Export für Projekt {project_id}")
 
     try:
-        data = json.loads(protokolle_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as e:
+        data = read_json_auto_encoding(protokolle_path)
+    except (json.JSONDecodeError, ValueError, OSError) as e:
         raise HTTPException(500, f"Fehler beim Lesen: {e}")
 
     return data
@@ -116,44 +157,102 @@ def get_status(project_id: str):
     manifest_path = EXPORT_DIR / project_id / "manifest.json"
     if manifest_path.exists():
         try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest = read_json_auto_encoding(manifest_path)
             result["lastExport"] = manifest.get("timestamp")
-        except (json.JSONDecodeError, OSError):
+        except (json.JSONDecodeError, ValueError, OSError):
             pass
 
-    import_dir = IMPORT_DIR / project_id
-    if import_dir.exists():
-        changes = sorted(import_dir.glob("changes_*.json"))
+    ready_dir = IMPORT_DIR / project_id / "ready"
+    if ready_dir.exists():
+        changes = sorted(ready_dir.glob("changes_*.json"))
         result["pendingChanges"] = len(changes)
         if changes:
             result["lastUpload"] = changes[-1].stem.replace("changes_", "")
     else:
         result["pendingChanges"] = 0
 
+    # Auch done/ für Gesamthistorie
+    done_dir = IMPORT_DIR / project_id / "done"
+    result["processedChanges"] = len(list(done_dir.glob("changes_*.json"))) if done_dir.exists() else 0
+
     return result
 
 
 @app.post("/api/projects/{project_id}/sync")
 async def upload_changes(project_id: str, changes: dict):
-    """Änderungen von der App hochladen."""
-    import_dir = IMPORT_DIR / project_id
-    import_dir.mkdir(parents=True, exist_ok=True)
+    """Änderungen von der App hochladen → incoming/ → ready/."""
+    incoming_dir = IMPORT_DIR / project_id / "incoming"
+    ready_dir = IMPORT_DIR / project_id / "ready"
+    incoming_dir.mkdir(parents=True, exist_ok=True)
+    ready_dir.mkdir(parents=True, exist_ok=True)
 
+    device_id = changes.get("deviceId", "unknown")[:12]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    changes_file = import_dir / f"changes_{timestamp}.json"
+    filename = f"changes_{device_id}_{timestamp}.json"
 
-    changes_file.write_text(
+    # Erst in incoming/ schreiben, dann nach ready/ verschieben (atomar)
+    incoming_file = incoming_dir / filename
+    incoming_file.write_text(
         json.dumps(changes, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    shutil.move(str(incoming_file), str(ready_dir / filename))
 
-    return {"status": "ok", "file": changes_file.name, "timestamp": timestamp}
+    return {"status": "ok", "file": filename, "timestamp": timestamp}
+
+
+@app.post("/api/projects/{project_id}/upload-zip")
+async def upload_zip(project_id: str, file: UploadFile = File(...)):
+    """ZIP-Datei (JSON + Fotos) von der App hochladen → entpacken → ready/."""
+    import zipfile
+    import io
+
+    incoming_dir = IMPORT_DIR / project_id / "incoming"
+    ready_dir = IMPORT_DIR / project_id / "ready"
+    incoming_dir.mkdir(parents=True, exist_ok=True)
+    ready_dir.mkdir(parents=True, exist_ok=True)
+
+    content = await file.read()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # ZIP auch als Archiv behalten
+    zip_name = f"protocol_export_{timestamp}.zip"
+    zip_path = ready_dir / zip_name
+    zip_path.write_bytes(content)
+
+    # ZIP entpacken: JSON nach ready/, Fotos nach ready/photos/
+    extracted = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            for name in zf.namelist():
+                if name.endswith('/'):
+                    continue
+                data = zf.read(name)
+                basename = Path(name).name
+
+                if basename.endswith('.json'):
+                    # JSON-Datei mit Timestamp umbenennen → ready/
+                    target_name = f"changes_zip_{timestamp}.json" if basename == "protocol_export.json" else basename
+                    target = ready_dir / target_name
+                    target.write_bytes(data)
+                    extracted.append(target_name)
+                else:
+                    # Fotos → ready/photos/
+                    photos_dir = ready_dir / "photos"
+                    photos_dir.mkdir(exist_ok=True)
+                    (photos_dir / basename).write_bytes(data)
+                    extracted.append(f"photos/{basename}")
+    except zipfile.BadZipFile:
+        # Kein gültiges ZIP — Datei bleibt trotzdem in ready/
+        pass
+
+    return {"status": "ok", "file": zip_name, "size": len(content), "extracted": extracted}
 
 
 @app.post("/api/projects/{project_id}/photos")
 async def upload_photos(project_id: str, files: list[UploadFile] = File(...)):
-    """Fotos von der App hochladen (multipart)."""
-    photos_dir = IMPORT_DIR / project_id / "photos"
+    """Fotos von der App hochladen (multipart) → ready/photos/."""
+    photos_dir = IMPORT_DIR / project_id / "ready" / "photos"
     photos_dir.mkdir(parents=True, exist_ok=True)
 
     saved = []
@@ -168,13 +267,51 @@ async def upload_photos(project_id: str, files: list[UploadFile] = File(...)):
     return {"status": "ok", "saved": saved, "count": len(saved)}
 
 
-# PWA ausliefern (same-origin): statische Dateien aus app/dist/
-# Im Produktivbetrieb: PWA-Build hierhin kopieren
-PWA_DIR = Path(__file__).parent / "pwa"
+# --- Abonnement-Verwaltung ---
+
+@app.get("/api/subscriptions/{device_id}")
+def get_subscriptions(device_id: str):
+    """Abos eines Devices abfragen."""
+    subs = _read_subscriptions()
+    device = subs.get("devices", {}).get(device_id)
+    if not device:
+        return {"userName": "", "deviceName": "", "projects": []}
+    return device
+
+
+@app.put("/api/subscriptions/{device_id}")
+async def put_subscriptions(device_id: str, body: dict):
+    """Abos eines Devices speichern/aktualisieren."""
+    subs = _read_subscriptions()
+    if "devices" not in subs:
+        subs["devices"] = {}
+
+    subs["devices"][device_id] = {
+        "userName": body.get("userName", ""),
+        "deviceName": body.get("deviceName", ""),
+        "lastSeen": datetime.now().isoformat(),
+        "projects": body.get("projects", []),
+    }
+
+    _write_subscriptions(subs)
+    return {"status": "ok", "deviceId": device_id}
+
+
+@app.get("/api/subscriptions")
+def list_subscriptions():
+    """Alle registrierten Devices und deren Abos (Admin-Übersicht)."""
+    return _read_subscriptions()
+
+
+# PWA ausliefern (same-origin): statische Dateien aus pwa/ neben der exe bzw. server.py
+PWA_DIR = _script_dir / "pwa"
 if PWA_DIR.exists():
     app.mount("/", StaticFiles(directory=str(PWA_DIR), html=True), name="pwa")
 
 
 if __name__ == "__main__":
+    import os
+    os.environ["NO_COLOR"] = "1"
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    port = int(os.environ.get("EXCHANGE_PORT", "8080"))
+    uvicorn.run(app, host="0.0.0.0", port=port, access_log=True)

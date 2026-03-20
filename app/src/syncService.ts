@@ -2,29 +2,37 @@
  * Sync-Service: PWA ↔ Exchange Server
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, getSyncMeta, setSyncMeta } from './db';
-import type { SyncMeta } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta } from './db';
 import { parseDfJson } from './dfimport';
+import { getDeviceId, getDeviceName, getUserName } from './deviceIdentity';
 
 const TIMEOUT_MS = 5000;
+const UPLOAD_TIMEOUT_MS = 30000;
 
 // Server-URL aus localStorage
 const STORAGE_KEY = 'sync-server-url';
 
 export function getServerUrl(): string {
-  return localStorage.getItem(STORAGE_KEY) || '';
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored) return stored;
+  // Wenn vom Exchange-Server geladen (nicht GitHub Pages), eigene Origin als Server verwenden
+  // GitHub Pages hat base='/protokollbrowser/', Server-Build hat base='./'
+  if (!location.pathname.startsWith('/protokollbrowser')) {
+    return location.origin;
+  }
+  return '';
 }
 
 export function setServerUrl(url: string) {
   localStorage.setItem(STORAGE_KEY, url.replace(/\/+$/, ''));
 }
 
-async function fetchApi(path: string, options?: RequestInit): Promise<Response> {
+async function fetchApi(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<Response> {
   const url = getServerUrl();
   if (!url) throw new Error('Kein Server konfiguriert');
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? TIMEOUT_MS);
 
   try {
     const resp = await fetch(`${url}${path}`, {
@@ -92,6 +100,8 @@ export async function uploadChanges(gruppeId: string): Promise<number> {
   if (geaendert.length === 0) return 0;
 
   const changes = {
+    deviceId: getDeviceId(),
+    userName: getUserName(),
     gruppeId,
     timestamp: new Date().toISOString(),
     elemente: geaendert,
@@ -116,17 +126,50 @@ export async function getRemoteStatus(projectId: string): Promise<{
   return resp.json();
 }
 
-/** Bidirektionaler Sync: Download, dann Upload */
-export async function syncProject(gruppeId: string): Promise<{ downloaded: boolean; uploaded: number }> {
+/** ZIP-Datei (JSON + Fotos) an den Server hochladen */
+export async function uploadZip(gruppeId: string, zipBlob: Blob, filename: string): Promise<void> {
+  const formData = new FormData();
+  formData.append('file', zipBlob, filename);
+  await fetchApi(`/api/projects/${gruppeId}/upload-zip`, {
+    method: 'POST',
+    body: formData,
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+  });
+}
+
+/** Abonnierte Projekte vom Server laden */
+export async function getSubscriptions(): Promise<string[]> {
+  try {
+    const resp = await fetchApi(`/api/subscriptions/${getDeviceId()}`);
+    const data = await resp.json();
+    return data.projects || [];
+  } catch {
+    return [];
+  }
+}
+
+/** Projekt-Abos auf dem Server speichern */
+export async function saveSubscriptions(projectIds: string[]): Promise<void> {
+  await fetchApi(`/api/subscriptions/${getDeviceId()}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userName: getUserName(),
+      deviceName: getDeviceName(),
+      projects: projectIds,
+    }),
+  });
+}
+
+/** Sync: Nur Download vom Server (Upload nur über manuellen ZIP-Export) */
+export async function syncProject(gruppeId: string): Promise<{ downloaded: boolean }> {
   let downloaded = false;
   try {
     await downloadProject(gruppeId);
     downloaded = true;
   } catch {
-    // Export möglicherweise nicht vorhanden — nur Upload
+    // Export möglicherweise nicht vorhanden
   }
-
-  const uploaded = await uploadChanges(gruppeId);
 
   await setSyncMeta({
     gruppeId,
@@ -135,5 +178,5 @@ export async function syncProject(gruppeId: string): Promise<{ downloaded: boole
     autoSync: true,
   });
 
-  return { downloaded, uploaded };
+  return { downloaded };
 }

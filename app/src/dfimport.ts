@@ -107,7 +107,15 @@ export function parseDfJson(raw: unknown[]): { pakete: ProtokollPaket[]; verantw
                   VerantwortlicherFirmaOid: eRaw['VerantwortlicherOid'] as string || '',
                   VerantwortlicherFirmaName: eRaw['VerantwortlicherName'] as string || '',
                   Verweise: [],
-                  MobileErfassung: parseMobileErfassung(eRaw['MobileErfassung']),
+                  MobileErfassung: parseMobileErfassungFromElement(eRaw),
+                  // Neue DOCUframe-Metadaten (flache Felder aus Export-Makro)
+                  FotoAnzahl: typeof eRaw['Anzahl Fotos'] === 'number' ? eRaw['Anzahl Fotos'] : undefined,
+                  FotoPfad: (eRaw['Pfad Foto-Ordner'] as string) || undefined,
+                  MobilErfasst: typeof eRaw['Mobil erfasst/geändert'] === 'boolean' ? eRaw['Mobil erfasst/geändert'] : undefined,
+                  MobilDatum: eRaw['Datum Mobil'] ? parseDfDatum(eRaw['Datum Mobil'] as string) : undefined,
+                  MobilUser: (eRaw['Benutzer Kürzel'] as string) || undefined,
+                  Notiz: (eRaw['Freitext-Notiz'] as string) || undefined,
+                  Info: (eRaw['Info'] as string) || undefined,
                 });
               }
             }
@@ -122,10 +130,29 @@ export function parseDfJson(raw: unknown[]): { pakete: ProtokollPaket[]; verantw
   return { pakete, verantwortliche };
 }
 
-function parseMobileErfassung(raw: unknown): Protokollelement['MobileErfassung'] {
-  if (!raw || typeof raw !== 'object') {
-    return { GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, GeoHeading: null, Fotos: [] };
+// Liest MobileErfassung aus dem Element-Objekt:
+// Neues Format: Geo-Felder liegen flach auf dem Element (deutsche Feldnamen aus Export-Makro)
+// Altes Format: verschachteltes MobileErfassung-Objekt (Fallback für alte Testdaten)
+function parseMobileErfassungFromElement(eRaw: Record<string, unknown>): Protokollelement['MobileErfassung'] {
+  const empty = { GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, GeoHeading: null, GeoAltitude: null, Fotos: [] };
+
+  // Neues Format: flache deutsche Feldnamen direkt auf dem Element
+  const hasFlat = typeof eRaw['Breitengrad'] === 'number' || typeof eRaw['Längengrad'] === 'number';
+  if (hasFlat) {
+    return {
+      GeoLat: typeof eRaw['Breitengrad'] === 'number' ? eRaw['Breitengrad'] : null,
+      GeoLon: typeof eRaw['Längengrad'] === 'number' ? eRaw['Längengrad'] : null,
+      GeoAccuracy: typeof eRaw['Genauigkeit'] === 'number' ? eRaw['Genauigkeit'] : null,
+      GeoText: (eRaw['Standort-Anzeigetext'] as string) || null,
+      GeoHeading: typeof eRaw['Kompassrichtung'] === 'number' ? eRaw['Kompassrichtung'] : null,
+      GeoAltitude: typeof eRaw['Höhe über NN'] === 'number' ? eRaw['Höhe über NN'] : null,
+      Fotos: [],
+    };
   }
+
+  // Altes Format: verschachteltes MobileErfassung-Objekt (Rückwärtskompatibilität)
+  const raw = eRaw['MobileErfassung'];
+  if (!raw || typeof raw !== 'object') return empty;
   const m = raw as Record<string, unknown>;
   return {
     GeoLat: typeof m['GeoLat'] === 'number' ? m['GeoLat'] : null,
@@ -133,6 +160,7 @@ function parseMobileErfassung(raw: unknown): Protokollelement['MobileErfassung']
     GeoAccuracy: typeof m['GeoAccuracy'] === 'number' ? m['GeoAccuracy'] : null,
     GeoText: (m['GeoText'] as string) || null,
     GeoHeading: typeof m['GeoHeading'] === 'number' ? m['GeoHeading'] : null,
+    GeoAltitude: typeof m['GeoAltitude'] === 'number' ? m['GeoAltitude'] : null,
     Fotos: Array.isArray(m['Fotos']) ? m['Fotos'] : [],
   };
 }

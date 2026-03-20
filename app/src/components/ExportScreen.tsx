@@ -1,34 +1,46 @@
-import { useState } from 'react';
-import type { Protokoll } from '../types';
-import { getElemente, getFotos } from '../db';
+import { useState, useEffect } from 'react';
+import type { Protokoll, Protokollgruppe } from '../types';
+import { getElemente, getFotos, clearSyncFlags, getProtokolleByGruppe, savePendingExport, getPendingExports, deletePendingExport } from '../db';
+import { checkConnectivity, uploadZip } from '../syncService';
 import JSZip from 'jszip';
 
 interface Props {
   protokoll: Protokoll;
+  gruppe: Protokollgruppe;
   onBack: () => void;
 }
 
-export default function ExportScreen({ protokoll, onBack }: Props) {
+export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
   const [autor, setAutor] = useState(protokoll.Autor);
   const [vorbemerkung, setVorbemerkung] = useState(`Folgeprotokoll zu Nr. ${protokoll.Nummer}`);
   const [exporting, setExporting] = useState(false);
+  const [uploadResult, setUploadResult] = useState<'ok' | 'error' | null>(null);
   const [stats, setStats] = useState<{ geaendert: number; neu: number } | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [exported, setExported] = useState(false);
 
-  useState(() => {
-    getElemente(protokoll.Id).then(elems => {
+  useEffect(() => {
+    // Stats laden
+    getProtokolleByGruppe(gruppe.Id).then(async (prots) => {
+      const allElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
       setStats({
-        geaendert: elems.filter(e => e._geaendert && !e._neu).length,
-        neu: elems.filter(e => e._neu).length,
+        geaendert: allElems.filter(e => e._geaendert && !e._neu).length,
+        neu: allElems.filter(e => e._neu).length,
       });
     });
-  });
+    // Pending exports zählen
+    getPendingExports().then(exps => {
+      setPendingCount(exps.filter(e => e.gruppeId === gruppe.Id).length);
+    });
+  }, [gruppe.Id]);
 
   async function exportieren() {
     setExporting(true);
     try {
-      const elemente = await getElemente(protokoll.Id);
-      const relevante = elemente.filter(e => e._geaendert || e._neu);
+      const prots = await getProtokolleByGruppe(gruppe.Id);
+      const alleElemente = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
+      const relevante = alleElemente.filter(e => e._geaendert || e._neu);
 
       if (relevante.length === 0) {
         alert('Keine Änderungen zum Exportieren vorhanden.');
@@ -36,9 +48,7 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
         return;
       }
 
-      // Protokollgruppe laden für die ID
-      // Wir nehmen die erste Gruppe (im Normalfall gibt es nur eine)
-      const gruppeId = protokoll.Id; // Wird unten korrekt aufgelöst
+      const gruppeId = gruppe.Id;
 
       const exportElemente = relevante.map(e => {
         const isNeu = e._neu;
@@ -68,7 +78,15 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
           GeoAccuracy: e.MobileErfassung.GeoAccuracy,
           GeoText: e.MobileErfassung.GeoText || '',
           GeoHeading: e.MobileErfassung.GeoHeading,
+          GeoAltitude: e.MobileErfassung.GeoAltitude,
           Fotos: e.MobileErfassung.Fotos,
+          FotoAnzahl: e.FotoAnzahl ?? 0,
+          FotoPfad: e.FotoPfad ?? '',
+          MobilErfasst: e.MobilErfasst ?? false,
+          MobilDatum: e.MobilDatum ?? '',
+          MobilUser: e.MobilUser ?? '',
+          Notiz: e.Notiz ?? '',
+          Info: e.Info ?? '',
         };
 
         return base;
@@ -94,7 +112,6 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
       zip.file('protocol_export.json', JSON.stringify(exportJson, null, 2));
       const photosFolder = zip.folder('photos')!;
 
-      // Fotos aus IndexedDB sammeln
       for (const elem of relevante) {
         const elemFotos = await getFotos(elem.Id);
         for (const foto of elemFotos) {
@@ -103,11 +120,48 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
       }
 
       const content = await zip.generateAsync({ type: 'blob' });
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `protocol_export_${ts}.zip`;
+      const elementIds = relevante.map(e => e.Id);
+
+      // ZIP in IndexedDB speichern → wird automatisch bei Serverkontakt hochgeladen
+      await savePendingExport({
+        id: `export-${Date.now()}`,
+        gruppeId,
+        blob: content,
+        filename,
+        elementIds,
+        createdAt: new Date().toISOString(),
+      });
+
+      // Sofort versuchen hochzuladen
+      const online = await checkConnectivity();
+      if (online) {
+        try {
+          await uploadZip(gruppeId, content, filename);
+          await clearSyncFlags(elementIds);
+          // Pending export löschen — wurde sofort hochgeladen
+          const exps = await getPendingExports();
+          const latest = exps.find(e => e.filename === filename);
+          if (latest) await deletePendingExport(latest.id);
+          setUploadResult('ok');
+          setExported(true);
+        } catch {
+          // Upload fehlgeschlagen — bleibt als pending in IndexedDB
+          setPendingCount(prev => prev + 1);
+          setExported(true);
+        }
+      } else {
+        // Kein Server → bleibt als pending, wird automatisch hochgeladen
+        setPendingCount(prev => prev + 1);
+        setExported(true);
+      }
+
+      // Lokaler Download als Backup
       const url = URL.createObjectURL(content);
       const a = document.createElement('a');
-      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       a.href = url;
-      a.download = `protocol_export_${ts}.zip`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -135,6 +189,17 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
             </div>
           )}
         </div>
+
+        {pendingCount > 0 && !exported && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+            <p className="text-yellow-800 text-sm font-medium">
+              {pendingCount} Export{pendingCount > 1 ? 's' : ''} wartet auf Upload
+            </p>
+            <p className="text-yellow-600 text-xs mt-0.5">
+              Wird automatisch gesendet sobald der Server erreichbar ist.
+            </p>
+          </div>
+        )}
 
         {/* Protokoll-Metadaten */}
         <div className="bg-white rounded-xl p-3 border border-gray-100">
@@ -169,11 +234,21 @@ export default function ExportScreen({ protokoll, onBack }: Props) {
 
         <button
           onClick={exportieren}
-          disabled={exporting}
+          disabled={exporting || exported}
           className="w-full bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 active:bg-green-800 transition disabled:opacity-50"
         >
-          {exporting ? 'Exportiere...' : 'ZIP exportieren'}
+          {exporting ? 'Exportiere...' : exported ? 'Exportiert' : 'ZIP exportieren'}
         </button>
+
+        {uploadResult === 'ok' && (
+          <p className="text-green-600 text-sm font-medium text-center">Erfolgreich an Server gesendet!</p>
+        )}
+
+        {exported && uploadResult !== 'ok' && (
+          <p className="text-yellow-600 text-sm font-medium text-center">
+            Export gespeichert. Wird automatisch an Server gesendet sobald erreichbar.
+          </p>
+        )}
 
         <p className="text-xs text-gray-400 text-center">
           Die Protokollnummer N+1 wird beim Re-Import in DOCUframe automatisch berechnet.

@@ -1,0 +1,205 @@
+  // ============================================================================
+  // DOCUcontrol-Makro: Import Protokoll-Änderungen aus App (JSON)
+  // ============================================================================
+  //
+  // Liest eine JSON-Datei (protocol_export.json aus dem App-Export-ZIP) und
+  // schreibt die Änderungen zurück in DOCUframe.
+  //
+  // JSON-Struktur (Array):
+  //   [{
+  //     "ProtokollgruppeId": "<OID>",
+  //     "ProtokollIdAlt": "<OID>",
+  //     "AktionProtokoll": "CREATE",
+  //     "ProtokollMeta": { Name, Datum, Ort, Autor, Vorbemerkung, Nachbemerkung },
+  //     "Elemente": [{
+  //       "Aktion": "UPDATE" | "CREATE",
+  //       "DfElementId": "<OID>" | null,
+  //       "StatusNeu": <int>,
+  //       "TerminNeu": "<ISO>",
+  //       "BemerkungNeu": "<string>",
+  //       "VerantwortlicherFirmaOidNeu": "<OID>",
+  //       "MobileDaten": {
+  //         GeoLat, GeoLon, GeoAccuracy, GeoText, GeoHeading, GeoAltitude,
+  //         FotoAnzahl, FotoPfad, MobilErfasst, MobilDatum, MobilUser,
+  //         Notiz, Info, Fotos: [...]
+  //       },
+  //       // Bei CREATE zusätzlich:
+  //       "Position", "Positionstitel", "Positionstext", "Thema", "Status",
+  //       "Termin", "Verweise": [<OID>, ...]
+  //     }]
+  //   }]
+  //
+  // Ausfuehrung:
+  //   - Makro auf der Protokollgruppe ausführen
+  //   - Datei auswählen (oder festen Pfad verwenden)
+  // ============================================================================
+
+  HJSON JSon;
+  HJSON PaketJSon;
+  HJSON ElemArray;
+  HJSON ElemJSon;
+  HJSON MetaJSon;
+  HJSON MobileJSon;
+  HFILE File;
+  STRING Txt;
+  STRING FilePath;
+  STRING Aktion;
+  STRING ElemOid;
+  STRING strace = "#### JSON-Import: ";
+
+  _PINGProtokollgruppe ProtGrp;
+  _PINGProtokoll ProtNeu;
+  _PINGProtokoll ProtAlt;
+  _PINGProtokollelement Elem;
+  _PINGProtokollelement ElemNeu;
+  Adresse Verantw;
+
+  // --- Protokollgruppe aus Selektion ---
+  ProtGrp = Object;
+
+  // --- Importdatei lesen ---
+  // TODO: Pfad anpassen oder FileDialog verwenden
+  FilePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\import\\" + ProtGrp.GetOID() + "\\protocol_export.json";
+  Trace( strace + "Lese Datei: %1", FilePath );
+
+  File.Open( FilePath, FILE_MODE_READ );
+  Txt = File.ReadAll();
+  File.Close();
+
+  JSon.Construct();
+  JSon.Parse( Txt );
+
+  // --- Pakete durchlaufen (normalerweise nur 1) ---
+  INTEGER i = 0;
+  INTEGER j = 0;
+  INTEGER AnzPakete = JSon.GetCount();
+  Trace( strace + "Anzahl Pakete: %1", AnzPakete.ToStr() );
+
+  WHILE( i < AnzPakete )
+    PaketJSon = JSon.GetElement( i );
+
+    // --- Neues Protokoll anlegen ---
+    MetaJSon = PaketJSon.GetMember( "ProtokollMeta", FALSE );
+    IF( MetaJSon.IsValid() )
+      ProtNeu = ProtGrp._Protokolle.Add();
+      ProtNeu._Name = MetaJSon.GetMember( "Name", FALSE ).GetString();
+      ProtNeu._Datum.SetDateTime( MetaJSon.GetMember( "Datum", FALSE ).GetString() );
+      ProtNeu._Ort = MetaJSon.GetMember( "Ort", FALSE ).GetString();
+      ProtNeu._Autor = MetaJSon.GetMember( "Autor", FALSE ).GetString();
+      ProtNeu._Vorbemerkung = MetaJSon.GetMember( "Vorbemerkung", FALSE ).GetString();
+      ProtNeu._Nachbemerkung = MetaJSon.GetMember( "Nachbemerkung", FALSE ).GetString();
+      ProtNeu.Save();
+      Trace( strace + "Neues Protokoll angelegt: %1", ProtNeu._Name );
+    ENDIF
+
+    // --- Altes Protokoll für Referenzen ---
+    STRING ProtAltOid = PaketJSon.GetMember( "ProtokollIdAlt", FALSE ).GetString();
+    ProtAlt.Load( ProtAltOid );
+
+    // --- Elemente verarbeiten ---
+    ElemArray = PaketJSon.GetMember( "Elemente", FALSE );
+    IF( !ElemArray.IsValid() )
+      i = i + 1;
+      CONTINUE;
+    ENDIF
+
+    j = 0;
+    INTEGER AnzElemente = ElemArray.GetCount();
+    Trace( strace + "Anzahl Elemente: %1", AnzElemente.ToStr() );
+
+    WHILE( j < AnzElemente )
+      ElemJSon = ElemArray.GetElement( j );
+      Aktion = ElemJSon.GetMember( "Aktion", FALSE ).GetString();
+      MobileJSon = ElemJSon.GetMember( "MobileDaten", FALSE );
+
+      IF( Aktion == "UPDATE" )
+        // --- Bestehendes Element aktualisieren ---
+        ElemOid = ElemJSon.GetMember( "DfElementId", FALSE ).GetString();
+        Elem.Load( ElemOid );
+        IF( Elem.IsValid() )
+          Elem._Status = ElemJSon.GetMember( "StatusNeu", FALSE ).GetNumber().ToInt();
+          Elem._Termin.SetDateTime( ElemJSon.GetMember( "TerminNeu", FALSE ).GetString() );
+          Elem._Bemerkung = ElemJSon.GetMember( "BemerkungNeu", FALSE ).GetString();
+
+          // Verantwortlicher
+          STRING VerantwOid = ElemJSon.GetMember( "VerantwortlicherFirmaOidNeu", FALSE ).GetString();
+          IF( VerantwOid != "" )
+            Verantw.Load( VerantwOid );
+            IF( Verantw.IsValid() )
+              Elem._Verantwortlicher = Verantw;
+            ENDIF
+          ENDIF
+
+          // Mobile/Geo-Daten
+          IF( MobileJSon.IsValid() )
+            Elem._PINGGeoLat = MobileJSon.GetMember( "GeoLat", FALSE ).GetNumber();
+            Elem._PINGGeoLon = MobileJSon.GetMember( "GeoLon", FALSE ).GetNumber();
+            Elem._PINGGeoAccuracy = MobileJSon.GetMember( "GeoAccuracy", FALSE ).GetNumber();
+            Elem._PINGGeoHeading = MobileJSon.GetMember( "GeoHeading", FALSE ).GetNumber();
+            Elem._PINGGeoText = MobileJSon.GetMember( "GeoText", FALSE ).GetString();
+            Elem._PINGGeoAltitude = MobileJSon.GetMember( "GeoAltitude", FALSE ).GetNumber();
+            Elem._PINGFotoAnzahl = MobileJSon.GetMember( "FotoAnzahl", FALSE ).GetNumber().ToInt();
+            Elem._PINGFotoPfad = MobileJSon.GetMember( "FotoPfad", FALSE ).GetString();
+            Elem._PINGMobilErfasst = MobileJSon.GetMember( "MobilErfasst", FALSE ).GetBool();
+            Elem._PINGMobilDatum.SetDateTime( MobileJSon.GetMember( "MobilDatum", FALSE ).GetString() );
+            Elem._PINGMobilUser = MobileJSon.GetMember( "MobilUser", FALSE ).GetString();
+            Elem._PINGNotiz = MobileJSon.GetMember( "Notiz", FALSE ).GetString();
+            Elem._PINGInfo = MobileJSon.GetMember( "Info", FALSE ).GetString();
+          ENDIF
+
+          Elem.Save();
+          Trace( strace + "UPDATE Element: %1", ElemOid );
+        ELSE
+          Trace( strace + "WARNUNG: Element nicht gefunden: %1", ElemOid );
+        ENDIF
+
+      ELSEIF( Aktion == "CREATE" )
+        // --- Neues Element anlegen ---
+        ElemNeu = ProtNeu._Protokollelemente.Add();
+        ElemNeu._Position = ElemJSon.GetMember( "Position", FALSE ).GetString();
+        ElemNeu._Positionstitel = ElemJSon.GetMember( "Positionstitel", FALSE ).GetString();
+        ElemNeu._Positionstext = ElemJSon.GetMember( "Positionstext", FALSE ).GetString();
+        ElemNeu._Thema = ElemJSon.GetMember( "Thema", FALSE ).GetString();
+        ElemNeu._Status = ElemJSon.GetMember( "Status", FALSE ).GetNumber().ToInt();
+        ElemNeu._Termin.SetDateTime( ElemJSon.GetMember( "Termin", FALSE ).GetString() );
+        ElemNeu._Bemerkung = ElemJSon.GetMember( "BemerkungNeu", FALSE ).GetString();
+
+        // Verantwortlicher
+        STRING VerantwOidNeu = ElemJSon.GetMember( "VerantwortlicherFirmaOidNeu", FALSE ).GetString();
+        IF( VerantwOidNeu != "" )
+          Verantw.Load( VerantwOidNeu );
+          IF( Verantw.IsValid() )
+            ElemNeu._Verantwortlicher = Verantw;
+          ENDIF
+        ENDIF
+
+        // Mobile/Geo-Daten
+        IF( MobileJSon.IsValid() )
+          ElemNeu._PINGGeoLat = MobileJSon.GetMember( "GeoLat", FALSE ).GetNumber();
+          ElemNeu._PINGGeoLon = MobileJSon.GetMember( "GeoLon", FALSE ).GetNumber();
+          ElemNeu._PINGGeoAccuracy = MobileJSon.GetMember( "GeoAccuracy", FALSE ).GetNumber();
+          ElemNeu._PINGGeoHeading = MobileJSon.GetMember( "GeoHeading", FALSE ).GetNumber();
+          ElemNeu._PINGGeoText = MobileJSon.GetMember( "GeoText", FALSE ).GetString();
+          ElemNeu._PINGGeoAltitude = MobileJSon.GetMember( "GeoAltitude", FALSE ).GetNumber();
+          ElemNeu._PINGFotoAnzahl = MobileJSon.GetMember( "FotoAnzahl", FALSE ).GetNumber().ToInt();
+          ElemNeu._PINGFotoPfad = MobileJSon.GetMember( "FotoPfad", FALSE ).GetString();
+          ElemNeu._PINGMobilErfasst = MobileJSon.GetMember( "MobilErfasst", FALSE ).GetBool();
+          ElemNeu._PINGMobilDatum.SetDateTime( MobileJSon.GetMember( "MobilDatum", FALSE ).GetString() );
+          ElemNeu._PINGMobilUser = MobileJSon.GetMember( "MobilUser", FALSE ).GetString();
+          ElemNeu._PINGNotiz = MobileJSon.GetMember( "Notiz", FALSE ).GetString();
+          ElemNeu._PINGInfo = MobileJSon.GetMember( "Info", FALSE ).GetString();
+        ENDIF
+
+        ElemNeu.Save();
+        Trace( strace + "CREATE Element: Pos %1", ElemNeu._Position );
+      ENDIF
+
+      j = j + 1;
+    ENDWHILE
+
+    i = i + 1;
+  ENDWHILE
+
+  JSon.Destruct();
+
+  MessageBox( "Import abgeschlossen.\n\nAnzahl Pakete: " + AnzPakete.ToStr(), MB_OK | MB_ICONINFORMATION );

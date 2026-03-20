@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getServerUrl, setServerUrl, checkConnectivity } from '../syncService';
+import { getDeviceId, getDeviceName, setDeviceName, getUserName, setUserName } from '../deviceIdentity';
 
 interface Props {
   onBack: () => void;
@@ -8,6 +9,9 @@ interface Props {
 export default function SyncSettings({ onBack }: Props) {
   const [url, setUrl] = useState(getServerUrl());
   const [status, setStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
+  const [userName, setUserNameLocal] = useState(getUserName());
+  const [deviceName, setDeviceNameLocal] = useState(getDeviceName());
+  const deviceId = getDeviceId();
 
   async function handleTest() {
     setServerUrl(url);
@@ -18,6 +22,8 @@ export default function SyncSettings({ onBack }: Props) {
 
   function handleSave() {
     setServerUrl(url);
+    setUserName(userName);
+    setDeviceName(deviceName);
     onBack();
   }
 
@@ -28,6 +34,7 @@ export default function SyncSettings({ onBack }: Props) {
         <h1 className="text-lg font-bold mt-1">Sync-Einstellungen</h1>
       </div>
       <div className="p-4 space-y-4">
+        {/* Server-URL */}
         <div>
           <label className="block text-sm font-medium text-ping-text mb-1">Server-URL</label>
           <input
@@ -48,8 +55,7 @@ export default function SyncSettings({ onBack }: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={!url}
-            className="flex-1 bg-ping-blue text-white py-2 px-4 rounded-lg font-medium disabled:opacity-50"
+            className="flex-1 bg-ping-blue text-white py-2 px-4 rounded-lg font-medium"
           >
             Speichern
           </button>
@@ -60,9 +66,36 @@ export default function SyncSettings({ onBack }: Props) {
         {status === 'error' && (
           <p className="text-red-500 text-sm font-medium">Verbindung fehlgeschlagen. URL prüfen.</p>
         )}
-        <div className="mt-6 p-3 bg-gray-50 rounded-lg text-xs text-gray-500 space-y-1">
+
+        {/* Benutzer + Gerät */}
+        <hr className="border-gray-200" />
+        <div>
+          <label className="block text-sm font-medium text-ping-text mb-1">Benutzer-Kürzel</label>
+          <input
+            type="text"
+            value={userName}
+            onChange={(e) => setUserNameLocal(e.target.value)}
+            placeholder="z.B. WEBE"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue"
+          />
+          <p className="text-xs text-gray-400 mt-1">Wird bei mobil erfassten Elementen als Bearbeiter gesetzt</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-ping-text mb-1">Gerätename</label>
+          <input
+            type="text"
+            value={deviceName}
+            onChange={(e) => setDeviceNameLocal(e.target.value)}
+            placeholder="z.B. Peters iPhone"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue"
+          />
+          <p className="text-xs text-gray-400 mt-1">Zur Unterscheidung bei mehreren Geräten</p>
+        </div>
+
+        {/* Device-ID */}
+        <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-500 space-y-1">
+          <p><strong>Geräte-ID:</strong> <code className="break-all">{deviceId}</code></p>
           <p><strong>Hinweis:</strong> Der Exchange-Server muss erreichbar sein (gleiches WLAN).</p>
-          <p>Format: <code>http://servername:8080</code></p>
         </div>
       </div>
     </div>

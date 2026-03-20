@@ -3,6 +3,8 @@ import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
 import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll } from '../db';
 import MapOverview from './map/MapOverview';
+import SyncIndicator from './SyncIndicator';
+import { useSyncStatus } from '../useSyncStatus';
 
 export interface UebersichtState {
   ansicht: 'alle' | 'einzeln' | 'karte';
@@ -31,6 +33,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
   const [filter, setFilter] = useState(initialState?.filter ?? '');
   const [statusFilter, setStatusFilter] = useState<number | null>(initialState?.statusFilter ?? null);
   const restoredProtId = useRef(initialState?.gewaehlteProtId ?? null);
+  const sync = useSyncStatus(gruppeId);
 
   // Refs für synchronen Zugriff auf aktuellen State (vermeidet Race Conditions)
   const ansichtRef = useRef(ansicht);
@@ -133,7 +136,8 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
       <div className="bg-ping-blue text-white p-3">
         <div className="flex items-center justify-between mb-1">
           <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-sm">&larr; Projekte</button>
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-2">
+            <SyncIndicator sync={sync} />
             <button
               onClick={() => setAnsicht('karte')}
               className="bg-ping-blue-dark hover:bg-ping-blue px-3 py-1 rounded-lg text-xs"
@@ -283,7 +287,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                         {st?.label || elem.Status}
                       </span>
                     </td>
-                    <td className="px-1 py-1.5 text-gray-500 whitespace-nowrap">
+                    <td className={`px-1 py-1.5 whitespace-nowrap ${elem.Termin && [0, 10].includes(elem.Status) && new Date(elem.Termin) < new Date(new Date().toDateString()) ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
                       {elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : '-'}
                     </td>
                     <td className="px-1 py-1.5 text-gray-400 hidden sm:table-cell truncate">
