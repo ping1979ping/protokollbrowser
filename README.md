@@ -1,4 +1,4 @@
-# Protokoll-App (PETTER INGENIEURE)
+# Protokoll-App
 
 Mobile PWA zur Protokollerfassung auf Baustellen mit DOCUframe-Anbindung.
 
