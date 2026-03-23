@@ -281,11 +281,19 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-white rounded-lg p-2.5 border border-gray-100">
               <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
-              <select value={thema}
-                onChange={(e) => setThema(e.target.value)}
+              <select value={themenVorschlaege.includes(thema) ? thema : (thema ? '__custom' : '')}
+                onChange={(e) => {
+                  if (e.target.value === '__custom') {
+                    const val = prompt('Neues Thema eingeben:', thema);
+                    if (val != null) setThema(val);
+                  } else {
+                    setThema(e.target.value);
+                  }
+                }}
                 className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
                 <option value="">(keins)</option>
                 {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
+                <option value="__custom">{thema && !themenVorschlaege.includes(thema) ? `✎ ${thema}` : '✎ Anderes...'}</option>
               </select>
             </div>
             <div className="bg-white rounded-lg p-2.5 border border-gray-100">
@@ -374,7 +382,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
               onClick={() => setAutoCapture(!autoCapture)}
               className={`relative w-10 h-5 rounded-full transition ${autoCapture ? 'bg-green-500' : 'bg-gray-300'}`}
             >
-              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoCapture ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoCapture ? 'translate-x-[1.35rem]' : 'translate-x-0.5'}`} />
             </button>
           </div>
 
