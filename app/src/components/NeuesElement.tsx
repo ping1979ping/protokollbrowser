@@ -83,6 +83,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   const [dirty, setDirty] = useState(false);
   const [showBtWizard, setShowBtWizard] = useState(!!isBautagebuch);
   const fotoRef = useRef<HTMLInputElement>(null);
+  const galerieRef = useRef<HTMLInputElement>(null);
 
   // Auto-GPS
   useEffect(() => {
@@ -143,11 +144,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
     })();
   }, []);
 
-  useEffect(() => {
-    if (!verantwFirmaOid && alleFirmen.length > 0) {
-      setVerantwFirmaOid(alleFirmen[0].Oid);
-    }
-  }, [firmen]);
+  // Kein Auto-Select der ersten Firma — Standard ist "(keine)"
 
   const alleFirmen = firmen.length > 0
     ? firmen.map(f => ({ Oid: f.ID, Name: f.Name }))
@@ -402,6 +399,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
           <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
           <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
             className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+            <option value="">(keine)</option>
             {alleFirmen.map(t => (
               <option key={t.Oid} value={t.Oid}>{t.Name}</option>
             ))}
@@ -455,9 +453,15 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
             <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({tempFotos.length})</label>
-            <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
-            <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple
-              onChange={(e) => { if (e.target.files) setTempFotos(prev => [...prev, ...Array.from(e.target.files!)]); }}
+            <div className="flex gap-1">
+              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
+              <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">Galerie</button>
+            </div>
+            <input ref={fotoRef} type="file" accept="image/*" capture="environment"
+              onChange={(e) => { if (e.target.files) { setTempFotos(prev => [...prev, ...Array.from(e.target.files!)]); fotoRef.current!.value = ''; } }}
+              className="hidden" />
+            <input ref={galerieRef} type="file" accept="image/*" multiple
+              onChange={(e) => { if (e.target.files) { setTempFotos(prev => [...prev, ...Array.from(e.target.files!)]); galerieRef.current!.value = ''; } }}
               className="hidden" />
           </div>
           {tempFotos.length > 0 && (

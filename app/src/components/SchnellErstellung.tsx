@@ -30,6 +30,12 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
   const [fotos, setFotos] = useState<File[]>([]);
   const [fotoUrls, setFotoUrls] = useState<string[]>([]);
   const fotoRef = useRef<HTMLInputElement>(null);
+  const galerieRef = useRef<HTMLInputElement>(null);
+  const [showGrid, setShowGrid] = useState(false);
+  const [autoCapture, setAutoCapture] = useState(true);
+
+  // GPS-Fallback (Fix 1)
+  const [deviceGps, setDeviceGps] = useState<{ lat: number; lon: number; acc: number } | null>(null);
 
   // Ergebnis
   const [erstellt, setErstellt] = useState(0);
@@ -47,6 +53,17 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
     return () => { fotoUrls.forEach(u => URL.revokeObjectURL(u)); };
   }, []);
 
+  // Device-GPS erfassen beim Betreten der Fotos-Phase (Fix 1)
+  useEffect(() => {
+    if (phase === 'fotos' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (p) => setDeviceGps({ lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy) }),
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+      );
+    }
+  }, [phase]);
+
   const alleFirmen = firmen.length > 0
     ? firmen.map(f => ({ Oid: f.ID, Name: f.Name }))
     : [
@@ -54,13 +71,25 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
         ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
       ];
 
-  function fotoHinzufuegen(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files) return;
+  function fotoHinzufuegenBase(files: FileList | null) {
+    if (!files || files.length === 0) return;
     const neueFiles = Array.from(files);
     setFotos(prev => [...prev, ...neueFiles]);
     setFotoUrls(prev => [...prev, ...neueFiles.map(f => URL.createObjectURL(f))]);
+  }
+
+  function fotoVonKamera(e: React.ChangeEvent<HTMLInputElement>) {
+    fotoHinzufuegenBase(e.target.files);
     if (fotoRef.current) fotoRef.current.value = '';
+    // Auto-Reopen Kamera (Fix 4)
+    if (autoCapture && e.target.files && e.target.files.length > 0) {
+      setTimeout(() => { fotoRef.current?.click(); }, 300);
+    }
+  }
+
+  function fotoAusGalerie(e: React.ChangeEvent<HTMLInputElement>) {
+    fotoHinzufuegenBase(e.target.files);
+    if (galerieRef.current) galerieRef.current.value = '';
   }
 
   function fotoEntfernen(index: number) {
@@ -97,7 +126,11 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
 
     for (let i = 0; i < fotos.length; i++) {
       const file = fotos[i];
-      const gps = await extractGpsFromImage(file);
+      const exifGps = await extractGpsFromImage(file);
+
+      // GPS-Fallback: EXIF > Device-GPS > null (Fix 1)
+      const finalGps = exifGps ?? (deviceGps ? { lat: deviceGps.lat, lon: deviceGps.lon } : null);
+      const accuracy = exifGps ? 10 : (deviceGps?.acc ?? null);
 
       const pos = `${Math.floor(maxPos) + 1 + i}`;
       const elemId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -125,10 +158,10 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
         Wert: 0,
         Verweise: [],
         MobileErfassung: {
-          GeoLat: gps?.lat ?? null,
-          GeoLon: gps?.lon ?? null,
-          GeoAccuracy: gps ? 10 : null, // EXIF hat keine Genauigkeitsangabe, Schätzwert
-          GeoText: gps ? `${gps.lat.toFixed(7)}, ${gps.lon.toFixed(7)} (EXIF)` : null,
+          GeoLat: finalGps?.lat ?? null,
+          GeoLon: finalGps?.lon ?? null,
+          GeoAccuracy: finalGps ? accuracy : null,
+          GeoText: finalGps ? `${finalGps.lat.toFixed(7)}, ${finalGps.lon.toFixed(7)} (${exifGps ? 'EXIF' : accuracy + ' m'})` : null,
           GeoHeading: null,
           GeoAltitude: null,
           Fotos: [{ FileName: fileName, RelativePath: `photos/${fileName}`, ZielPfad: '' }],
@@ -226,33 +259,74 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
       <div className="min-h-screen bg-ping-bg">
         <div className="bg-ping-blue text-white p-3">
           <button onClick={() => setPhase('einstellungen')} className="text-ping-blue-light hover:text-white text-xs">&larr; Einstellungen</button>
-          <h1 className="text-base font-bold mt-0.5">Fotos aufnehmen</h1>
+          <div className="flex items-center gap-2 mt-0.5">
+            <h1 className="text-base font-bold">Fotos aufnehmen</h1>
+            {/* GPS-Status-Indikator (Fix 1) */}
+            <span className={`w-2 h-2 rounded-full ${deviceGps ? 'bg-green-400' : 'bg-red-400'}`}
+              title={deviceGps ? `GPS: ${deviceGps.acc} m` : 'Kein GPS'} />
+          </div>
           <p className="text-xs text-ping-blue-light">{fotos.length} Foto{fotos.length !== 1 ? 's' : ''} aufgenommen</p>
         </div>
 
         <div className="p-3 space-y-3">
-          {/* Foto-Aufnahme Button */}
-          <button
-            onClick={() => fotoRef.current?.click()}
-            className="w-full py-6 rounded-xl bg-purple-600 text-white font-medium text-base hover:bg-purple-700 active:bg-purple-800 transition shadow-lg"
-          >
-            Foto aufnehmen
-          </button>
-          <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple
-            onChange={fotoHinzufuegen} className="hidden" />
+          {/* Kamera + Galerie Buttons (Fix 5) */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => fotoRef.current?.click()}
+              className="flex-1 py-6 rounded-xl bg-purple-600 text-white font-medium text-base hover:bg-purple-700 active:bg-purple-800 transition shadow-lg"
+            >
+              Foto aufnehmen
+            </button>
+            <button
+              onClick={() => galerieRef.current?.click()}
+              className="flex-1 py-6 rounded-xl bg-blue-600 text-white font-medium text-base hover:bg-blue-700 active:bg-blue-800 transition shadow-lg"
+            >
+              Aus Galerie
+            </button>
+          </div>
+          <input ref={fotoRef} type="file" accept="image/*" capture="environment"
+            onChange={fotoVonKamera} className="hidden" />
+          <input ref={galerieRef} type="file" accept="image/*" multiple
+            onChange={fotoAusGalerie} className="hidden" />
 
-          {/* Foto-Grid */}
+          {/* Auto-Capture Toggle (Fix 4) */}
+          <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-gray-100">
+            <span className="text-xs text-gray-600">Kamera automatisch erneut öffnen</span>
+            <button
+              onClick={() => setAutoCapture(!autoCapture)}
+              className={`relative w-10 h-5 rounded-full transition ${autoCapture ? 'bg-green-500' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoCapture ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          {/* Kompakte Foto-Anzeige (Fix 4) */}
           {fotos.length > 0 && (
-            <div className="grid grid-cols-4 gap-1.5">
-              {fotos.map((_, i) => (
-                <div key={i} className="relative aspect-square">
-                  <img src={fotoUrls[i]} alt="" className="w-full h-full object-cover rounded-lg" />
-                  <button onClick={() => fotoEntfernen(i)}
-                    className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow">
-                    ×
-                  </button>
+            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-bold text-purple-600">{fotos.length}</span>
+                <span className="text-sm text-gray-500">Fotos</span>
+                {fotoUrls.length > 0 && (
+                  <img src={fotoUrls[fotoUrls.length - 1]} alt="" className="w-10 h-10 rounded object-cover ml-auto" />
+                )}
+                <button onClick={() => setShowGrid(!showGrid)}
+                  className="text-xs text-ping-blue hover:underline">
+                  {showGrid ? 'Zuklappen' : 'Alle anzeigen'}
+                </button>
+              </div>
+              {showGrid && (
+                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                  {fotos.map((_, i) => (
+                    <div key={i} className="relative aspect-square">
+                      <img src={fotoUrls[i]} alt="" className="w-full h-full object-cover rounded-lg" />
+                      <button onClick={() => fotoEntfernen(i)}
+                        className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow">
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
 

@@ -49,11 +49,14 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   const [prevElem, setPrevElem] = useState<Protokollelement | null>(null);
   const [nextElem, setNextElem] = useState<Protokollelement | null>(null);
   const fotoRef = useRef<HTMLInputElement>(null);
+  const galerieRef = useRef<HTMLInputElement>(null);
   const [karteOffen, setKarteOffen] = useState(false);
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
   const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
   const [showWeitereStatus, setShowWeitereStatus] = useState(false);
   const [showBtWizard, setShowBtWizard] = useState(false);
+  const [showProtokollWahl, setShowProtokollWahl] = useState(false);
+  const [verschiebungsziele, setVerschiebungsziele] = useState<{ Id: string; Name: string; Nummer: number; _neu?: boolean }[]>([]);
 
   const istNeu = !!elem._neu;
   const istBautagebuch = elem.Thema === 'Bautagebuch';
@@ -70,6 +73,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
     ladenGeschwister();
     ladenFirmen();
     ladenThemen();
+    ladenVerschiebungsziele();
     return () => { fotos.forEach(f => f.url && URL.revokeObjectURL(f.url)); };
   }, [element.Id]);
 
@@ -118,6 +122,14 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
       }
     }
     setThemenVorschlaege([...themen].sort());
+  }
+
+  async function ladenVerschiebungsziele() {
+    const prots = await getProtokolleByGruppe(gruppe.Id);
+    const ziele = prots.filter(p =>
+      p.Id !== elem.ProtokollId && (p.Nummer < 0 || (p as any)._neu)
+    );
+    setVerschiebungsziele(ziele.map(p => ({ Id: p.Id, Name: p.Name, Nummer: p.Nummer, _neu: (p as any)._neu })));
   }
 
   const alleFirmen = firmen.length > 0
@@ -359,10 +371,12 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           {istNeu ? (
             <select value={elem.VerantwortlicherFirmaOid}
               onChange={(e) => {
-                const t = alleFirmen.find(t => t.Oid === e.target.value);
-                if (t) update({ VerantwortlicherFirmaOid: t.Oid, VerantwortlicherFirmaName: t.Name });
+                const v = e.target.value;
+                const t = alleFirmen.find(t => t.Oid === v);
+                update({ VerantwortlicherFirmaOid: t?.Oid || '', VerantwortlicherFirmaName: t?.Name || '' });
               }}
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+              <option value="">(keine)</option>
               {alleFirmen.map(t => (
                 <option key={t.Oid} value={t.Oid}>{t.Name}</option>
               ))}
@@ -413,8 +427,12 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <div className="flex items-center justify-between mb-1">
               <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
-              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
-              <input ref={fotoRef} type="file" accept="image/*" capture="environment" multiple onChange={fotoHinzufuegen} className="hidden" />
+              <div className="flex gap-1">
+                <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
+                <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">Galerie</button>
+              </div>
+              <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={fotoHinzufuegen} className="hidden" />
+              <input ref={galerieRef} type="file" accept="image/*" multiple onChange={fotoHinzufuegen} className="hidden" />
             </div>
             {fotos.length > 0 && (
               <div className="flex gap-1 flex-wrap">
@@ -474,6 +492,35 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           >
             Bautagebuch bearbeiten
           </button>
+        )}
+
+        {/* Verschieben in anderes Protokoll (nur neue Elemente) */}
+        {istNeu && verschiebungsziele.length > 0 && (
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <button
+              onClick={() => setShowProtokollWahl(!showProtokollWahl)}
+              className="w-full py-2.5 rounded-lg font-medium text-sm bg-indigo-600 text-white hover:bg-indigo-700 transition"
+            >
+              In anderes Protokoll verschieben
+            </button>
+            {showProtokollWahl && (
+              <div className="mt-2 space-y-1">
+                {verschiebungsziele.map(p => (
+                  <button key={p.Id}
+                    onClick={async () => {
+                      if (!confirm(`Punkt nach "${p.Name}" verschieben?`)) return;
+                      const updated = { ...elem, ProtokollId: p.Id, _geaendert: true as const };
+                      await updateElement(updated);
+                      onBack();
+                    }}
+                    className="w-full text-left px-3 py-2 rounded bg-gray-50 hover:bg-indigo-50 text-xs border border-gray-200"
+                  >
+                    {p.Name} {p.Nummer < 0 ? '(Anhang)' : p._neu ? '(Entwurf)' : `Nr. ${p.Nummer}`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Löschen (nur neue Elemente) */}
