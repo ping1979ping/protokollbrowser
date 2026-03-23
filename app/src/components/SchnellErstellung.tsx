@@ -380,9 +380,9 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
             <span className="text-xs text-gray-600">Kamera automatisch erneut öffnen</span>
             <button
               onClick={() => setAutoCapture(!autoCapture)}
-              className={`relative w-10 h-5 rounded-full transition ${autoCapture ? 'bg-green-500' : 'bg-gray-300'}`}
+              className={`relative inline-flex items-center w-10 h-5 rounded-full transition ${autoCapture ? 'bg-green-500' : 'bg-gray-300'}`}
             >
-              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoCapture ? 'translate-x-[1.35rem]' : 'translate-x-0.5'}`} />
+              <span className={`inline-block w-4 h-4 bg-white rounded-full shadow transition-transform ${autoCapture ? 'translate-x-[1.3rem]' : 'translate-x-0.5'}`} />
             </button>
           </div>
 

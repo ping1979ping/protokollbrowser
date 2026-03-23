@@ -454,9 +454,9 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
           </div>
           <button
             onClick={toggleAutoGps}
-            className={`relative w-10 h-5 rounded-full transition ${autoGps ? 'bg-green-500' : 'bg-gray-300'}`}
+            className={`relative inline-flex items-center w-10 h-5 rounded-full transition ${autoGps ? 'bg-green-500' : 'bg-gray-300'}`}
           >
-            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${autoGps ? 'translate-x-[1.35rem]' : 'translate-x-0.5'}`} />
+            <span className={`inline-block w-4 h-4 bg-white rounded-full shadow transition-transform ${autoGps ? 'translate-x-[1.3rem]' : 'translate-x-0.5'}`} />
           </button>
         </div>
 

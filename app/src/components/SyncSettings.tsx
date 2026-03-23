@@ -108,9 +108,9 @@ export default function SyncSettings({ onBack }: Props) {
           </div>
           <button
             onClick={toggleAutoBackup}
-            className={`relative w-11 h-6 rounded-full transition ${autoBackup ? 'bg-green-500' : 'bg-gray-300'}`}
+            className={`relative inline-flex items-center w-11 h-6 rounded-full transition ${autoBackup ? 'bg-green-500' : 'bg-gray-300'}`}
           >
-            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${autoBackup ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            <span className={`inline-block w-5 h-5 bg-white rounded-full shadow transition-transform ${autoBackup ? 'translate-x-[1.3rem]' : 'translate-x-0.5'}`} />
           </button>
         </div>
 
