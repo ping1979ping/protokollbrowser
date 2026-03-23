@@ -384,19 +384,16 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
           </div>
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
-            <select value={themenVorschlaege.includes(thema) ? thema : '__custom'}
-              onChange={(e) => {
-                if (e.target.value === '__custom') {
-                  const val = prompt('Neues Thema eingeben:', thema);
-                  if (val != null) setThema(val);
-                } else {
-                  setThema(e.target.value);
-                }
-              }}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-              {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
-              <option value="__custom">{thema && !themenVorschlaege.includes(thema) ? `✎ ${thema}` : '✎ Anderes...'}</option>
-            </select>
+            <div className="flex gap-1">
+              <select value={thema}
+                onChange={(e) => setThema(e.target.value)}
+                className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
+                {thema && !themenVorschlaege.includes(thema) && <option value={thema}>{thema}</option>}
+              </select>
+              <button onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) setThema(val); }}
+                className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
+            </div>
           </div>
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>

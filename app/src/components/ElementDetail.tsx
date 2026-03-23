@@ -354,19 +354,16 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
             {istNeu ? (
-              <select value={themenVorschlaege.includes(elem.Thema) ? elem.Thema : '__custom'}
-                onChange={(e) => {
-                  if (e.target.value === '__custom') {
-                    const val = prompt('Neues Thema eingeben:', elem.Thema);
-                    if (val != null) update({ Thema: val });
-                  } else {
-                    update({ Thema: e.target.value });
-                  }
-                }}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-                {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
-                <option value="__custom">{elem.Thema && !themenVorschlaege.includes(elem.Thema) ? `✎ ${elem.Thema}` : '✎ Anderes...'}</option>
-              </select>
+              <div className="flex gap-1">
+                <select value={elem.Thema}
+                  onChange={(e) => update({ Thema: e.target.value })}
+                  className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                  {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
+                  {elem.Thema && !themenVorschlaege.includes(elem.Thema) && <option value={elem.Thema}>{elem.Thema}</option>}
+                </select>
+                <button onClick={() => { const val = prompt('Neues Thema eingeben:', elem.Thema); if (val != null) update({ Thema: val }); }}
+                  className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
+              </div>
             ) : (
               <p className="text-xs text-gray-700">{elem.Thema || '—'}</p>
             )}
