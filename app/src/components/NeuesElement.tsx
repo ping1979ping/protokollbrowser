@@ -458,10 +458,10 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">Galerie</button>
             </div>
             <input ref={fotoRef} type="file" accept="image/*" capture="environment"
-              onChange={(e) => { if (e.target.files) { setTempFotos(prev => [...prev, ...Array.from(e.target.files!)]); fotoRef.current!.value = ''; } }}
+              onChange={(e) => { if (e.target.files) { const files = Array.from(e.target.files).map(f => new File([f], f.name, { type: f.type, lastModified: f.lastModified })); setTempFotos(prev => [...prev, ...files]); fotoRef.current!.value = ''; } }}
               className="hidden" />
             <input ref={galerieRef} type="file" accept="image/*" multiple
-              onChange={(e) => { if (e.target.files) { setTempFotos(prev => [...prev, ...Array.from(e.target.files!)]); galerieRef.current!.value = ''; } }}
+              onChange={(e) => { if (e.target.files) { const files = Array.from(e.target.files).map(f => new File([f], f.name, { type: f.type, lastModified: f.lastModified })); setTempFotos(prev => [...prev, ...files]); } }}
               className="hidden" />
           </div>
           {tempFotos.length > 0 && (

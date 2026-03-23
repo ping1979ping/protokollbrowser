@@ -4,6 +4,7 @@ import { STATUS_MAP } from '../types';
 import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
 import type { Verantwortlicher } from '../db';
 import { extractGpsFromImage } from '../exifGps';
+import MapEditorModal from './map/MapEditorModal';
 
 interface Props {
   protokoll: Protokoll;
@@ -34,8 +35,11 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
   const [showGrid, setShowGrid] = useState(false);
   const [autoCapture, setAutoCapture] = useState(true);
 
-  // GPS-Fallback (Fix 1)
+  // GPS-Fallback-Kette: Device-GPS > BBox-Ecke > Karten-Auswahl > null
   const [deviceGps, setDeviceGps] = useState<{ lat: number; lon: number; acc: number } | null>(null);
+  const [fallbackGps, setFallbackGps] = useState<{ lat: number; lon: number } | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'ermitteln' | 'device' | 'bbox' | 'manuell' | 'keins'>('ermitteln');
+  const [showMapPicker, setShowMapPicker] = useState(false);
 
   // Ergebnis
   const [erstellt, setErstellt] = useState(0);
@@ -53,14 +57,44 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
     return () => { fotoUrls.forEach(u => URL.revokeObjectURL(u)); };
   }, []);
 
-  // Device-GPS erfassen beim Betreten der Fotos-Phase (Fix 1)
+  // GPS-Fallback beim Betreten der Fotos-Phase
   useEffect(() => {
-    if (phase === 'fotos' && navigator.geolocation) {
+    if (phase !== 'fotos') return;
+    setGpsStatus('ermitteln');
+
+    let deviceErfolg = false;
+
+    // 1. Device-GPS versuchen
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (p) => setDeviceGps({ lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy) }),
-        () => {},
+        (p) => {
+          deviceErfolg = true;
+          setDeviceGps({ lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy) });
+          setGpsStatus('device');
+        },
+        () => { if (!deviceErfolg) fallbackAusBbox(); },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
       );
+    } else {
+      fallbackAusBbox();
+    }
+
+    // 2. BBox-Fallback aus existierenden Punkten
+    async function fallbackAusBbox() {
+      const prots = await getProtokolleByGruppe(gruppe.Id);
+      const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
+      const mitGps = alleElems.filter(e => e.MobileErfassung.GeoLat != null);
+      if (mitGps.length > 0) {
+        const lats = mitGps.map(e => e.MobileErfassung.GeoLat!);
+        const lons = mitGps.map(e => e.MobileErfassung.GeoLon!);
+        // Südost-Ecke der Bounding-Box als Startpunkt
+        setFallbackGps({ lat: Math.min(...lats), lon: Math.max(...lons) });
+        setGpsStatus('bbox');
+      } else {
+        // 3. Gar keine GPS-Daten → Karte anbieten
+        setGpsStatus('keins');
+        setShowMapPicker(true);
+      }
     }
   }, [phase]);
 
@@ -73,23 +107,25 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
 
   function fotoHinzufuegenBase(files: FileList | null) {
     if (!files || files.length === 0) return;
-    const neueFiles = Array.from(files);
+    // Files sofort klonen — iOS Safari invalidiert FileList nach input.value=''
+    const neueFiles = Array.from(files).map(f => new File([f], f.name, { type: f.type, lastModified: f.lastModified }));
     setFotos(prev => [...prev, ...neueFiles]);
     setFotoUrls(prev => [...prev, ...neueFiles.map(f => URL.createObjectURL(f))]);
   }
 
   function fotoVonKamera(e: React.ChangeEvent<HTMLInputElement>) {
+    const hatFiles = e.target.files && e.target.files.length > 0;
     fotoHinzufuegenBase(e.target.files);
     if (fotoRef.current) fotoRef.current.value = '';
-    // Auto-Reopen Kamera (Fix 4)
-    if (autoCapture && e.target.files && e.target.files.length > 0) {
+    // Auto-Reopen Kamera
+    if (autoCapture && hatFiles) {
       setTimeout(() => { fotoRef.current?.click(); }, 300);
     }
   }
 
   function fotoAusGalerie(e: React.ChangeEvent<HTMLInputElement>) {
     fotoHinzufuegenBase(e.target.files);
-    if (galerieRef.current) galerieRef.current.value = '';
+    // Kein input.value='' Reset — bei Galerie nicht nötig, verhindert iOS-Bug
   }
 
   function fotoEntfernen(index: number) {
@@ -128,9 +164,25 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
       const file = fotos[i];
       const exifGps = await extractGpsFromImage(file);
 
-      // GPS-Fallback: EXIF > Device-GPS > null (Fix 1)
-      const finalGps = exifGps ?? (deviceGps ? { lat: deviceGps.lat, lon: deviceGps.lon } : null);
-      const accuracy = exifGps ? 10 : (deviceGps?.acc ?? null);
+      // GPS-Fallback-Kette: EXIF > Device-GPS > BBox-Ecke mit Versatz > null
+      let finalLat: number | null = null;
+      let finalLon: number | null = null;
+      let accuracy: number | null = null;
+      let gpsSource = '';
+
+      if (exifGps) {
+        finalLat = exifGps.lat; finalLon = exifGps.lon;
+        accuracy = 10; gpsSource = 'EXIF';
+      } else if (deviceGps) {
+        finalLat = deviceGps.lat; finalLon = deviceGps.lon;
+        accuracy = deviceGps.acc; gpsSource = `${deviceGps.acc} m`;
+      } else if (fallbackGps) {
+        // ca. 0.000018° Breite ≈ 2m Versatz pro Punkt
+        const offset = 0.000018 * i;
+        finalLat = fallbackGps.lat - offset;
+        finalLon = fallbackGps.lon + offset;
+        accuracy = 50; gpsSource = 'geschätzt';
+      }
 
       const pos = `${Math.floor(maxPos) + 1 + i}`;
       const elemId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -158,10 +210,10 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
         Wert: 0,
         Verweise: [],
         MobileErfassung: {
-          GeoLat: finalGps?.lat ?? null,
-          GeoLon: finalGps?.lon ?? null,
-          GeoAccuracy: finalGps ? accuracy : null,
-          GeoText: finalGps ? `${finalGps.lat.toFixed(7)}, ${finalGps.lon.toFixed(7)} (${exifGps ? 'EXIF' : accuracy + ' m'})` : null,
+          GeoLat: finalLat,
+          GeoLon: finalLon,
+          GeoAccuracy: accuracy,
+          GeoText: finalLat != null ? `${finalLat.toFixed(7)}, ${finalLon!.toFixed(7)} (${gpsSource})` : null,
           GeoHeading: null,
           GeoAltitude: null,
           Fotos: [{ FileName: fileName, RelativePath: `photos/${fileName}`, ZielPfad: '' }],
@@ -176,6 +228,15 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
     setErstellt(count);
     setPhase('fertig');
   }
+
+  // GPS-Indikator: Farbe + Text
+  const gpsIndikator = {
+    ermitteln: { farbe: 'bg-yellow-400 animate-pulse', text: 'GPS wird ermittelt...' },
+    device:    { farbe: 'bg-green-400', text: `GPS: ${deviceGps?.acc ?? '?'} m` },
+    bbox:      { farbe: 'bg-amber-400', text: 'Position geschätzt (aus vorh. Punkten)' },
+    manuell:   { farbe: 'bg-amber-400', text: 'Manuell gewählt' },
+    keins:     { farbe: 'bg-red-400', text: 'Kein GPS' },
+  }[gpsStatus];
 
   // --- Phase: Einstellungen ---
   if (phase === 'einstellungen') {
@@ -261,15 +322,17 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           <button onClick={() => setPhase('einstellungen')} className="text-ping-blue-light hover:text-white text-xs">&larr; Einstellungen</button>
           <div className="flex items-center gap-2 mt-0.5">
             <h1 className="text-base font-bold">Fotos aufnehmen</h1>
-            {/* GPS-Status-Indikator (Fix 1) */}
-            <span className={`w-2 h-2 rounded-full ${deviceGps ? 'bg-green-400' : 'bg-red-400'}`}
-              title={deviceGps ? `GPS: ${deviceGps.acc} m` : 'Kein GPS'} />
+            {/* GPS-Status-Indikator */}
+            <span className={`w-2 h-2 rounded-full ${gpsIndikator.farbe}`}
+              title={gpsIndikator.text} />
           </div>
-          <p className="text-xs text-ping-blue-light">{fotos.length} Foto{fotos.length !== 1 ? 's' : ''} aufgenommen</p>
+          <p className="text-xs text-ping-blue-light">
+            {fotos.length} Foto{fotos.length !== 1 ? 's' : ''} — {gpsIndikator.text}
+          </p>
         </div>
 
         <div className="p-3 space-y-3">
-          {/* Kamera + Galerie Buttons (Fix 5) */}
+          {/* Kamera + Galerie Buttons */}
           <div className="flex gap-2">
             <button
               onClick={() => fotoRef.current?.click()}
@@ -289,7 +352,17 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           <input ref={galerieRef} type="file" accept="image/*" multiple
             onChange={fotoAusGalerie} className="hidden" />
 
-          {/* Auto-Capture Toggle (Fix 4) */}
+          {/* Kein GPS? Manuell per Karte wählen */}
+          {(gpsStatus === 'keins' || gpsStatus === 'bbox' || gpsStatus === 'manuell') && (
+            <button
+              onClick={() => setShowMapPicker(true)}
+              className="w-full py-2 rounded-lg text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition"
+            >
+              Startposition auf Karte wählen
+            </button>
+          )}
+
+          {/* Auto-Capture Toggle */}
           <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-gray-100">
             <span className="text-xs text-gray-600">Kamera automatisch erneut öffnen</span>
             <button
@@ -300,7 +373,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
             </button>
           </div>
 
-          {/* Kompakte Foto-Anzeige (Fix 4) */}
+          {/* Kompakte Foto-Anzeige */}
           {fotos.length > 0 && (
             <div className="bg-white rounded-lg p-2.5 border border-gray-100">
               <div className="flex items-center gap-3">
@@ -341,6 +414,21 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
             </button>
           )}
         </div>
+
+        {/* MapEditorModal für manuelle Startposition */}
+        {showMapPicker && (
+          <MapEditorModal
+            lat={fallbackGps?.lat ?? null}
+            lon={fallbackGps?.lon ?? null}
+            heading={null}
+            onSave={(lat, lon) => {
+              setFallbackGps({ lat, lon });
+              setGpsStatus('manuell');
+              setShowMapPicker(false);
+            }}
+            onCancel={() => setShowMapPicker(false)}
+          />
+        )}
       </div>
     );
   }

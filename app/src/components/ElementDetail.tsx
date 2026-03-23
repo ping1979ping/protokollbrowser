@@ -185,7 +185,9 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   async function fotoHinzufuegen(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files) return;
-    for (const file of Array.from(files)) {
+    // Files sofort klonen — iOS Safari invalidiert FileList nach input.value=''
+    const geklont = Array.from(files).map(f => new File([f], f.name, { type: f.type, lastModified: f.lastModified }));
+    for (const file of geklont) {
       const fotoId = `foto-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const fileName = `PE-${elem.Id.replace(/[^a-zA-Z0-9]/g, '')}_${String(fotos.length + 1).padStart(3, '0')}.jpg`;
       await saveFoto(fotoId, elem.Id, file, fileName);
