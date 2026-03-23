@@ -85,19 +85,42 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   const fotoRef = useRef<HTMLInputElement>(null);
   const galerieRef = useRef<HTMLInputElement>(null);
 
-  // Auto-GPS
+  // Auto-GPS mit BBox-Fallback
   useEffect(() => {
-    if (autoGps && !clone && geoLat == null && protokoll.Nummer >= 0 && navigator.geolocation) {
+    if (!autoGps || clone || geoLat != null || protokoll.Nummer < 0) return;
+
+    let deviceErfolg = false;
+
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (p) => {
+          deviceErfolg = true;
           const lat = p.coords.latitude, lon = p.coords.longitude;
           const acc = Math.round(p.coords.accuracy);
           setGeoLat(lat); setGeoLon(lon); setGeoAcc(acc);
           setGeoText(`${lat.toFixed(7)}, ${lon.toFixed(7)} (${acc} m)`);
         },
-        () => {},
+        () => { if (!deviceErfolg) fallbackAusBbox(); },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
       );
+    } else {
+      fallbackAusBbox();
+    }
+
+    async function fallbackAusBbox() {
+      const prots = await getProtokolleByGruppe(gruppe.Id);
+      const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
+      const mitGps = alleElems.filter(e => e.MobileErfassung.GeoLat != null);
+      if (mitGps.length > 0) {
+        const lats = mitGps.map(e => e.MobileErfassung.GeoLat!);
+        const lons = mitGps.map(e => e.MobileErfassung.GeoLon!);
+        const lat = Math.min(...lats);
+        const lon = Math.max(...lons);
+        // Kleiner Versatz basierend auf Anzahl existierender Punkte
+        const offset = 0.000018 * mitGps.length;
+        setGeoLat(lat - offset); setGeoLon(lon + offset); setGeoAcc(50);
+        setGeoText(`${(lat - offset).toFixed(7)}, ${(lon + offset).toFixed(7)} (geschätzt)`);
+      }
     }
   }, []);
 
