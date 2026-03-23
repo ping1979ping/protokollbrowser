@@ -185,16 +185,32 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   async function fotoHinzufuegen(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files) return;
-    // Files sofort klonen — iOS Safari invalidiert FileList nach input.value=''
-    const geklont = Array.from(files).map(f => new File([f], f.name, { type: f.type, lastModified: f.lastModified }));
-    for (const file of geklont) {
+    // Files mit arrayBuffer() einlesen — iOS Safari invalidiert FileList-Referenzen
+    const geklont: File[] = [];
+    for (const f of Array.from(files)) {
+      const buf = await f.arrayBuffer();
+      geklont.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified }));
+    }
+    // Einheitliche Bild-Benennung: [ProjektNr]_[Gruppe]_[Position]_Bild_[Nr].jpg
+    const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, '_').replace(/_+/g, '_');
+    const neueFotoNamen: string[] = [];
+    for (let idx = 0; idx < geklont.length; idx++) {
+      const file = geklont[idx];
       const fotoId = `foto-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const fileName = `PE-${elem.Id.replace(/[^a-zA-Z0-9]/g, '')}_${String(fotos.length + 1).padStart(3, '0')}.jpg`;
+      const bildNr = fotos.length + idx + 1;
+      const fileName = `${gruppe.Protokollnummer}_${sanitize(gruppe.Name)}_${elem.Position}_Bild_${bildNr}.jpg`;
       await saveFoto(fotoId, elem.Id, file, fileName);
+      neueFotoNamen.push(fileName);
     }
     await ladenFotos();
     const aktFotos = await getFotos(elem.Id);
     updateMobile({ Fotos: aktFotos.map(f => ({ FileName: f.fileName, RelativePath: `photos/${f.fileName}`, ZielPfad: '' })) });
+    // Bildnamen in Bemerkung anfügen
+    if (neueFotoNamen.length > 0) {
+      const bilderText = `{Bilder: ${neueFotoNamen.join(', ')}}`;
+      const aktBemerkung = elem.Bemerkung?.trim() || '';
+      update({ Bemerkung: aktBemerkung ? `${aktBemerkung} ${bilderText}` : bilderText });
+    }
     if (fotoRef.current) fotoRef.current.value = '';
   }
 
@@ -378,7 +394,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
                 update({ VerantwortlicherFirmaOid: t?.Oid || '', VerantwortlicherFirmaName: t?.Name || '' });
               }}
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-              <option value="">(keine)</option>
+              <option value=""></option>
               {alleFirmen.map(t => (
                 <option key={t.Oid} value={t.Oid}>{t.Name}</option>
               ))}

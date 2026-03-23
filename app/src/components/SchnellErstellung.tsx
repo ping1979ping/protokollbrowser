@@ -105,17 +105,22 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
         ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
       ];
 
-  function fotoHinzufuegenBase(files: FileList | null) {
+  // Files einlesen: arrayBuffer() liest die echten Binärdaten,
+  // bevor iOS Safari die FileList-Referenzen invalidieren kann
+  async function fotoHinzufuegenBase(files: FileList | null) {
     if (!files || files.length === 0) return;
-    // Files sofort klonen — iOS Safari invalidiert FileList nach input.value=''
-    const neueFiles = Array.from(files).map(f => new File([f], f.name, { type: f.type, lastModified: f.lastModified }));
+    const neueFiles: File[] = [];
+    for (const f of Array.from(files)) {
+      const buf = await f.arrayBuffer();
+      neueFiles.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified }));
+    }
     setFotos(prev => [...prev, ...neueFiles]);
     setFotoUrls(prev => [...prev, ...neueFiles.map(f => URL.createObjectURL(f))]);
   }
 
-  function fotoVonKamera(e: React.ChangeEvent<HTMLInputElement>) {
+  async function fotoVonKamera(e: React.ChangeEvent<HTMLInputElement>) {
     const hatFiles = e.target.files && e.target.files.length > 0;
-    fotoHinzufuegenBase(e.target.files);
+    await fotoHinzufuegenBase(e.target.files);
     if (fotoRef.current) fotoRef.current.value = '';
     // Auto-Reopen Kamera
     if (autoCapture && hatFiles) {
@@ -123,9 +128,8 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
     }
   }
 
-  function fotoAusGalerie(e: React.ChangeEvent<HTMLInputElement>) {
-    fotoHinzufuegenBase(e.target.files);
-    // Kein input.value='' Reset — bei Galerie nicht nötig, verhindert iOS-Bug
+  async function fotoAusGalerie(e: React.ChangeEvent<HTMLInputElement>) {
+    await fotoHinzufuegenBase(e.target.files);
   }
 
   function fotoEntfernen(index: number) {
@@ -187,9 +191,10 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
       const pos = `${Math.floor(maxPos) + 1 + i}`;
       const elemId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-      // Foto speichern
+      // Foto speichern — einheitliche Benennung: [ProjektNr]_[Gruppe]_[Position]_Bild_[Nr].jpg
       const fotoId = `foto-${Date.now()}-${i}`;
-      const fileName = `PE-${elemId.replace(/[^a-zA-Z0-9]/g, '')}_001.jpg`;
+      const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, '_').replace(/_+/g, '_');
+      const fileName = `${gruppe.Protokollnummer}_${sanitize(gruppe.Name)}_${pos}_Bild_1.jpg`;
       await saveFoto(fotoId, elemId, file, fileName);
 
       const text = positionstext.trim() || file.name.replace(/\.[^.]+$/, '');
@@ -205,7 +210,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
         Termin: termin ? termin + 'T00:00:00' : '',
         VerantwortlicherFirmaOid: verantw?.Oid || '',
         VerantwortlicherFirmaName: verantw?.Name || '',
-        Bemerkung: '',
+        Bemerkung: `{Bilder: ${fileName}}`,
         Erinnerung: false,
         Wert: 0,
         Verweise: [],
@@ -295,7 +300,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
             <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-              <option value="">(keine)</option>
+              <option value=""></option>
               {alleFirmen.map(t => (
                 <option key={t.Oid} value={t.Oid}>{t.Name}</option>
               ))}

@@ -203,12 +203,23 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
     const verantw = alleFirmen.find(t => t.Oid === verantwFirmaOid);
     const elemId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+    // Einheitliche Bild-Benennung: [ProjektNr]_[Gruppe]_[Position]_Bild_[Nr].jpg
+    const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, '_').replace(/_+/g, '_');
     const fotoRefs = [];
+    const fotoNamen: string[] = [];
     for (let i = 0; i < tempFotos.length; i++) {
       const fotoId = `foto-${Date.now()}-${i}`;
-      const fileName = `PE-${elemId.replace(/[^a-zA-Z0-9]/g, '')}_${String(i + 1).padStart(3, '0')}.jpg`;
+      const fileName = `${gruppe.Protokollnummer}_${sanitize(gruppe.Name)}_${pos}_Bild_${i + 1}.jpg`;
       await saveFoto(fotoId, elemId, tempFotos[i], fileName);
       fotoRefs.push({ FileName: fileName, RelativePath: `photos/${fileName}`, ZielPfad: '' });
+      fotoNamen.push(fileName);
+    }
+
+    // Bildnamen in Bemerkung anfügen
+    let finalBemerkung = bemerkung;
+    if (fotoNamen.length > 0) {
+      const bilderText = `{Bilder: ${fotoNamen.join(', ')}}`;
+      finalBemerkung = finalBemerkung.trim() ? `${finalBemerkung.trim()} ${bilderText}` : bilderText;
     }
 
     const verweise: string[] = vorgaenger ? [vorgaenger.Id] : [];
@@ -224,7 +235,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
       Termin: termin ? termin + 'T00:00:00' : '',
       VerantwortlicherFirmaOid: verantw?.Oid || '',
       VerantwortlicherFirmaName: verantw?.Name || '',
-      Bemerkung: bemerkung,
+      Bemerkung: finalBemerkung,
       Erinnerung: false,
       Wert: 0,
       Verweise: verweise,
@@ -399,7 +410,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
           <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
           <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
             className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-            <option value="">(keine)</option>
+            <option value=""></option>
             {alleFirmen.map(t => (
               <option key={t.Oid} value={t.Oid}>{t.Name}</option>
             ))}
@@ -458,10 +469,10 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">Galerie</button>
             </div>
             <input ref={fotoRef} type="file" accept="image/*" capture="environment"
-              onChange={(e) => { if (e.target.files) { const files = Array.from(e.target.files).map(f => new File([f], f.name, { type: f.type, lastModified: f.lastModified })); setTempFotos(prev => [...prev, ...files]); fotoRef.current!.value = ''; } }}
+              onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); fotoRef.current!.value = ''; } }}
               className="hidden" />
             <input ref={galerieRef} type="file" accept="image/*" multiple
-              onChange={(e) => { if (e.target.files) { const files = Array.from(e.target.files).map(f => new File([f], f.name, { type: f.type, lastModified: f.lastModified })); setTempFotos(prev => [...prev, ...files]); } }}
+              onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); } }}
               className="hidden" />
           </div>
           {tempFotos.length > 0 && (
