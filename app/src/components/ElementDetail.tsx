@@ -227,26 +227,29 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
     <div className="min-h-screen bg-ping-bg" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
       {/* Header */}
       <div className="bg-ping-blue text-white p-3">
-        <div className="flex items-center justify-between">
+        {/* Zeile 1: Vorh. | Übersicht | Nächst. — alle gleich breit */}
+        <div className="flex gap-1.5">
           <button onClick={() => prevElem && !dirty && onNavigate(prevElem)} disabled={!prevElem || dirty}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium ${prevElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
+            className={`flex-1 py-2 rounded-lg text-xs font-medium text-center ${prevElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
             &larr; Vorh.
           </button>
-          <div className="text-center">
-            <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Übersicht</button>
-            <p className="text-[10px] text-ping-blue-light/70 mt-0.5">{protokoll.Name}</p>
-            <div className="flex items-center gap-2 justify-center mt-0.5">
-              <span className="text-xs text-ping-blue-light">Pos. {elem.Position}</span>
-              {st && <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${st.css}`}>{st.label}</span>}
-            </div>
-          </div>
+          <button onClick={onBack}
+            className="flex-1 py-2 rounded-lg text-xs font-medium text-center bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue">
+            &uarr; Übersicht
+          </button>
           <button onClick={() => nextElem && !dirty && onNavigate(nextElem)} disabled={!nextElem || dirty}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium ${nextElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
+            className={`flex-1 py-2 rounded-lg text-xs font-medium text-center ${nextElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
             Nächst. &rarr;
           </button>
         </div>
-        {!istNeu && <p className="text-xs text-ping-blue-light text-center mt-1">Nur Status änderbar</p>}
-        {istNeu && <p className="text-xs text-green-300 text-center mt-1">&#9998; Neues Element — editierbar</p>}
+        {/* Zeile 2: Status | Pos. | Protokollname */}
+        <div className="flex items-center gap-2 mt-1.5">
+          {st && <span className={`px-2 py-0.5 rounded text-[10px] font-medium w-20 text-center shrink-0 ${st.css}`}>{st.label}</span>}
+          <span className="text-xs text-ping-blue-light">Pos. {elem.Position}</span>
+          <span className="text-[10px] text-ping-blue-light/70 truncate">{protokoll.Name}</span>
+        </div>
+        {!istNeu && <p className="text-xs text-ping-blue-light mt-1">Nur Status änderbar</p>}
+        {istNeu && <p className="text-xs text-green-300 mt-1">&#9998; Neues Element — editierbar</p>}
       </div>
 
       {/* Buttons direkt unter Header */}
