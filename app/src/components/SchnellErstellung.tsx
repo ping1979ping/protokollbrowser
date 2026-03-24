@@ -247,28 +247,28 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
   if (phase === 'einstellungen') {
     return (
       <div className="min-h-screen bg-ping-bg">
-        <div className="bg-ping-blue text-white p-3">
-          <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Übersicht</button>
-          <h1 className="text-base font-bold mt-0.5">Schnellerstellung</h1>
-          <p className="text-xs text-ping-blue-light">Voreinstellungen für Foto-Batch</p>
+        <div className="bg-ping-blue text-white p-4">
+          <button onClick={onBack} className="text-ping-blue-light hover:text-white text-sm">&larr; Übersicht</button>
+          <h1 className="text-lg font-bold mt-0.5">Schnellerstellung</h1>
+          <p className="text-sm text-ping-blue-light">Voreinstellungen für Foto-Batch</p>
         </div>
 
-        <div className="p-3 space-y-2.5">
+        <div className="p-4 space-y-3.5">
           {/* Positionstext */}
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Positionstext (optional)</label>
+          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+            <label className="text-sm text-gray-600 font-medium block mb-1">Positionstext (optional)</label>
             <textarea value={positionstext} onChange={(e) => setPositionstext(e.target.value)} rows={3}
               placeholder="Wird für alle Punkte übernommen. Leer = Dateiname."
-              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
           </div>
 
           {/* Status */}
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase mb-1.5 block">Status</label>
-            <div className="flex gap-1 flex-wrap">
+          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+            <label className="text-sm text-gray-600 font-medium mb-1.5 block">Status</label>
+            <div className="flex gap-2 flex-wrap">
               {HAUPT_STATUS.map(s => (
                 <button key={s} onClick={() => setStatus(s)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                  className={`px-3 py-2 rounded text-sm font-medium transition ${
                     status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
                   }`}>
                   {STATUS_MAP[s].label}
@@ -279,32 +279,32 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
 
           {/* Thema / Termin */}
           <div className="grid grid-cols-2 gap-2">
-            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-              <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
-              <div className="flex gap-1">
+            <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+              <label className="text-sm text-gray-600 font-medium block mb-1">Thema</label>
+              <div className="flex gap-2">
                 <select value={thema}
                   onChange={(e) => setThema(e.target.value)}
-                  className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                  className="flex-1 min-w-0 px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue">
                   <option value="">(keins)</option>
                   {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
                   {thema && !themenVorschlaege.includes(thema) && <option value={thema}>{thema}</option>}
                 </select>
                 <button onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) setThema(val); }}
-                  className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
+                  className="px-3 py-2 bg-ping-blue text-white rounded text-sm font-bold shrink-0" title="Neues Thema">+</button>
               </div>
             </div>
-            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-              <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
+            <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+              <label className="text-sm text-gray-600 font-medium block mb-1">Termin</label>
               <input type="date" value={termin} onChange={(e) => setTermin(e.target.value)}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue" />
             </div>
           </div>
 
           {/* Verantwortlich */}
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
+          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+            <label className="text-sm text-gray-600 font-medium block mb-1">Verantwortlich</label>
             <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue">
               <option value=""></option>
               {alleFirmen.map(t => (
                 <option key={t.Oid} value={t.Oid}>{t.Name}</option>
@@ -315,7 +315,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           {/* Weiter-Button */}
           <button
             onClick={() => setPhase('fotos')}
-            className="w-full py-3 rounded-lg font-medium text-white text-sm bg-green-600 hover:bg-green-700 transition"
+            className="w-full py-4 rounded-lg font-medium text-white text-base bg-green-600 hover:bg-green-700 transition"
           >
             Fotos aufnehmen &rarr;
           </button>
@@ -328,20 +328,20 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
   if (phase === 'fotos') {
     return (
       <div className="min-h-screen bg-ping-bg">
-        <div className="bg-ping-blue text-white p-3">
-          <button onClick={() => setPhase('einstellungen')} className="text-ping-blue-light hover:text-white text-xs">&larr; Einstellungen</button>
+        <div className="bg-ping-blue text-white p-4">
+          <button onClick={() => setPhase('einstellungen')} className="text-ping-blue-light hover:text-white text-sm">&larr; Einstellungen</button>
           <div className="flex items-center gap-2 mt-0.5">
-            <h1 className="text-base font-bold">Fotos aufnehmen</h1>
+            <h1 className="text-lg font-bold">Fotos aufnehmen</h1>
             {/* GPS-Status-Indikator */}
             <span className={`w-2 h-2 rounded-full ${gpsIndikator.farbe}`}
               title={gpsIndikator.text} />
           </div>
-          <p className="text-xs text-ping-blue-light">
+          <p className="text-sm text-ping-blue-light">
             {fotos.length} Foto{fotos.length !== 1 ? 's' : ''} — {gpsIndikator.text}
           </p>
         </div>
 
-        <div className="p-3 space-y-3">
+        <div className="p-4 space-y-4">
           {/* Kamera + Galerie Buttons */}
           <div className="flex gap-2">
             <button
@@ -366,18 +366,18 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           {(gpsStatus === 'keins' || gpsStatus === 'bbox' || gpsStatus === 'manuell') && (
             <button
               onClick={() => setShowMapPicker(true)}
-              className="w-full py-2 rounded-lg text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition"
+              className="w-full py-3.5 rounded-lg text-sm font-medium bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition"
             >
               Startposition auf Karte wählen
             </button>
           )}
 
           {/* Auto-Capture Toggle */}
-          <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-gray-100">
-            <span className="text-xs text-gray-600">Kamera automatisch erneut öffnen</span>
+          <div className="flex items-center justify-between bg-white rounded-lg p-3.5 border border-gray-200">
+            <span className="text-base text-gray-600">Kamera automatisch erneut öffnen</span>
             <button
               onClick={() => setAutoCapture(!autoCapture)}
-              className={`relative inline-flex items-center w-10 h-5 rounded-full transition ${autoCapture ? 'bg-green-500' : 'bg-gray-300'}`}
+              className={`relative inline-flex items-center w-10 h-5 rounded-full transition ${autoCapture ? 'bg-green-500' : 'bg-gray-500'}`}
             >
               <span className={`inline-block w-4 h-4 bg-white rounded-full shadow transition-transform ${autoCapture ? 'translate-x-[1.3rem]' : 'translate-x-0.5'}`} />
             </button>
@@ -385,25 +385,25 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
 
           {/* Kompakte Foto-Anzeige */}
           {fotos.length > 0 && (
-            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <div className="bg-white rounded-lg p-3.5 border border-gray-200">
               <div className="flex items-center gap-3">
                 <span className="text-2xl font-bold text-purple-600">{fotos.length}</span>
-                <span className="text-sm text-gray-500">Fotos</span>
+                <span className="text-base text-gray-500">Fotos</span>
                 {fotoUrls.length > 0 && (
                   <img src={fotoUrls[fotoUrls.length - 1]} alt="" className="w-10 h-10 rounded object-cover ml-auto" />
                 )}
                 <button onClick={() => setShowGrid(!showGrid)}
-                  className="text-xs text-ping-blue hover:underline">
+                  className="text-sm text-ping-blue hover:underline">
                   {showGrid ? 'Zuklappen' : 'Alle anzeigen'}
                 </button>
               </div>
               {showGrid && (
-                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                <div className="grid grid-cols-4 gap-2 mt-2">
                   {fotos.map((_, i) => (
                     <div key={i} className="relative aspect-square">
                       <img src={fotoUrls[i]} alt="" className="w-full h-full object-cover rounded-lg" />
                       <button onClick={() => fotoEntfernen(i)}
-                        className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow">
+                        className="absolute -top-1 -right-1 bg-red-500 text-white w-8 h-8 rounded-full text-sm flex items-center justify-center shadow">
                         ×
                       </button>
                     </div>
@@ -418,7 +418,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
             <button
               onClick={abschliessen}
               disabled={verarbeitet}
-              className="w-full py-3 rounded-lg font-medium text-white text-sm bg-green-600 hover:bg-green-700 transition disabled:opacity-50"
+              className="w-full py-4 rounded-lg font-medium text-white text-base bg-green-600 hover:bg-green-700 transition disabled:opacity-50"
             >
               {verarbeitet ? 'Wird erstellt...' : `Abschließen (${fotos.length} Punkte erstellen)`}
             </button>
@@ -449,12 +449,12 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
       <div className="bg-white rounded-xl p-6 shadow-lg text-center max-w-sm mx-4">
         <div className="text-4xl mb-3 text-green-600">&#10003;</div>
         <h2 className="text-lg font-bold text-gray-800 mb-1">{erstellt} Punkte erstellt</h2>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-base text-gray-500 mb-4">
           Alle Fotos wurden als neue Protokollpunkte angelegt.
         </p>
         <button
           onClick={onDone}
-          className="w-full py-2.5 rounded-lg font-medium text-white text-sm bg-ping-blue hover:bg-ping-blue-dark transition"
+          className="w-full py-3.5 rounded-lg font-medium text-white text-base bg-ping-blue hover:bg-ping-blue-dark transition"
         >
           Zur Übersicht
         </button>

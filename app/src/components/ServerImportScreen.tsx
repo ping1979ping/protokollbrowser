@@ -95,39 +95,39 @@ export default function ServerImportScreen({ onImported, onZurueck, onSettings }
     <div className="min-h-screen bg-ping-bg">
       <div className="bg-ping-blue text-white p-4">
         <div className="flex items-center justify-between mb-1">
-          <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-sm">&larr; Zurück</button>
-          <button onClick={onSettings} className="text-ping-blue-light hover:text-white text-sm">Einstellungen</button>
+          <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-base">&larr; Zurück</button>
+          <button onClick={onSettings} className="text-ping-blue-light hover:text-white text-base">Einstellungen</button>
         </div>
         <h1 className="text-lg font-bold mt-1">Vom Server laden</h1>
-        <p className="text-ping-blue-light text-xs mt-0.5">{serverUrl || 'Kein Server'}</p>
+        <p className="text-ping-blue-light text-sm mt-0.5">{serverUrl || 'Kein Server'}</p>
       </div>
-      <div className="p-3 space-y-2">
+      <div className="p-4 space-y-3">
         {loading && (
-          <p className="text-center text-ping-text-light py-8">Verbinde mit Server...</p>
+          <p className="text-center text-ping-text-light py-8 text-base">Verbinde mit Server...</p>
         )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-            <p className="text-red-600 text-sm font-medium">{error}</p>
+            <p className="text-red-600 text-base font-medium">{error}</p>
             <div className="flex gap-2 justify-center mt-3">
-              <button onClick={loadProjects} className="text-ping-blue text-sm font-medium">Nochmal versuchen</button>
-              <button onClick={onSettings} className="text-ping-blue text-sm font-medium">Server konfigurieren</button>
+              <button onClick={loadProjects} className="text-ping-blue text-base font-medium px-3 py-2">Nochmal versuchen</button>
+              <button onClick={onSettings} className="text-ping-blue text-base font-medium px-3 py-2">Server konfigurieren</button>
             </div>
           </div>
         )}
 
         {!loading && !error && projekte.length === 0 && (
-          <p className="text-center text-ping-text-light py-8">Keine Projekte auf dem Server.</p>
+          <p className="text-center text-ping-text-light py-8 text-base">Keine Projekte auf dem Server.</p>
         )}
 
         {!loading && !error && projekte.length > 0 && (
           <>
-            <p className="text-xs text-ping-text-light px-1">Projekte auswählen und abonnieren:</p>
+            <p className="text-sm text-ping-text-light px-1">Projekte auswählen und abonnieren:</p>
             {projekte.map(p => (
               <label
                 key={p.id}
                 className={`flex items-start gap-3 bg-white rounded-xl shadow-sm border p-4 cursor-pointer transition ${
-                  selected.has(p.id) ? 'border-ping-blue ring-1 ring-ping-blue' : 'border-gray-100'
+                  selected.has(p.id) ? 'border-ping-blue ring-1 ring-ping-blue' : 'border-gray-200'
                 }`}
               >
                 <input
@@ -135,13 +135,13 @@ export default function ServerImportScreen({ onImported, onZurueck, onSettings }
                   checked={selected.has(p.id)}
                   onChange={() => toggleProject(p.id)}
                   disabled={downloading}
-                  className="mt-0.5 w-5 h-5 rounded border-gray-300 text-ping-blue focus:ring-ping-blue flex-shrink-0"
+                  className="mt-0.5 w-5 h-5 rounded border-gray-500 text-ping-blue focus:ring-ping-blue flex-shrink-0"
                 />
                 <div className="min-w-0">
-                  <p className="font-medium text-ping-text">{p.projektName || p.id}</p>
-                  {p.gruppeName && <p className="text-sm text-ping-text-mid mt-0.5">{p.gruppeName}</p>}
+                  <p className="font-medium text-ping-text text-base">{p.projektName || p.id}</p>
+                  {p.gruppeName && <p className="text-base text-ping-text-mid mt-0.5">{p.gruppeName}</p>}
                   {p.timestamp && (
-                    <p className="text-xs text-ping-text-light mt-0.5">
+                    <p className="text-sm text-ping-text-light mt-0.5">
                       Export: {p.timestamp}
                     </p>
                   )}
@@ -152,7 +152,7 @@ export default function ServerImportScreen({ onImported, onZurueck, onSettings }
             <button
               onClick={handleSubscribeAndLoad}
               disabled={downloading || selected.size === 0}
-              className="w-full bg-ping-blue text-white py-3 rounded-xl font-medium disabled:opacity-50 mt-2"
+              className="w-full bg-ping-blue text-white py-4 rounded-xl font-medium disabled:opacity-50 mt-2 text-base"
             >
               {downloading
                 ? progress

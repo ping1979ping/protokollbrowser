@@ -246,51 +246,51 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
     <div className="fixed inset-0 bg-black/30 z-50 flex items-stretch justify-center p-2">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col">
         {/* Header */}
-        <div className="bg-ping-blue text-white p-3 rounded-t-xl shrink-0">
-          <h2 className="text-base font-bold">Bautagebuch-Eintrag</h2>
-          <p className="text-ping-blue-light text-xs">{existingElement ? 'Bearbeiten' : 'Neuer Eintrag'}</p>
+        <div className="bg-ping-blue text-white p-3.5 rounded-t-xl shrink-0">
+          <h2 className="text-lg font-bold">Bautagebuch-Eintrag</h2>
+          <p className="text-ping-blue-light text-sm">{existingElement ? 'Bearbeiten' : 'Neuer Eintrag'}</p>
         </div>
 
         {/* Scrollbarer Inhalt */}
-        <div className="p-3 space-y-3 flex-1 overflow-auto min-h-0">
+        <div className="p-3.5 space-y-3.5 flex-1 overflow-auto min-h-0">
           {/* Datum */}
-          <div className="bg-gray-50 rounded-lg p-2.5">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Datum</label>
+          <div className="bg-gray-50 rounded-lg p-3.5">
+            <label className="text-sm text-gray-600 font-medium block mb-1">Datum</label>
             <input
               type="date"
               value={datum}
               onChange={(e) => setDatum(e.target.value)}
-              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue"
             />
           </div>
 
           {/* Wetter */}
-          <div className="bg-gray-50 rounded-lg p-2.5">
-            <div className="flex items-center justify-between mb-0.5">
-              <label className="text-[10px] text-gray-400 font-medium uppercase">Wetter</label>
-              {wetterLaedt && <span className="text-[10px] text-ping-blue">Laden...</span>}
-              {!wetterLaedt && wetterGeladen && <span className="text-[10px] text-green-600">API</span>}
+          <div className="bg-gray-50 rounded-lg p-3.5">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm text-gray-600 font-medium">Wetter</label>
+              {wetterLaedt && <span className="text-sm text-ping-blue">Laden...</span>}
+              {!wetterLaedt && wetterGeladen && <span className="text-sm text-green-600">API</span>}
             </div>
             <input
               type="text"
               value={wetter}
               onChange={(e) => setWetter(e.target.value)}
               placeholder={geoLat == null ? 'Kein GPS — Wetter manuell eingeben' : 'Wird geladen...'}
-              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue"
             />
             {!wetterGeladen && !wetterLaedt && geoLat == null && (
-              <p className="text-[9px] text-gray-400 mt-0.5">Kein GPS-Standort verfügbar. Wetter manuell eingeben.</p>
+              <p className="text-sm text-gray-600 mt-1">Kein GPS-Standort verfügbar. Wetter manuell eingeben.</p>
             )}
           </div>
 
           {/* Firmen */}
-          <div className="bg-gray-50 rounded-lg p-2.5">
+          <div className="bg-gray-50 rounded-lg p-3.5">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] text-gray-400 font-medium uppercase">Baufirmen auf der Baustelle</label>
+              <label className="text-sm text-gray-600 font-medium">Baufirmen auf der Baustelle</label>
               <div className="relative">
                 <button
                   onClick={() => setFirmaDropdown(!firmaDropdown)}
-                  className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]"
+                  className="bg-ping-blue text-white px-3 py-2 rounded text-sm"
                 >
                   + Firma
                 </button>
@@ -300,7 +300,7 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
                       <button
                         key={v.ID}
                         onClick={() => firmaHinzufuegen(v)}
-                        className="block w-full text-left px-3 py-1.5 text-xs hover:bg-ping-blue-light border-b border-gray-50 last:border-0"
+                        className="block w-full text-left px-3 py-2 text-sm hover:bg-ping-blue-light border-b border-gray-200 last:border-0"
                       >
                         {v.Name}
                       </button>
@@ -311,17 +311,17 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
             </div>
 
             {firmen.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-2">Keine Firmen — "Firma hinzufügen" klicken</p>
+              <p className="text-sm text-gray-600 text-center py-2">Keine Firmen — "Firma hinzufügen" klicken</p>
             )}
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               {firmen.map((firma, i) => (
-                <div key={firma.oid || i} className="bg-white rounded-lg p-2 border border-gray-200">
+                <div key={firma.oid || i} className="bg-white rounded-lg p-3 border border-gray-200">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-medium text-gray-800">{firma.name}</span>
+                    <span className="text-sm font-medium text-gray-800">{firma.name}</span>
                     <button
                       onClick={() => firmaEntfernen(i)}
-                      className="text-red-400 hover:text-red-600 text-sm leading-none px-1"
+                      className="text-red-400 hover:text-red-600 text-base leading-none px-2 py-1"
                     >
                       ×
                     </button>
@@ -329,17 +329,17 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
 
                   {/* Mitarbeiter */}
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[10px] text-gray-500 w-16">Mitarbeiter:</span>
+                    <span className="text-sm text-gray-500 w-20">Mitarbeiter:</span>
                     <button
                       onClick={() => updateFirma(i, { mitarbeiter: Math.max(0, firma.mitarbeiter - 1) })}
-                      className="w-7 h-7 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-bold hover:bg-gray-200"
+                      className="w-9 h-9 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-base font-bold hover:bg-gray-200"
                     >
                       −
                     </button>
-                    <span className="text-sm font-mono font-medium w-6 text-center">{firma.mitarbeiter}</span>
+                    <span className="text-base font-mono font-medium w-8 text-center">{firma.mitarbeiter}</span>
                     <button
                       onClick={() => updateFirma(i, { mitarbeiter: firma.mitarbeiter + 1 })}
-                      className="w-7 h-7 rounded bg-ping-blue text-white flex items-center justify-center text-sm font-bold hover:bg-ping-blue-dark"
+                      className="w-9 h-9 rounded bg-ping-blue text-white flex items-center justify-center text-base font-bold hover:bg-ping-blue-dark"
                     >
                       +
                     </button>
@@ -347,13 +347,13 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
 
                   {/* Baustand */}
                   <div>
-                    <span className="text-[10px] text-gray-500">Baustand:</span>
+                    <span className="text-sm text-gray-500">Baustand:</span>
                     <input
                       type="text"
                       value={firma.baustand}
                       onChange={(e) => updateFirma(i, { baustand: e.target.value })}
                       placeholder="Aktueller Baustand..."
-                      className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue mt-0.5"
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue mt-1"
                     />
                   </div>
                 </div>
@@ -363,16 +363,16 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
         </div>
 
         {/* Buttons — immer sichtbar unten */}
-        <div className="p-3 border-t flex gap-2 shrink-0">
+        <div className="p-3.5 border-t flex gap-2 shrink-0">
           <button
             onClick={onAbbrechen}
-            className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
+            className="flex-1 py-3.5 rounded-lg font-medium text-base bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
           >
             Abbrechen
           </button>
           <button
             onClick={uebernehmen}
-            className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-green-600 text-white hover:bg-green-700 transition"
+            className="flex-1 py-3.5 rounded-lg font-medium text-base bg-green-600 text-white hover:bg-green-700 transition"
           >
             Übernehmen
           </button>

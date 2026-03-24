@@ -39,27 +39,27 @@ export default function ProjektAuswahl({ onSelect, onZurueck, onNeuesImport }: P
     <div className="min-h-screen bg-ping-bg">
       <div className="bg-ping-blue text-white p-4">
         <div className="flex items-center justify-between mb-1">
-          <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-sm">&larr; Import</button>
+          <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-base">&larr; Import</button>
           <span className="bg-white rounded-lg px-3 py-1.5 inline-flex items-center"><img src={logo} alt="PING" className="h-16" /></span>
         </div>
         <h1 className="text-lg font-bold mt-1">Projektauswahl</h1>
       </div>
-      <div className="p-3 space-y-2">
+      <div className="p-4 space-y-3">
         {projekte.map(p => (
-          <div key={p.gruppe.Id} className="flex items-stretch bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div key={p.gruppe.Id} className="flex items-stretch bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <button
               onClick={() => onSelect(p.gruppe.Id)}
               className="flex-1 text-left p-4 hover:bg-ping-blue-light active:bg-ping-blue-light transition"
             >
-              <p className="font-medium text-ping-text">{p.gruppe.ProjektName}</p>
-              <p className="text-sm text-ping-text-mid mt-0.5">
+              <p className="font-medium text-ping-text text-base">{p.gruppe.ProjektName}</p>
+              <p className="text-base text-ping-text-mid mt-0.5">
                 {p.gruppe.Name} &middot; {p.anzahlProtokolle} Protokoll{p.anzahlProtokolle !== 1 ? 'e' : ''}
               </p>
-              <p className="text-xs text-ping-text-light mt-0.5">Projekt {p.gruppe.ProjektId}</p>
+              <p className="text-sm text-ping-text-light mt-0.5">Projekt {p.gruppe.ProjektId}</p>
             </button>
             <button
               onClick={() => handleDelete(p.gruppe.Id, p.gruppe.ProjektName)}
-              className="px-3 text-red-400 hover:text-red-600 hover:bg-red-50 transition text-lg"
+              className="px-4 text-red-400 hover:text-red-600 hover:bg-red-50 transition text-lg"
               title="Projekt löschen"
             >
               &times;
@@ -67,12 +67,12 @@ export default function ProjektAuswahl({ onSelect, onZurueck, onNeuesImport }: P
           </div>
         ))}
         {projekte.length === 0 && (
-          <p className="text-center text-ping-text-light py-8">Keine Projekte geladen.</p>
+          <p className="text-center text-ping-text-light py-8 text-base">Keine Projekte geladen.</p>
         )}
         {onNeuesImport && (
           <button
             onClick={onNeuesImport}
-            className="w-full bg-ping-blue-light text-ping-blue py-3 px-4 rounded-xl font-medium hover:bg-ping-blue hover:text-white transition mt-4"
+            className="w-full bg-ping-blue-light text-ping-blue py-4 px-4 rounded-xl font-medium hover:bg-ping-blue hover:text-white transition mt-4 text-base"
           >
             + Neues Projekt laden
           </button>
