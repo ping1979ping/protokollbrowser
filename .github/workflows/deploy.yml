@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [master]
+    branches: [master, layout-barrierefrei]
 
 permissions:
   contents: read
@@ -18,17 +18,79 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install & Build
+
+      # 1. Master-Version bauen
+      - name: Build Master
         working-directory: app
         run: |
+          git checkout master -- .
           npm ci
           npm run build
+
+      - name: Copy Master build
+        run: |
+          mkdir -p _site
+          cp -r app/dist/* _site/
+
+      # 2. Barrierefrei-Version bauen (falls Branch existiert)
+      - name: Build Barrierefrei
+        run: |
+          if git rev-parse --verify origin/layout-barrierefrei >/dev/null 2>&1; then
+            git checkout origin/layout-barrierefrei -- app/src app/package.json app/vite.config.ts app/tsconfig.json app/tsconfig.app.json app/index.html
+            cd app
+            npm ci
+            npm run build
+            cd ..
+            mkdir -p _site/bf
+            cp -r app/dist/* _site/bf/
+            echo "BF-Version gebaut und nach _site/bf/ kopiert"
+          else
+            echo "Branch layout-barrierefrei nicht gefunden, nur Master deployt"
+          fi
+
+      # 3. Auswahlseite generieren
+      - name: Generate selection page
+        run: |
+          cat > _site/auswahl.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="de">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Protokoll-App — Versionswahl</title>
+          <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: -apple-system, system-ui, sans-serif; background: #F7F8FA; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+            .container { max-width: 400px; width: 100%; padding: 24px; }
+            h1 { color: #004899; font-size: 22px; text-align: center; margin-bottom: 8px; }
+            p { color: #666; font-size: 14px; text-align: center; margin-bottom: 24px; }
+            a { display: block; padding: 20px; margin-bottom: 12px; border-radius: 12px; text-decoration: none; font-size: 18px; font-weight: 600; text-align: center; }
+            .standard { background: #004899; color: white; }
+            .bf { background: #16a34a; color: white; font-size: 22px; padding: 28px; }
+            .info { font-size: 12px; color: #999; text-align: center; margin-top: 16px; }
+          </style>
+          </head>
+          <body>
+          <div class="container">
+            <h1>Protokoll-App</h1>
+            <p>Version zum Testen w&auml;hlen:</p>
+            <a href="./bf/" class="bf">Barrierefrei (NEU)</a>
+            <a href="./index.html" class="standard">Standard (aktuell)</a>
+            <p class="info">Beide Versionen nutzen die gleichen lokalen Daten.</p>
+          </div>
+          </body>
+          </html>
+          HTMLEOF
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: app/dist
+          path: _site
 
   deploy:
     needs: build
