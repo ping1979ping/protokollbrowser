@@ -27,9 +27,9 @@ jobs:
 
       # 1. Master-Version bauen
       - name: Build Master
-        working-directory: app
         run: |
-          git checkout master -- .
+          git checkout origin/master -- .
+          cd app
           npm ci
           npm run build
 
@@ -42,7 +42,7 @@ jobs:
       - name: Build Barrierefrei
         run: |
           if git rev-parse --verify origin/layout-barrierefrei >/dev/null 2>&1; then
-            git checkout origin/layout-barrierefrei -- app/src app/package.json app/vite.config.ts app/tsconfig.json app/tsconfig.app.json app/index.html
+            git checkout origin/layout-barrierefrei -- .
             cd app
             npm ci
             npm run build
