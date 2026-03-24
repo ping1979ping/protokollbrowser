@@ -305,6 +305,9 @@ def list_subscriptions():
 
 # PWA ausliefern (same-origin): statische Dateien aus pwa/ neben der exe bzw. server.py
 PWA_DIR = _script_dir / "pwa"
+PWA_BF_DIR = PWA_DIR / "bf"
+if PWA_BF_DIR.exists():
+    app.mount("/bf", StaticFiles(directory=str(PWA_BF_DIR), html=True), name="pwa-bf")
 if PWA_DIR.exists():
     app.mount("/", StaticFiles(directory=str(PWA_DIR), html=True), name="pwa")
 
