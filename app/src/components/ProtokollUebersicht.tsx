@@ -310,61 +310,54 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         />
       ) : (
         <div className="flex-1 overflow-auto">
-          <table className="w-full text-xs table-fixed">
-            <colgroup>
-              <col className="w-[8%]" />
-              <col className="w-[10%]" />
-              <col />
-              <col className="w-[10%]" />
-              <col className="w-[10%]" />
-              <col className="w-[10%] hidden sm:table-column" />
-              <col className="w-[12%]" />
-            </colgroup>
-            <thead className="bg-gray-100 sticky top-0">
-              <tr className="text-left text-gray-500">
-                <th className="px-2 py-1.5 font-medium">Pos.</th>
-                <th className="px-1 py-1.5 font-medium">Thema</th>
-                <th className="px-1 py-1.5 font-medium">Positionstext</th>
-                <th className="px-1 py-1.5 font-medium">Status</th>
-                <th className="px-1 py-1.5 font-medium">Termin</th>
-                <th className="px-1 py-1.5 font-medium hidden sm:table-cell">Bemerkung</th>
-                <th className="px-1 py-1.5 font-medium">Verantw.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {aktuelleElemente.map((elem) => {
-                const st = STATUS_MAP[elem.Status];
-                return (
-                  <tr
-                    key={elem.Id}
-                    onClick={() => aktivProt && handleSelectElement(elem, ansicht === 'einzeln' ? aktivProt : protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
-                    className="border-b border-gray-100 hover:bg-ping-blue-light active:bg-ping-blue-light cursor-pointer"
-                  >
-                    <td className={`px-2 py-1.5 font-mono ${elem.MobileErfassung?.GeoLat != null ? 'text-ping-blue font-semibold' : 'text-gray-400'}`}>{elem.Position}</td>
-                    <td className="px-1 py-1.5 text-gray-600 text-[10px] leading-tight break-all overflow-hidden">{elem.Thema || '-'}</td>
-                    <td className="px-1 py-1.5 text-gray-800">
-                      <div className="leading-tight line-clamp-2">{elem.Positionstext || elem.Positionstitel || '—'}</div>
-                      {elem._geaendert && <span className="text-orange-500 font-medium"> *</span>}
-                      {elem._neu && <span className="text-green-600 font-medium"> +neu</span>}
-                      {(elem.Verweise?.length > 0) && <span className="text-amber-500"> ↩</span>}
-                    </td>
-                    <td className="px-1 py-1.5">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium leading-tight ${st?.css || 'bg-gray-100'}`}>
-                        {st?.label || elem.Status}
+          <div className="divide-y divide-gray-100">
+            {aktuelleElemente.map((elem) => {
+              const st = STATUS_MAP[elem.Status];
+              const ueberfaellig = elem.Termin && [0, 10].includes(elem.Status) && new Date(elem.Termin) < new Date(new Date().toDateString());
+              return (
+                <button
+                  key={elem.Id}
+                  onClick={() => aktivProt && handleSelectElement(elem, ansicht === 'einzeln' ? aktivProt : protokolle.find(p => p.Id === elem.ProtokollId) || aktivProt, gruppe, aktuelleElemente.map(e => e.Id))}
+                  className="w-full text-left px-2 py-2 hover:bg-ping-blue-light active:bg-ping-blue-light flex gap-2"
+                >
+                  {/* Links: Position + Thema + Badges */}
+                  <div className="w-20 shrink-0">
+                    <div className={`text-xs font-mono font-semibold ${elem.MobileErfassung?.GeoLat != null ? 'text-ping-blue' : 'text-gray-400'}`}>
+                      {elem.Position}
+                    </div>
+                    <div className="text-[10px] text-gray-500 leading-tight mt-0.5">{elem.Thema || '-'}</div>
+                    <div className="flex gap-1 mt-0.5 flex-wrap">
+                      {(elem.Verweise?.length > 0) && <span className="text-amber-500 text-[10px]">↩</span>}
+                      {elem._neu && <span className="text-[9px] bg-green-100 text-green-700 px-1 rounded">+neu</span>}
+                      {elem._geaendert && !elem._neu && <span className="text-[9px] bg-orange-100 text-orange-700 px-1 rounded">*</span>}
+                    </div>
+                  </div>
+
+                  {/* Mitte: Positionstext (dreizeilig) */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-800 leading-snug line-clamp-3">
+                      {elem.Positionstext || elem.Positionstitel || '—'}
+                    </div>
+                  </div>
+
+                  {/* Rechts: Status + Termin + Verantwortlich */}
+                  <div className="w-20 shrink-0 text-right">
+                    {st && (
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${st.css}`}>
+                        {st.label}
                       </span>
-                    </td>
-                    <td className={`px-1 py-1.5 whitespace-nowrap ${elem.Termin && [0, 10].includes(elem.Status) && new Date(elem.Termin) < new Date(new Date().toDateString()) ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                      {elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : '-'}
-                    </td>
-                    <td className="px-1 py-1.5 text-gray-400 hidden sm:table-cell truncate">
-                      {elem.Bemerkung || '-'}
-                    </td>
-                    <td className="px-1 py-1.5 text-gray-600 truncate max-w-[80px]">{elem.VerantwortlicherFirmaName || '-'}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    )}
+                    <div className={`text-[10px] mt-0.5 ${ueberfaellig ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                      {elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : ''}
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 truncate">
+                      {elem.VerantwortlicherFirmaName || ''}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
           {aktuelleElemente.length === 0 && (
             <p className="text-center text-gray-400 py-6 text-sm">Keine Elemente gefunden.</p>
           )}
