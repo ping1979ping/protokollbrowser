@@ -242,14 +242,15 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             Nächst. &rarr;
           </button>
         </div>
-        {/* Zeile 2: Status | Pos. | Protokollname */}
+        {/* Zeile 2: Status | Pos. | Protokollname | Modus */}
         <div className="flex items-center gap-2 mt-1.5">
           {st && <span className={`px-2 py-0.5 rounded text-[10px] font-medium w-20 text-center shrink-0 ${st.css}`}>{st.label}</span>}
           <span className="text-xs text-ping-blue-light">Pos. {elem.Position}</span>
           <span className="text-[10px] text-ping-blue-light/70 truncate">{protokoll.Name}</span>
+          <span className={`text-[10px] shrink-0 ml-auto ${istNeu ? 'text-green-300' : 'text-ping-blue-light'}`}>
+            ({istNeu ? 'editierbar' : 'Status/GPS'})
+          </span>
         </div>
-        {!istNeu && <p className="text-xs text-ping-blue-light mt-1">Nur Status änderbar</p>}
-        {istNeu && <p className="text-xs text-green-300 mt-1">&#9998; Neues Element — editierbar</p>}
       </div>
 
       {/* Buttons direkt unter Header */}
