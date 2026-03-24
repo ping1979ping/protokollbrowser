@@ -418,10 +418,10 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
                 className="px-2.5 bg-ping-blue text-white rounded text-sm font-bold shrink-0" title="Neues Thema">+</button>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200 col-span-2">
+          <div className="bg-white rounded-lg p-3.5 border border-gray-200 col-span-2 overflow-hidden">
             <label className="text-sm text-gray-600 font-medium block mb-1">Termin</label>
             <input type="date" value={termin} onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
-              className={`w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
+              className={`w-full max-w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
           </div>
         </div>
 

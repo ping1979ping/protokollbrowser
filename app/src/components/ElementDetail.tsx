@@ -242,14 +242,15 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             Nächst. &rarr;
           </button>
         </div>
-        {/* Zeile 2: Status | Pos. | Protokollname */}
+        {/* Zeile 2: Status | Pos. | Protokollname | Modus */}
         <div className="flex items-center gap-2 mt-2">
           {st && <span className={`px-3 py-1 rounded text-sm font-medium w-24 text-center shrink-0 ${st.css}`}>{st.label}</span>}
           <span className="text-sm text-ping-blue-light">Pos. {elem.Position}</span>
           <span className="text-sm text-ping-blue-light/70 truncate">{protokoll.Name}</span>
+          <span className={`text-sm shrink-0 ml-auto ${istNeu ? 'text-green-300' : 'text-ping-blue-light'}`}>
+            ({istNeu ? 'editierbar' : 'Status/GPS'})
+          </span>
         </div>
-        {!istNeu && <p className="text-sm text-ping-blue-light mt-1">Nur Status änderbar</p>}
-        {istNeu && <p className="text-sm text-green-300 mt-1">&#9998; Neues Element — editierbar</p>}
       </div>
 
       {/* Buttons direkt unter Header */}
@@ -371,12 +372,12 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               <p className="text-sm text-gray-700">{elem.Thema || '—'}</p>
             )}
           </div>
-          <div className="col-span-2 bg-white rounded-lg p-3.5 border border-gray-200">
+          <div className="col-span-2 bg-white rounded-lg p-3.5 border border-gray-200 overflow-hidden">
             <label className="text-sm text-gray-600 font-medium block mb-1">Termin</label>
             {istNeu ? (
               <input type="date" value={elem.Termin ? elem.Termin.slice(0, 10) : ''}
                 onChange={(e) => update({ Termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                className="w-full max-w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue box-border" />
             ) : (
               <p className={`text-sm ${terminUeberfaellig ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>{elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE') : '—'}</p>
             )}
