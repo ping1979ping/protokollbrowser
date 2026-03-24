@@ -45,7 +45,7 @@ jobs:
             git checkout origin/layout-barrierefrei -- .
             cd app
             npm ci
-            npm run build
+            VITE_BASE=bf npm run build
             cd ..
             mkdir -p _site/bf
             cp -r app/dist/* _site/bf/
