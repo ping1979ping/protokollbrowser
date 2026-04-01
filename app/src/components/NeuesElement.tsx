@@ -73,7 +73,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   const [tempFotos, setTempFotos] = useState<File[]>([]);
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
   const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
-  const [autoGps, setAutoGps] = useState(() => localStorage.getItem('autoGps') !== 'false');
+  const [autoGps, setAutoGps] = useState(() => localStorage.getItem('autoGps') === 'true');
   const [dirty, setDirty] = useState(false);
   const [showBtWizard, setShowBtWizard] = useState(!!isBautagebuch);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
@@ -121,7 +121,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
 
   // Auto-Kompass
   useEffect(() => {
-    if (!autoGps || protokoll.Nummer < 0) return;
+    if (protokoll.Nummer < 0) return;
     if (!('DeviceOrientationEvent' in window)) return;
     let captured = false;
     const handler = (e: DeviceOrientationEvent) => {
@@ -347,7 +347,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
 
         {/* 2. Verantwortlich (flex:2) + Thema (flex:1) + Termin (flex:1) — one row */}
         <div className="flex gap-2">
-          <div className="flex-[2] bg-white rounded-lg p-2.5 border-2 border-gray-300">
+          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
             <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>
             <select value={verantwFirmaOid} onChange={(e) => { setVerantwFirmaOid(e.target.value); setDirty(true); }}
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
@@ -402,11 +402,11 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               </div>
             )}
           </div>
-          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Titel</label>
+          <div className="flex-[2] bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex items-center gap-2">
+            <span className="text-xs text-gray-500 shrink-0">Titel</span>
             <input type="text" value={titel} onChange={(e) => { setTitel(e.target.value); setDirty(true); }}
-              placeholder="Optional, für Gestaltung"
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+              placeholder="optional"
+              className="flex-1 min-w-0 px-2 py-0.5 text-xs focus:outline-none" />
           </div>
         </div>
 
@@ -453,11 +453,11 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               <div className="flex gap-1 items-center">
                 <button onClick={() => fotoRef.current?.click()}
                   className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
-                  📷
+                  CAM
                 </button>
                 <button onClick={() => galerieRef.current?.click()}
                   className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-xs font-medium">
-                  🖼
+                  MEDIA
                 </button>
                 {tempFotos.length > 0 && (
                   <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full text-[10px] font-bold">

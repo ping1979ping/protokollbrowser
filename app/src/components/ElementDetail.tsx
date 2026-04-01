@@ -314,7 +314,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
 
         {/* Verantwortlich + Thema + Termin — eine Zeile */}
         <div className="flex gap-2">
-          <div className="flex-[2] bg-white rounded-lg p-2.5 border-2 border-gray-300">
+          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
             <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>
             {istNeu ? (
               <select value={elem.VerantwortlicherFirmaOid}
@@ -374,13 +374,14 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               </button>
             </div>
           </div>
-          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Titel</label>
+          <div className="flex-[2] bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex items-center gap-2">
+            <span className="text-xs text-gray-500 shrink-0">Titel</span>
             {istNeu ? (
               <input type="text" value={elem.Positionstitel} onChange={(e) => update({ Positionstitel: e.target.value })}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                placeholder="optional"
+                className="flex-1 min-w-0 px-2 py-0.5 text-xs focus:outline-none" />
             ) : (
-              <p className="text-xs text-gray-700">{elem.Positionstitel || '—'}</p>
+              <span className="text-xs text-gray-700 truncate">{elem.Positionstitel || '—'}</span>
             )}
           </div>
         </div>
@@ -454,11 +455,11 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               <div className="flex gap-1 mt-1 items-center">
                 {istNeu && (
                   <>
-                    <button onClick={() => fotoRef.current?.click()} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
+                    <button onClick={() => fotoRef.current?.click()} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">
+                      CAM
                     </button>
-                    <button onClick={() => galerieRef.current?.click()} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">
-                      <span role="img" aria-label="Galerie">&#128444;&#65039;</span>
+                    <button onClick={() => galerieRef.current?.click()} className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-[10px] font-medium">
+                      MEDIA
                     </button>
                     <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={fotoHinzufuegen} className="hidden" />
                     <input ref={galerieRef} type="file" accept="image/*" multiple onChange={fotoHinzufuegen} className="hidden" />
