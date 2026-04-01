@@ -6,6 +6,7 @@ import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord } from './map/mapUtils';
 import BautagebuchWizard from './BautagebuchWizard';
+import ScrollToTopFab from './ScrollToTopFab';
 
 interface Props {
   element: Protokollelement;
@@ -133,12 +134,12 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   }
 
   const alleFirmen = firmen.length > 0
-    ? firmen.map(f => ({ Oid: f.ID, Name: f.Name }))
+    ? firmen.map(f => ({ Oid: f.ID, Kuerzel: f.Kuerzel, Name: f.Name }))
     : [
-        ...protokoll.Teilnehmer.map(t => ({ Oid: t.Oid, Name: t.Name })),
+        ...protokoll.Teilnehmer.map(t => ({ Oid: t.Oid, Kuerzel: (t as any).Nummer || '', Name: t.Name })),
         ...protokoll.Verteiler
           .filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid))
-          .map(v => ({ Oid: v.Oid, Name: v.Name })),
+          .map(v => ({ Oid: v.Oid, Kuerzel: (v as any).Nummer || '', Name: v.Name })),
       ];
 
   function markDirty() { setDirty(true); setGespeichert(false); }
@@ -221,7 +222,6 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   }
 
   const st = STATUS_MAP[elem.Status];
-  const istWeitererStatus = WEITERE_STATUS.includes(elem.Status);
   const terminUeberfaellig = elem.Termin && [0, 10].includes(elem.Status) && new Date(elem.Termin) < new Date(new Date().toDateString());
 
   return (
@@ -300,8 +300,8 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         )}
 
         {/* Positionstext */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase">Positionstext</label>
+        <div className="bg-white rounded-lg p-2.5 border-2 border-gray-300">
+          <label className="text-xs text-gray-700 font-semibold">Positionstext</label>
           {istNeu ? (
             <textarea value={elem.Positionstext} onChange={(e) => update({ Positionstext: e.target.value })}
               onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
@@ -312,52 +312,29 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           )}
         </div>
 
-        {/* Status */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase mb-1.5 block">Status</label>
-          <div className="flex gap-1 flex-wrap">
-            {HAUPT_STATUS.map(s => (
-              <button key={s} onClick={() => updateStatus(s)}
-                className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                  elem.Status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-                }`}>
-                {STATUS_MAP[s].label}
-              </button>
-            ))}
-            <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
-              className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                istWeitererStatus && !showWeitereStatus ? STATUS_MAP[elem.Status].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-              }`}>
-              {istWeitererStatus && !showWeitereStatus ? STATUS_MAP[elem.Status].label : '...'}
-            </button>
-          </div>
-          {showWeitereStatus && (
-            <div className="flex gap-1 flex-wrap mt-1.5 pt-1.5 border-t border-gray-100">
-              {WEITERE_STATUS.map(s => STATUS_MAP[s] && (
-                <button key={s} onClick={() => updateStatus(s)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                    elem.Status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-                  }`}>
-                  {STATUS_MAP[s].label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Position / Thema / Termin */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Position</label>
+        {/* Verantwortlich + Thema + Termin — eine Zeile */}
+        <div className="flex gap-2">
+          <div className="flex-[2] bg-white rounded-lg p-2.5 border-2 border-gray-300">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>
             {istNeu ? (
-              <input type="text" value={elem.Position} onChange={(e) => update({ Position: e.target.value })}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+              <select value={elem.VerantwortlicherFirmaOid}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const t = alleFirmen.find(t => t.Oid === v);
+                  update({ VerantwortlicherFirmaOid: t?.Oid || '', VerantwortlicherFirmaName: t?.Name || '' });
+                }}
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                <option value=""></option>
+                {alleFirmen.map(t => (
+                  <option key={t.Oid} value={t.Oid}>{t.Kuerzel ? `${t.Kuerzel} — ${t.Name}` : t.Name}</option>
+                ))}
+              </select>
             ) : (
-              <p className="text-xs text-gray-700 font-mono">{elem.Position}</p>
+              <p className="text-xs text-gray-700">{(() => { const f = alleFirmen.find(t => t.Oid === elem.VerantwortlicherFirmaOid); return f ? (f.Kuerzel ? `${f.Kuerzel} — ${f.Name}` : f.Name) : (elem.VerantwortlicherFirmaName || '—'); })()}</p>
             )}
           </div>
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
+          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Thema</label>
             {istNeu ? (
               <div className="flex gap-1">
                 <select value={elem.Thema}
@@ -373,8 +350,8 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               <p className="text-xs text-gray-700">{elem.Thema || '—'}</p>
             )}
           </div>
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
+          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
             {istNeu ? (
               <input type="date" value={elem.Termin ? elem.Termin.slice(0, 10) : ''}
                 onChange={(e) => update({ Termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
@@ -385,45 +362,134 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </div>
         </div>
 
-        {/* Verantwortlich */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich (Firma)</label>
-          {istNeu ? (
-            <select value={elem.VerantwortlicherFirmaOid}
-              onChange={(e) => {
-                const v = e.target.value;
-                const t = alleFirmen.find(t => t.Oid === v);
-                update({ VerantwortlicherFirmaOid: t?.Oid || '', VerantwortlicherFirmaName: t?.Name || '' });
-              }}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-              <option value=""></option>
-              {alleFirmen.map(t => (
-                <option key={t.Oid} value={t.Oid}>{t.Name}</option>
-              ))}
-            </select>
-          ) : (
-            <p className="text-xs text-gray-700">{elem.VerantwortlicherFirmaName || '—'}</p>
-          )}
-        </div>
-
-        {/* GPS */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
-            <div className="flex gap-1">
-              <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
-              <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
-              {elem.MobileErfassung.GeoLat != null && (
-                <button onClick={() => updateMobile({ GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoHeading: null, GeoText: null })}
-                  className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px]">Löschen</button>
-              )}
+        {/* Status + Titel — eine Zeile */}
+        <div className="flex gap-2">
+          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-700 font-semibold">Status</span>
+              {st && <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${st.css}`}>{st.label}</span>}
+              <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
+                className="px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 text-gray-500 ml-auto">
+                ···
+              </button>
             </div>
           </div>
+          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Titel</label>
+            {istNeu ? (
+              <input type="text" value={elem.Positionstitel} onChange={(e) => update({ Positionstitel: e.target.value })}
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+            ) : (
+              <p className="text-xs text-gray-700">{elem.Positionstitel || '—'}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Status picker — expandable */}
+        {showWeitereStatus && (
+          <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+            <div className="flex gap-1 flex-wrap">
+              {HAUPT_STATUS.map(s => (
+                <button key={s} onClick={() => updateStatus(s)}
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                    elem.Status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
+                  }`}>
+                  {STATUS_MAP[s].label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 flex-wrap mt-1.5 pt-1.5 border-t border-gray-100">
+              {WEITERE_STATUS.map(s => STATUS_MAP[s] && (
+                <button key={s} onClick={() => updateStatus(s)}
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                    elem.Status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
+                  }`}>
+                  {STATUS_MAP[s].label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Position + Bemerkung — eine Zeile, keine Labels */}
+        <div className="flex gap-2">
+          <div className="flex-1 bg-white rounded-lg p-2.5 border border-gray-200">
+            {istNeu ? (
+              <input type="text" value={elem.Position} onChange={(e) => update({ Position: e.target.value })}
+                placeholder="Position"
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+            ) : (
+              <p className="text-xs text-gray-700 font-mono">{elem.Position}</p>
+            )}
+          </div>
+          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
+            {istNeu ? (
+              <textarea value={elem.Bemerkung} onChange={(e) => update({ Bemerkung: e.target.value })} rows={1}
+                placeholder="Optionale Bemerkung (intern)"
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+            ) : (
+              <p className="text-xs text-gray-700">{elem.Bemerkung || '—'}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Standort + Fotos — kombinierte Karte */}
+        <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+          <div className="flex gap-4">
+            {/* Standort */}
+            <div className="flex-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Standort</span>
+              <div className="flex gap-1 mt-1">
+                <button onClick={gpsErfassen} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">GPS</button>
+                <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">Karte</button>
+                {elem.MobileErfassung.GeoLat != null && (
+                  <button onClick={() => updateMobile({ GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoHeading: null, GeoText: null })}
+                    className="bg-gray-100 text-gray-500 border border-gray-300 px-2 py-1 rounded text-[10px] font-medium">✕</button>
+                )}
+              </div>
+            </div>
+            {/* Fotos */}
+            <div className="flex-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Fotos</span>
+              <div className="flex gap-1 mt-1 items-center">
+                {istNeu && (
+                  <>
+                    <button onClick={() => fotoRef.current?.click()} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
+                    </button>
+                    <button onClick={() => galerieRef.current?.click()} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">
+                      <span role="img" aria-label="Galerie">&#128444;&#65039;</span>
+                    </button>
+                    <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={fotoHinzufuegen} className="hidden" />
+                    <input ref={galerieRef} type="file" accept="image/*" multiple onChange={fotoHinzufuegen} className="hidden" />
+                  </>
+                )}
+                {fotos.length > 0 && (
+                  <span className="bg-amber-100 text-amber-800 text-[10px] font-semibold px-1.5 py-0.5 rounded">{fotos.length}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          {/* GPS coordinates */}
           {elem.MobileErfassung.GeoLat != null
-            ? <p className="text-[10px] text-gray-600">
+            ? <p className="text-[10px] text-gray-600 mt-1.5">
                 {formatCoord(elem.MobileErfassung.GeoLat, elem.MobileErfassung.GeoLon!, elem.MobileErfassung.GeoAccuracy, elem.MobileErfassung.GeoHeading)}
               </p>
-            : <p className="text-[10px] text-gray-300">Kein Standort</p>}
+            : <p className="text-[10px] text-gray-400 mt-1.5">Kein Standort</p>}
+          {/* Foto thumbnails */}
+          {fotos.length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-1.5">
+              {fotos.map(f => (
+                <div key={f.fotoId} className="relative w-10 h-10">
+                  <img src={f.url} alt="" className="w-full h-full object-cover rounded" />
+                  {istNeu && (
+                    <button onClick={() => fotoLoeschen(f.fotoId)}
+                      className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         {karteOffen && (
           <MapEditorModal
@@ -440,68 +506,6 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             }}
             onCancel={() => setKarteOffen(false)}
           />
-        )}
-
-        {/* Fotos */}
-        {istNeu && (
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
-              <div className="flex gap-1">
-                <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
-                <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">Galerie</button>
-              </div>
-              <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={fotoHinzufuegen} className="hidden" />
-              <input ref={galerieRef} type="file" accept="image/*" multiple onChange={fotoHinzufuegen} className="hidden" />
-            </div>
-            {fotos.length > 0 && (
-              <div className="flex gap-1 flex-wrap">
-                {fotos.map(f => (
-                  <div key={f.fotoId} className="relative w-10 h-10">
-                    <img src={f.url} alt="" className="w-full h-full object-cover rounded" />
-                    <button onClick={() => fotoLoeschen(f.fotoId)}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        {!istNeu && fotos.length > 0 && (
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
-            <div className="flex gap-1 flex-wrap mt-1">
-              {fotos.map(f => (
-                <img key={f.fotoId} src={f.url} alt="" className="w-10 h-10 object-cover rounded" />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Bemerkung (intern) */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Bemerkung (intern)</label>
-          {istNeu ? (
-            <textarea value={elem.Bemerkung} onChange={(e) => update({ Bemerkung: e.target.value })} rows={2}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
-          ) : (
-            <p className="text-xs text-gray-700">{elem.Bemerkung || '—'}</p>
-          )}
-        </div>
-
-        {/* Titel */}
-        {istNeu && (
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel (optional, für Gestaltung)</label>
-            <input type="text" value={elem.Positionstitel} onChange={(e) => update({ Positionstitel: e.target.value })}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-          </div>
-        )}
-        {!istNeu && elem.Positionstitel && (
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel</label>
-            <p className="text-xs text-gray-700">{elem.Positionstitel}</p>
-          </div>
         )}
 
         {/* Bautagebuch bearbeiten */}
@@ -612,6 +616,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           onAbbrechen={() => setShowBtWizard(false)}
         />
       )}
+      <ScrollToTopFab />
     </div>
   );
 }
