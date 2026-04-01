@@ -312,8 +312,18 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           )}
         </div>
 
-        {/* Verantwortlich + Thema + Termin — eine Zeile */}
+        {/* Termin + Verantwortlich + Thema — eine Zeile */}
         <div className="flex gap-2">
+          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
+            {istNeu ? (
+              <input type="date" value={elem.Termin ? elem.Termin.slice(0, 10) : ''}
+                onChange={(e) => update({ Termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+            ) : (
+              <p className={`text-xs ${terminUeberfaellig ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>{elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE') : '—'}</p>
+            )}
+          </div>
           <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
             <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>
             {istNeu ? (
@@ -350,28 +360,26 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               <p className="text-xs text-gray-700">{elem.Thema || '—'}</p>
             )}
           </div>
-          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
-            {istNeu ? (
-              <input type="date" value={elem.Termin ? elem.Termin.slice(0, 10) : ''}
-                onChange={(e) => update({ Termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-            ) : (
-              <p className={`text-xs ${terminUeberfaellig ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>{elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE') : '—'}</p>
-            )}
-          </div>
         </div>
 
         {/* Status + Titel — eine Zeile */}
         <div className="flex gap-2">
-          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
+          <div className="flex-[2] bg-white rounded-lg px-2.5 py-2 border border-gray-200">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-700 font-semibold">Status</span>
+              <span className="text-xs text-gray-500 shrink-0">Status</span>
               {st && <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${st.css}`}>{st.label}</span>}
-              <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
-                className="px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 text-gray-500 ml-auto">
-                ···
-              </button>
+              <div className="flex gap-1 ml-auto">
+                <button onClick={() => updateStatus(10)}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition ${
+                    elem.Status === 10 ? 'bg-yellow-200 text-yellow-800 ring-2 ring-ping-blue' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
+                  }`}>Offen</button>
+                <button onClick={() => updateStatus(20)}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition ${
+                    elem.Status === 20 ? 'bg-green-200 text-green-800 ring-2 ring-ping-blue' : 'bg-green-50 text-green-700 hover:bg-green-100'
+                  }`}>Erledigt</button>
+                <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
+                  className="bg-gray-100 text-gray-500 px-2 py-1.5 rounded text-xs border border-gray-300">···</button>
+              </div>
             </div>
           </div>
           <div className="flex-[2] bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex items-center gap-2">
@@ -456,7 +464,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
                 {istNeu && (
                   <>
                     <button onClick={() => fotoRef.current?.click()} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">
-                      CAM
+                      Kamera
                     </button>
                     <button onClick={() => galerieRef.current?.click()} className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-[10px] font-medium">
                       MEDIA

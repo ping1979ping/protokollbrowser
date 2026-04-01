@@ -345,8 +345,13 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
             className="flex-1 w-full px-2 py-1 border border-gray-200 rounded text-sm text-gray-400 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none min-h-[9rem] max-h-[50vh] overflow-auto" />
         </div>
 
-        {/* 2. Verantwortlich (flex:2) + Thema (flex:1) + Termin (flex:1) — one row */}
+        {/* 2. Termin (flex:1) + Verantwortlich (flex:1) + Thema (flex:1) — one row */}
         <div className="flex gap-2">
+          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300 overflow-hidden">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
+            <input type="date" value={termin} onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
+              className={`w-full max-w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
+          </div>
           <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
             <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>
             <select value={verantwFirmaOid} onChange={(e) => { setVerantwFirmaOid(e.target.value); setDirty(true); }}
@@ -370,11 +375,6 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               <button onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) { setThema(val); setDirty(true); } }}
                 className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
             </div>
-          </div>
-          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300 overflow-hidden">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
-            <input type="date" value={termin} onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
-              className={`w-full max-w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
           </div>
         </div>
 
@@ -453,7 +453,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               <div className="flex gap-1 items-center">
                 <button onClick={() => fotoRef.current?.click()}
                   className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
-                  CAM
+                  Kamera
                 </button>
                 <button onClick={() => galerieRef.current?.click()}
                   className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-xs font-medium">
