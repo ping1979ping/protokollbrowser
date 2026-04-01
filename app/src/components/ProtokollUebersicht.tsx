@@ -3,6 +3,7 @@ import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
 import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll, findBautagebuchProtokoll } from '../db';
 import MapOverview from './map/MapOverview';
+import ScrollToTopFab from './ScrollToTopFab';
 import SyncIndicator from './SyncIndicator';
 import { useSyncStatus } from '../useSyncStatus';
 
@@ -405,6 +406,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
           </button>
         </div>
       )}
+      <ScrollToTopFab />
     </div>
   );
 }
