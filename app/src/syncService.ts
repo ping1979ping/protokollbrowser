@@ -64,6 +64,7 @@ export async function listRemoteProjects(): Promise<{
   id: string;
   projektName?: string;
   gruppeName?: string;
+  projektNummer?: string;
   timestamp?: string;
   hasExport: boolean;
   pendingChanges: number;

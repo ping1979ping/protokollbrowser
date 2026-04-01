@@ -302,6 +302,7 @@ def list_projects():
                 info["projektName"] = manifest.get("projektName", projekt_dir.name)
                 info["timestamp"] = manifest.get("timestamp")
                 info["gruppeName"] = manifest.get("gruppeName")
+                info["projektNummer"] = manifest.get("projektNummer") or manifest.get("projektId", "")
             except (json.JSONDecodeError, ValueError, OSError):
                 info["projektName"] = projekt_dir.name
 
