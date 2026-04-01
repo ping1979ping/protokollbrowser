@@ -1,0 +1,498 @@
+// ============================================================================
+// DOCUcontrol-Makro: Export Protokollgruppe -> JSON (V6)
+// ============================================================================
+// Basiert auf V5c (Introspection mit DBCGetMembers).
+// Aenderungen gegenueber V5c:
+//   - Redundante V4-Arrays entfernt (ProtIDArray, ElementIDArray,
+//     TeilnehmerArray, VerteilerArray, VerweisArray)
+//     → werden bereits generisch durch Introspection erzeugt
+//   - Hardcoded Keys umbenannt (Introspection-konform):
+//     ProtGrpID → _ProtokollgruppeOid
+//     ProtokollId → _ProtokollOid
+//   - ProjektId → ProjektNummer (ist nur interne Nummer, keine OID)
+//   - Manifest: version="v6", ProjektOid statt ProjektId,
+//     projektStammverzeichnis hinzugefuegt
+//   - ExchangeBasePath auf Produktiv-Server
+//
+// PING, 01.04.2026, CP (ClaudeCode)
+// ============================================================================
+INT PINGProtGrpExpJSON_V6( HDIALOG Dialog, _PINGProtokollgruppe &Object )
+    HJSON JSon;
+    HJSON PaketJSon;
+    HJSON ArrJSon;
+    HJSON SetArrJSon;
+    HFILE File;
+    STRING Txt;
+    STRING GruppeOid;
+
+    STRING ExchangeBasePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\export";
+    STRING ExchangeProjPath;
+    STRING ExchangeJsonPath;
+
+    _PINGProtokollgruppe ProtGrp;
+    _PINGProtokollSet ProtSet;
+    _PINGProtokoll Prot;
+    _PINGProtokollelementSet ElemSet;
+    _PINGProtokollelement Elem, VerweisElem;
+    Ansprechpartner Teiln;
+    FunktionelleRolleSet RoleSet;
+    FunktionelleRolle Role;
+
+    // Schema introspection
+    DBSTRINGSET GrpMembers;
+    DBSTRINGSET ProtMembers;
+    DBSTRINGSET ElemMembers;
+    INT GrpMemberCount;
+    INT ProtMemberCount;
+    INT ElemMemberCount;
+    STRING MemberName;
+    STRING MemberType;
+    STRING ClassName;
+    INT mi;
+
+    // Generic value holders
+    STRING sVal;
+    INT iVal;
+    FLOAT fVal;
+    BOOL bVal;
+    TIME tVal;
+    DBOBJECT RefObj;
+
+    BOOL isSet;
+    BOOL isObj;
+    BOOL isVisible;
+
+    // Generic set holders (V5c: Set-Export)
+    DBOBJECTSET GenObjSet;
+    DBSTRINGSET GenStrSet;
+    DBINTSET GenIntSet;
+    DBFLOATSET GenFloatSet;
+    DBBOOLSET GenBoolSet;
+    DBTIMESET GenTimeSet;
+    DBOBJECT GenSetObj;
+    INT SetCount;
+    INT si;
+
+    STRING strace = "#### JSON-Export V6: ";
+
+    ProtGrp = Object;
+    GruppeOid = ProtGrp.GetOID();
+    Trace( strace + "Object-ID ist: %1", GruppeOid );
+
+    JSon.Construct();
+
+    // Schema einmalig vorladen
+    DBCGetMembers( "_PINGProtokollgruppe", GrpMembers );
+    GrpMemberCount = GrpMembers.GetCount();
+    DBCGetMembers( "_PINGProtokoll", ProtMembers );
+    ProtMemberCount = ProtMembers.GetCount();
+    DBCGetMembers( "_PINGProtokollelement", ElemMembers );
+    ElemMemberCount = ElemMembers.GetCount();
+
+    // ============================================================
+    // ELEMENT 1: Manifest (integriert)
+    // ============================================================
+    PaketJSon = JSon.AddElement();
+    PaketJSon.GetMember( "ProjektOid", TRUE ).SetString( ProtGrp._Projekt.GetOID() );
+    PaketJSon.GetMember( "ProjektName", TRUE ).SetString( ProtGrp._Projekt.Name );
+    PaketJSon.GetMember( "GruppeName", TRUE ).SetString( ProtGrp._Name );
+    PaketJSon.GetMember( "GruppeId", TRUE ).SetString( GruppeOid );
+    PaketJSon.GetMember( "ProjektNummer", TRUE ).SetString( ProtGrp._Projekt.Nummer );
+    PaketJSon.GetMember( "timestamp", TRUE ).SetString( TimeGetCurrTime( FALSE ).FormatDateTime() );
+    PaketJSon.GetMember( "anzahlProtokolle", TRUE ).SetNumber( ProtGrp._Protokolle.GetCount().ToFloat() );
+    PaketJSon.GetMember( "version", TRUE ).SetString( "v6" );
+    PaketJSon.GetMember( "projektStammverzeichnis", TRUE ).SetString( ProtGrp._Projekt._PINGPfadProjektDokumenteExtern );
+
+    // ============================================================
+    // VERANTWORTLICHE
+    // ============================================================
+    RoleSet = ProtGrp._Projekt.Vorgang.FunktionelleRollen;
+    IF( RoleSet.Get( Role, 1, START ) )
+        REPEAT
+            PaketJSon = JSon.AddElement();
+            PaketJSon.GetMember( "ID", TRUE ).SetString( Role.Adresse.GetOID() );
+            PaketJSon.GetMember( "Kuerzel", TRUE ).SetString( Role.Adresse.Kuerzel );
+            PaketJSon.GetMember( "Name", TRUE ).SetString( Role.Adresse.Name1 );
+        UNTIL( !RoleSet.Get( Role, 1, CURRENT ) )
+    ENDIF
+
+    // ============================================================
+    // PROTOKOLLGRUPPE — dynamisch
+    // ============================================================
+    PaketJSon = JSon.AddElement();
+    PaketJSon.GetMember( "Id", TRUE ).SetString( GruppeOid );
+    PaketJSon.GetMember( "ProjektNummer", TRUE ).SetString( ProtGrp._Projekt.Nummer );
+    PaketJSon.GetMember( "ProjektName", TRUE ).SetString( ProtGrp._Projekt.Name );
+    PaketJSon.GetMember( "ProjektStammverzeichnis", TRUE ).SetString( ProtGrp._Projekt._PINGPfadProjektDokumenteExtern );
+
+    // Introspection: _PINGProtokollgruppe
+    ClassName = "_PINGProtokollgruppe";
+    FOR( mi = 1; mi <= GrpMemberCount; mi++ )
+        MemberName = GrpMembers[ mi ];
+        isVisible = DBCIsMemberVisible( ClassName, MemberName );
+        IF( isVisible )
+            isSet = DBCIsMemberSet( ClassName, MemberName );
+            IF( !isSet )
+                isObj = DBCIsMemberObject( ClassName, MemberName );
+                IF( isObj )
+                    IF( ProtGrp.GetObject( MemberName, RefObj ) )
+                        PaketJSon.GetMember( MemberName + "Oid", TRUE ).SetString( RefObj.GetOID() );
+                    ENDIF
+                ELSE
+                    MemberType = DBCGetMemberTypeName( ClassName, MemberName );
+                    IF( MemberType == "STRING" )
+                        sVal = ProtGrp.GetString( MemberName );
+                        PaketJSon.GetMember( MemberName, TRUE ).SetString( sVal );
+                    ELSEIF( MemberType == "INT" )
+                        iVal = ProtGrp.GetInt( MemberName );
+                        PaketJSon.GetMember( MemberName, TRUE ).SetNumber( iVal.ToFloat() );
+                    ELSEIF( MemberType == "FLOAT" )
+                        fVal = ProtGrp.GetFloat( MemberName );
+                        PaketJSon.GetMember( MemberName, TRUE ).SetNumber( fVal );
+                    ELSEIF( MemberType == "BOOL" )
+                        bVal = ProtGrp.GetBool( MemberName );
+                        PaketJSon.GetMember( MemberName, TRUE ).SetBool( bVal );
+                    ELSEIF( MemberType == "TIME" )
+                        tVal = ProtGrp.GetTime( MemberName );
+                        PaketJSon.GetMember( MemberName, TRUE ).SetString( tVal.EditFormatDateTime() );
+                    ENDIF
+                ENDIF
+            ELSE
+                // V5c: Set-Member exportieren
+                isObj = DBCIsMemberObject( ClassName, MemberName );
+                IF( isObj )
+                    IF( ProtGrp.GetObjectSet( MemberName, GenObjSet ) )
+                        SetCount = GenObjSet.GetCount();
+                        IF( SetCount > 0 )
+                            SetArrJSon = PaketJSon.GetMember( MemberName + "Oids", TRUE );
+                            IF( GenObjSet.Get( GenSetObj, 1, START ) )
+                                REPEAT
+                                    SetArrJSon.AddElement().SetString( GenSetObj.GetOID() );
+                                UNTIL( !GenObjSet.Get( GenSetObj, 1, CURRENT ) )
+                            ENDIF
+                        ENDIF
+                    ENDIF
+                ELSE
+                    MemberType = DBCGetMemberTypeName( ClassName, MemberName );
+                    IF( MemberType == "STRING" )
+                        IF( ProtGrp.GetStringSet( MemberName, GenStrSet ) )
+                            SetCount = GenStrSet.GetCount();
+                            IF( SetCount > 0 )
+                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                FOR( si = 1; si <= SetCount; si++ )
+                                    SetArrJSon.AddElement().SetString( GenStrSet.Get( si ) );
+                                NEXT
+                            ENDIF
+                        ENDIF
+                    ELSEIF( MemberType == "INT" )
+                        IF( ProtGrp.GetIntSet( MemberName, GenIntSet ) )
+                            SetCount = GenIntSet.GetCount();
+                            IF( SetCount > 0 )
+                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                FOR( si = 1; si <= SetCount; si++ )
+                                    SetArrJSon.AddElement().SetNumber( GenIntSet.Get( si ).ToFloat() );
+                                NEXT
+                            ENDIF
+                        ENDIF
+                    ELSEIF( MemberType == "FLOAT" )
+                        IF( ProtGrp.GetFloatSet( MemberName, GenFloatSet ) )
+                            SetCount = GenFloatSet.GetCount();
+                            IF( SetCount > 0 )
+                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                FOR( si = 1; si <= SetCount; si++ )
+                                    SetArrJSon.AddElement().SetNumber( GenFloatSet.Get( si ) );
+                                NEXT
+                            ENDIF
+                        ENDIF
+                    ELSEIF( MemberType == "BOOL" )
+                        IF( ProtGrp.GetBoolSet( MemberName, GenBoolSet ) )
+                            SetCount = GenBoolSet.GetCount();
+                            IF( SetCount > 0 )
+                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                FOR( si = 1; si <= SetCount; si++ )
+                                    SetArrJSon.AddElement().SetBool( GenBoolSet.Get( si ) );
+                                NEXT
+                            ENDIF
+                        ENDIF
+                    ELSEIF( MemberType == "TIME" )
+                        IF( ProtGrp.GetTimeSet( MemberName, GenTimeSet ) )
+                            SetCount = GenTimeSet.GetCount();
+                            IF( SetCount > 0 )
+                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                FOR( si = 1; si <= SetCount; si++ )
+                                    SetArrJSon.AddElement().SetString( GenTimeSet.Get( si ).EditFormatDateTime() );
+                                NEXT
+                            ENDIF
+                        ENDIF
+                    ENDIF
+                ENDIF
+            ENDIF
+        ENDIF
+    NEXT
+
+    // ============================================================
+    // PROTOKOLLE + ELEMENTE
+    // ============================================================
+    ProtSet = ProtGrp._Protokolle;
+    ElemSet.Construct();
+    IF( ProtSet.Get( Prot, 1, START ) )
+        REPEAT
+            ElemSet.AddSet( Prot._Protokollelemente );
+
+            PaketJSon = JSon.AddElement();
+            PaketJSon.GetMember( "Id", TRUE ).SetString( Prot.GetOID() );
+            PaketJSon.GetMember( "_ProtokollgruppeOid", TRUE ).SetString( GruppeOid );
+
+            // Introspection: _PINGProtokoll
+            ClassName = "_PINGProtokoll";
+            FOR( mi = 1; mi <= ProtMemberCount; mi++ )
+                MemberName = ProtMembers[ mi ];
+                isVisible = DBCIsMemberVisible( ClassName, MemberName );
+                IF( isVisible )
+                    isSet = DBCIsMemberSet( ClassName, MemberName );
+                    IF( !isSet )
+                        isObj = DBCIsMemberObject( ClassName, MemberName );
+                        IF( isObj )
+                            IF( Prot.GetObject( MemberName, RefObj ) )
+                                PaketJSon.GetMember( MemberName + "Oid", TRUE ).SetString( RefObj.GetOID() );
+                            ENDIF
+                        ELSE
+                            MemberType = DBCGetMemberTypeName( ClassName, MemberName );
+                            IF( MemberType == "STRING" )
+                                sVal = Prot.GetString( MemberName );
+                                PaketJSon.GetMember( MemberName, TRUE ).SetString( sVal );
+                            ELSEIF( MemberType == "INT" )
+                                iVal = Prot.GetInt( MemberName );
+                                PaketJSon.GetMember( MemberName, TRUE ).SetNumber( iVal.ToFloat() );
+                            ELSEIF( MemberType == "FLOAT" )
+                                fVal = Prot.GetFloat( MemberName );
+                                PaketJSon.GetMember( MemberName, TRUE ).SetNumber( fVal );
+                            ELSEIF( MemberType == "BOOL" )
+                                bVal = Prot.GetBool( MemberName );
+                                PaketJSon.GetMember( MemberName, TRUE ).SetBool( bVal );
+                            ELSEIF( MemberType == "TIME" )
+                                tVal = Prot.GetTime( MemberName );
+                                PaketJSon.GetMember( MemberName, TRUE ).SetString( tVal.EditFormatDateTime() );
+                            ENDIF
+                        ENDIF
+                    ELSE
+                        // V5c: Set-Member exportieren
+                        isObj = DBCIsMemberObject( ClassName, MemberName );
+                        IF( isObj )
+                            IF( Prot.GetObjectSet( MemberName, GenObjSet ) )
+                                SetCount = GenObjSet.GetCount();
+                                IF( SetCount > 0 )
+                                    SetArrJSon = PaketJSon.GetMember( MemberName + "Oids", TRUE );
+                                    IF( GenObjSet.Get( GenSetObj, 1, START ) )
+                                        REPEAT
+                                            SetArrJSon.AddElement().SetString( GenSetObj.GetOID() );
+                                        UNTIL( !GenObjSet.Get( GenSetObj, 1, CURRENT ) )
+                                    ENDIF
+                                ENDIF
+                            ENDIF
+                        ELSE
+                            MemberType = DBCGetMemberTypeName( ClassName, MemberName );
+                            IF( MemberType == "STRING" )
+                                IF( Prot.GetStringSet( MemberName, GenStrSet ) )
+                                    SetCount = GenStrSet.GetCount();
+                                    IF( SetCount > 0 )
+                                        SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                        FOR( si = 1; si <= SetCount; si++ )
+                                            SetArrJSon.AddElement().SetString( GenStrSet.Get( si ) );
+                                        NEXT
+                                    ENDIF
+                                ENDIF
+                            ELSEIF( MemberType == "INT" )
+                                IF( Prot.GetIntSet( MemberName, GenIntSet ) )
+                                    SetCount = GenIntSet.GetCount();
+                                    IF( SetCount > 0 )
+                                        SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                        FOR( si = 1; si <= SetCount; si++ )
+                                            SetArrJSon.AddElement().SetNumber( GenIntSet.Get( si ).ToFloat() );
+                                        NEXT
+                                    ENDIF
+                                ENDIF
+                            ELSEIF( MemberType == "FLOAT" )
+                                IF( Prot.GetFloatSet( MemberName, GenFloatSet ) )
+                                    SetCount = GenFloatSet.GetCount();
+                                    IF( SetCount > 0 )
+                                        SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                        FOR( si = 1; si <= SetCount; si++ )
+                                            SetArrJSon.AddElement().SetNumber( GenFloatSet.Get( si ) );
+                                        NEXT
+                                    ENDIF
+                                ENDIF
+                            ELSEIF( MemberType == "BOOL" )
+                                IF( Prot.GetBoolSet( MemberName, GenBoolSet ) )
+                                    SetCount = GenBoolSet.GetCount();
+                                    IF( SetCount > 0 )
+                                        SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                        FOR( si = 1; si <= SetCount; si++ )
+                                            SetArrJSon.AddElement().SetBool( GenBoolSet.Get( si ) );
+                                        NEXT
+                                    ENDIF
+                                ENDIF
+                            ELSEIF( MemberType == "TIME" )
+                                IF( Prot.GetTimeSet( MemberName, GenTimeSet ) )
+                                    SetCount = GenTimeSet.GetCount();
+                                    IF( SetCount > 0 )
+                                        SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                        FOR( si = 1; si <= SetCount; si++ )
+                                            SetArrJSon.AddElement().SetString( GenTimeSet.Get( si ).EditFormatDateTime() );
+                                        NEXT
+                                    ENDIF
+                                ENDIF
+                            ENDIF
+                        ENDIF
+                    ENDIF
+                ENDIF
+            NEXT
+
+        UNTIL( !ProtSet.Get( Prot, 1, CURRENT ) )
+
+        // ============================================================
+        // PROTOKOLLELEMENTE — dynamisch
+        // ============================================================
+        IF( ElemSet.GetCount() > 0 )
+            IF( ElemSet.Get( Elem, 1, START ) )
+                REPEAT
+                    PaketJSon = JSon.AddElement();
+                    PaketJSon.GetMember( "Id", TRUE ).SetString( Elem.GetOID() );
+                    PaketJSon.GetMember( "_ProtokollOid", TRUE ).SetString( Elem._Protokoll.GetOID() );
+
+                    // Introspection: _PINGProtokollelement
+                    ClassName = "_PINGProtokollelement";
+                    FOR( mi = 1; mi <= ElemMemberCount; mi++ )
+                        MemberName = ElemMembers[ mi ];
+                        isVisible = DBCIsMemberVisible( ClassName, MemberName );
+                        IF( isVisible )
+                            isSet = DBCIsMemberSet( ClassName, MemberName );
+                            IF( !isSet )
+                                isObj = DBCIsMemberObject( ClassName, MemberName );
+                                IF( isObj )
+                                    IF( Elem.GetObject( MemberName, RefObj ) )
+                                        PaketJSon.GetMember( MemberName + "Oid", TRUE ).SetString( RefObj.GetOID() );
+                                    ENDIF
+                                ELSE
+                                    MemberType = DBCGetMemberTypeName( ClassName, MemberName );
+                                    IF( MemberType == "STRING" )
+                                        sVal = Elem.GetString( MemberName );
+                                        PaketJSon.GetMember( MemberName, TRUE ).SetString( sVal );
+                                    ELSEIF( MemberType == "INT" )
+                                        iVal = Elem.GetInt( MemberName );
+                                        PaketJSon.GetMember( MemberName, TRUE ).SetNumber( iVal.ToFloat() );
+                                    ELSEIF( MemberType == "FLOAT" )
+                                        fVal = Elem.GetFloat( MemberName );
+                                        PaketJSon.GetMember( MemberName, TRUE ).SetNumber( fVal );
+                                    ELSEIF( MemberType == "BOOL" )
+                                        bVal = Elem.GetBool( MemberName );
+                                        PaketJSon.GetMember( MemberName, TRUE ).SetBool( bVal );
+                                    ELSEIF( MemberType == "TIME" )
+                                        tVal = Elem.GetTime( MemberName );
+                                        PaketJSon.GetMember( MemberName, TRUE ).SetString( tVal.EditFormatDateTime() );
+                                    ENDIF
+                                ENDIF
+                            ELSE
+                                // V5c: Set-Member exportieren
+                                isObj = DBCIsMemberObject( ClassName, MemberName );
+                                IF( isObj )
+                                    IF( Elem.GetObjectSet( MemberName, GenObjSet ) )
+                                        SetCount = GenObjSet.GetCount();
+                                        IF( SetCount > 0 )
+                                            SetArrJSon = PaketJSon.GetMember( MemberName + "Oids", TRUE );
+                                            IF( GenObjSet.Get( GenSetObj, 1, START ) )
+                                                REPEAT
+                                                    SetArrJSon.AddElement().SetString( GenSetObj.GetOID() );
+                                                UNTIL( !GenObjSet.Get( GenSetObj, 1, CURRENT ) )
+                                            ENDIF
+                                        ENDIF
+                                    ENDIF
+                                ELSE
+                                    MemberType = DBCGetMemberTypeName( ClassName, MemberName );
+                                    IF( MemberType == "STRING" )
+                                        IF( Elem.GetStringSet( MemberName, GenStrSet ) )
+                                            SetCount = GenStrSet.GetCount();
+                                            IF( SetCount > 0 )
+                                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                                FOR( si = 1; si <= SetCount; si++ )
+                                                    SetArrJSon.AddElement().SetString( GenStrSet.Get( si ) );
+                                                NEXT
+                                            ENDIF
+                                        ENDIF
+                                    ELSEIF( MemberType == "INT" )
+                                        IF( Elem.GetIntSet( MemberName, GenIntSet ) )
+                                            SetCount = GenIntSet.GetCount();
+                                            IF( SetCount > 0 )
+                                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                                FOR( si = 1; si <= SetCount; si++ )
+                                                    SetArrJSon.AddElement().SetNumber( GenIntSet.Get( si ).ToFloat() );
+                                                NEXT
+                                            ENDIF
+                                        ENDIF
+                                    ELSEIF( MemberType == "FLOAT" )
+                                        IF( Elem.GetFloatSet( MemberName, GenFloatSet ) )
+                                            SetCount = GenFloatSet.GetCount();
+                                            IF( SetCount > 0 )
+                                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                                FOR( si = 1; si <= SetCount; si++ )
+                                                    SetArrJSon.AddElement().SetNumber( GenFloatSet.Get( si ) );
+                                                NEXT
+                                            ENDIF
+                                        ENDIF
+                                    ELSEIF( MemberType == "BOOL" )
+                                        IF( Elem.GetBoolSet( MemberName, GenBoolSet ) )
+                                            SetCount = GenBoolSet.GetCount();
+                                            IF( SetCount > 0 )
+                                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                                FOR( si = 1; si <= SetCount; si++ )
+                                                    SetArrJSon.AddElement().SetBool( GenBoolSet.Get( si ) );
+                                                NEXT
+                                            ENDIF
+                                        ENDIF
+                                    ELSEIF( MemberType == "TIME" )
+                                        IF( Elem.GetTimeSet( MemberName, GenTimeSet ) )
+                                            SetCount = GenTimeSet.GetCount();
+                                            IF( SetCount > 0 )
+                                                SetArrJSon = PaketJSon.GetMember( MemberName, TRUE );
+                                                FOR( si = 1; si <= SetCount; si++ )
+                                                    SetArrJSon.AddElement().SetString( GenTimeSet.Get( si ).EditFormatDateTime() );
+                                                NEXT
+                                            ENDIF
+                                        ENDIF
+                                    ENDIF
+                                ENDIF
+                            ENDIF
+                        ENDIF
+                    NEXT
+
+                    // VerantwortlicherName (Denormalisierung, hart kodiert)
+                    IF( !Elem._Verantwortlicher.IsEmpty() )
+                        PaketJSon.GetMember( "VerantwortlicherName", TRUE ).SetString( Elem._Verantwortlicher.Name1 );
+                    ENDIF
+
+                UNTIL( !ElemSet.Get( Elem, 1, CURRENT ) )
+            ENDIF
+        ENDIF
+    ENDIF
+
+    ElemSet.Destruct();
+
+    // ============================================================
+    // DATEI SCHREIBEN
+    // ============================================================
+    Txt = JSon.GetText( TRUE );
+
+    IF( ExchangeBasePath != "" )
+        ExchangeProjPath = ExchangeBasePath + "\\" + GruppeOid;
+        FileCreatePath( ExchangeProjPath );
+        ExchangeJsonPath = ExchangeProjPath + "\\protokolle.json";
+        File.Open( ExchangeJsonPath, FILE_MODE_CREATE | FILE_MODE_WRITE );
+        File.WriteString( Txt );
+        File.Close();
+    ENDIF
+
+    JSon.Destruct();
+
+    MessageBox( "Export V6 abgeschlossen.\n\nDatei: " + ExchangeJsonPath + "\n\nAnzahl Protokolle: " + ProtSet.GetCount().ToStr(), MB_OK | MB_ICONINFORMATION );
+
+RETURN( 0 );

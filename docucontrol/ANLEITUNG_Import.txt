@@ -1,0 +1,159 @@
+DOCUcontrol-Makro: Import Protokoll-Aenderungen aus App
+=======================================================
+Version 2 — Stand 25.03.2026
+
+
+1. Was macht das Makro?
+-----------------------
+
+Das Makro liest die von der mobilen Protokoll-App exportierten Aenderungen
+und schreibt sie in DOCUframe zurueck. Es verarbeitet drei Arten von Daten:
+
+  a) AKTUALISIERUNGEN — bestehende Punkte werden aktualisiert:
+     Status, Termin, Bemerkung, Verantwortlicher, GPS-Daten, Fotos
+
+  b) NEUE PROTOKOLLE — ein Folgeprotokoll wird angelegt:
+     Metadaten (Name, Datum, Ort, Autor), Teilnehmer und Verteiler
+     werden vom Vorgaengerprotokoll uebernommen, neue Punkte darunter
+
+  c) ANHANGPROTOKOLLE — neue Punkte in bestehenden Anhangprotokollen:
+     z.B. Bautagebuch, Mehrkosten (Protokolle mit negativer Nummer)
+
+
+2. Einrichtung in DOCUframe
+----------------------------
+
+  1. DOCUcontrol oeffnen
+  2. Neues Makro anlegen:
+     - Objekttyp: "_PINGProtokollgruppe"
+     - Name: z.B. "Import App-Aenderungen v2"
+  3. Inhalt von "Import_Protokollgruppe_v2.txt" einfuegen
+  4. Makro speichern
+
+  Pfad im Makro pruefen (Zeile ~75):
+    BasePath = "K:\Sonstige\Docuframe-Exchange\data\import\" + GruppeOid
+
+  Dieser Pfad muss mit dem Exchange-Server-Datenverzeichnis uebereinstimmen.
+
+
+3. Ausfuehrung
+--------------
+
+  1. In DOCUframe die gewuenschte Protokollgruppe selektieren
+  2. Rechtsklick → Makro "Import App-Aenderungen v2" ausfuehren
+  3. Das Makro:
+     - Liest alle ausstehenden Dateien aus ready/
+     - Verarbeitet Updates und neue Elemente
+     - Verschiebt verarbeitete Dateien nach done/
+     - Schreibt ein Log nach import.log
+     - Zeigt eine Zusammenfassung an
+
+
+4. Dateistruktur auf dem Server
+-------------------------------
+
+  K:\Sonstige\Docuframe-Exchange\data\import\{GruppeOID}\
+  |
+  +-- ready\                    Hier liegen die Dateien zum Importieren
+  |   +-- index.json            Liste der ausstehenden Dateien
+  |   +-- changes_zip_*.json    Aenderungen aus der App
+  |   +-- photos\               Fotos (werden vom Server in Projektordner kopiert)
+  |
+  +-- done\                     Verarbeitete Dateien (Archiv)
+  |   +-- changes_zip_*.json    Bereits importiert
+  |
+  +-- import.log                Import-Protokoll
+
+
+5. Foto-Ablage
+--------------
+
+  Fotos werden vom Exchange-Server automatisch in die Projektstruktur kopiert:
+
+  K:\projekte\{AG-Gruppe}\{Projekt}\
+    Fotos\
+      {Protokollgruppen-Name}\
+        Protokoll {Nr}\
+          6_Neubau_Pos1_Bild_1.jpg
+          6_Neubau_Pos2_Bild_1.jpg
+
+  Der Foto-Pfad wird vom Server berechnet und im JSON als "FotoPfadServer"
+  eingetragen. Das Makro schreibt diesen Pfad in das DOCUframe-Feld
+  _PINGFotoPfad.
+
+
+6. Zusammenspiel mit dem Export-Makro
+--------------------------------------
+
+  Typischer Ablauf (woechentlich):
+
+  1. Export-Makro ausfuehren → Daten fuer die App bereitstellen
+  2. Bauleiter arbeiten mobil → Aenderungen, neue Punkte, Fotos
+  3. Bauleiter klicken "Exportieren" in der App → Daten an Server
+  4. Import-Makro ausfuehren → Aenderungen in DOCUframe uebernehmen
+  5. Wieder bei 1. → naechster Zyklus
+
+
+7. Fehlerbehebung
+-----------------
+
+  "Keine Import-Dateien gefunden"
+    → Es liegen keine changes_*.json in ready/
+    → Pruefen ob die App den Export durchgefuehrt hat
+
+  "WARNUNG: Element nicht gefunden: <OID>"
+    → Ein Element wurde in DOCUframe geloescht, ist aber noch in der App
+    → Kann ignoriert werden, wird im Log dokumentiert
+
+  "WARNUNG: Anhangprotokoll nicht gefunden: <OID>"
+    → Das Anhangprotokoll (z.B. Bautagebuch) existiert nicht mehr
+    → Pruefen ob das Protokoll umbenannt oder geloescht wurde
+
+  Log pruefen:
+    K:\Sonstige\Docuframe-Exchange\data\import\{GruppeOID}\import.log
+
+
+8. Hinweise zu Teilnehmer/Verteiler
+------------------------------------
+
+  Das Makro kopiert Teilnehmer und Verteiler vom Vorgaengerprotokoll
+  auf das neue Protokoll. Falls die Kopie nicht funktioniert (DOCUframe-
+  Versionsabhaengig), bitte testen und ggf. die Zeilen im Makro
+  anpassen (markiert mit Kommentar "bitte testen").
+
+  Betroffener Abschnitt im Makro: ca. Zeile 160-180
+  (Suche nach "Teilnehmer vom Vorgaenger kopieren")
+
+
+9. FileRename
+-------------
+
+  Das Makro verwendet FileRename() um Dateien von ready/ nach done/
+  zu verschieben. Falls diese Funktion in Ihrer DOCUframe-Version
+  nicht verfuegbar ist:
+    - Die Zeile "FileRename( ReadyFile, DoneFile );" auskommentieren
+    - Der Exchange-Server kann alternativ das Aufraeumen uebernehmen
+
+
+10. Laufwerkszugriff (K:) und Projektpfad-Suche
+-------------------------------------------------
+
+  WICHTIG: Die Makros greifen auf Netzlaufwerke zu:
+    - Import/Export: K:\Sonstige\Docuframe-Exchange\data\
+    - Projektpfad-Suche: K:\projekte\
+
+  Das funktioniert nur, wenn der DOCUframe-Client (oder -Server) das
+  Laufwerk K: gemappt hat. Die Entwicklungsumgebung DOCUdev hat
+  moeglicherweise KEINEN Zugriff auf K: — dort zum Testen einen
+  lokalen Pfad verwenden (z.B. T:\_Temp\...).
+
+  Im Makro den BasisPfad anpassen:
+    Produktiv:  STRING BasisPfad = "K:\\projekte";
+    Test/Dev:   STRING BasisPfad = "T:\\_Temp\\CP\\DOCUcontrol\\tmp\\Projekte";
+
+  Die Projektpfad-Suche (Hilfsfunktion_Projektpfad.txt) durchsucht
+  K:\projekte\ nach dem Schema:
+    K:\projekte\{AG-Gruppe}\{ProjektNr}_{Bezeichnung}\
+
+  Sie verwendet HFILEFIND mit Wildcard-Suche (schnell, nicht rekursiv).
+  FileGetSubDirs ist fuer Netzlaufwerke zu langsam (rekursiver Scan).
