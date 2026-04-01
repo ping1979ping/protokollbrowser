@@ -55,7 +55,7 @@ export default function ProjektAuswahl({ onSelect, onZurueck, onNeuesImport }: P
               <p className="text-base text-ping-text-mid mt-0.5">
                 {p.gruppe.Name} &middot; {p.anzahlProtokolle} Protokoll{p.anzahlProtokolle !== 1 ? 'e' : ''}
               </p>
-              <p className="text-sm text-ping-text-light mt-0.5">Projekt {p.gruppe.ProjektId}</p>
+              <p className="text-sm text-ping-text-light mt-0.5">Projekt {p.gruppe.ProjektNummer}</p>
             </button>
             <button
               onClick={() => handleDelete(p.gruppe.Id, p.gruppe.ProjektName)}

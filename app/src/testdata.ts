@@ -6,7 +6,7 @@ export const testDaten: ProtokollPaket[] = [
   // === Projekt 1: B123 Ausbau Musterstrasse — Protokoll 4 ===
   {
     Protokollgruppe: {
-      Id: 'grp-001', Name: 'Baustellennotiz', ProjektId: 'PR-4711',
+      Id: 'grp-001', Name: 'Baustellennotiz', ProjektNummer: 'PR-4711',
       ProjektName: 'B123 Ausbau Musterstrasse',
       ProjektStammverzeichnis: '\\\\Server\\Projekte\\B123_Musterstrasse\\',
       Protokollnummer: 5, Vorwort: '', Nachwort: '', Themen: 'Tiefbau, Mängel', Bemerkung: '',
@@ -35,7 +35,7 @@ export const testDaten: ProtokollPaket[] = [
   // === Projekt 1: B123 Ausbau Musterstrasse — Protokoll 5 ===
   {
     Protokollgruppe: {
-      Id: 'grp-001', Name: 'Baustellennotiz', ProjektId: 'PR-4711',
+      Id: 'grp-001', Name: 'Baustellennotiz', ProjektNummer: 'PR-4711',
       ProjektName: 'B123 Ausbau Musterstrasse',
       ProjektStammverzeichnis: '\\\\Server\\Projekte\\B123_Musterstrasse\\',
       Protokollnummer: 5, Vorwort: 'Protokoll der 5. Baustellenbegehung.', Nachwort: 'Nächster Termin: 23.03.2026', Themen: 'Tiefbau, Mängel, Restarbeiten', Bemerkung: '',
@@ -67,7 +67,7 @@ export const testDaten: ProtokollPaket[] = [
   // === Projekt 2: K45 Sanierung Hauptstrasse — Protokoll 2 ===
   {
     Protokollgruppe: {
-      Id: 'grp-002', Name: 'Jour fixe', ProjektId: 'PR-8820',
+      Id: 'grp-002', Name: 'Jour fixe', ProjektNummer: 'PR-8820',
       ProjektName: 'K45 Sanierung Hauptstrasse',
       ProjektStammverzeichnis: '\\\\Server\\Projekte\\K45_Hauptstrasse\\',
       Protokollnummer: 2, Vorwort: '', Nachwort: '', Themen: 'Hochbau, Elektro', Bemerkung: '',

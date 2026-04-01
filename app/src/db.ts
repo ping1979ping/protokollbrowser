@@ -56,11 +56,11 @@ export async function importPakete(pakete: ProtokollPaket[]): Promise<void> {
   await tx.done;
 }
 
-export async function importVerantwortliche(firmen: { ID: string; Kürzel: string; Name: string }[]): Promise<void> {
+export async function importVerantwortliche(firmen: { ID: string; Kürzel?: string; Kuerzel?: string; Name: string }[]): Promise<void> {
   const db = await getDb();
   const tx = db.transaction('verantwortliche', 'readwrite');
   for (const f of firmen) {
-    await tx.objectStore('verantwortliche').put({ ID: f.ID, Kuerzel: f['Kürzel'], Name: f.Name });
+    await tx.objectStore('verantwortliche').put({ ID: f.ID, Kuerzel: f.Kuerzel || f['Kürzel'] || '', Name: f.Name });
   }
   await tx.done;
 }

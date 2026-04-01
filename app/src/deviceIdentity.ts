@@ -9,7 +9,16 @@ const USER_NAME_KEY = 'user-name';
 export function getDeviceId(): string {
   let id = localStorage.getItem(DEVICE_ID_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    // crypto.randomUUID() ist nur in Secure Contexts (HTTPS/localhost) verfügbar.
+    // Fallback für HTTP-Zugriff über IP-Adresse (z.B. VPN).
+    if (typeof crypto.randomUUID === 'function') {
+      id = crypto.randomUUID();
+    } else {
+      id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+      });
+    }
     localStorage.setItem(DEVICE_ID_KEY, id);
   }
   return id;

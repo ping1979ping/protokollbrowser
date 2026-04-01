@@ -170,6 +170,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   }
 
   async function gpsErfassen() {
+    if (!window.isSecureContext) { alert('GPS erfordert eine HTTPS-Verbindung.\nBitte Server mit SSL-Zertifikat starten.'); return; }
     if (!navigator.geolocation) { alert('GPS nicht verfügbar.'); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => {

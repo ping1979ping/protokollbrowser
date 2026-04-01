@@ -184,6 +184,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   }
 
   function gpsErfassen() {
+    if (!window.isSecureContext) { alert('GPS erfordert eine HTTPS-Verbindung.\nBitte Server mit SSL-Zertifikat starten.'); return; }
     if (!navigator.geolocation) { alert('GPS nicht verfügbar.'); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => {

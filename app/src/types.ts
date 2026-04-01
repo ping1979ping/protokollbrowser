@@ -74,7 +74,7 @@ export interface Protokoll {
 export interface Protokollgruppe {
   Id: string;
   Name: string;
-  ProjektId: string;
+  ProjektNummer: string;
   ProjektName: string;
   ProjektStammverzeichnis: string;
   Protokollnummer: number;
