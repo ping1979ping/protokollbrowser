@@ -229,68 +229,68 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
       {/* Header */}
       <div className="bg-ping-blue text-white p-3">
         {/* Zeile 1: Vorh. | Übersicht | Nächst. — alle gleich breit */}
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <button onClick={() => prevElem && !dirty && onNavigate(prevElem)} disabled={!prevElem || dirty}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium text-center ${prevElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/50 cursor-default'}`}>
+            className={`flex-1 py-2 rounded-lg text-xs font-medium text-center ${prevElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
             &larr; Vorh.
           </button>
           <button onClick={onBack}
-            className="flex-1 py-2.5 rounded-lg text-sm font-medium text-center bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue">
+            className="flex-1 py-2 rounded-lg text-xs font-medium text-center bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue">
             &uarr; Übersicht
           </button>
           <button onClick={() => nextElem && !dirty && onNavigate(nextElem)} disabled={!nextElem || dirty}
-            className={`flex-1 py-2.5 rounded-lg text-sm font-medium text-center ${nextElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/50 cursor-default'}`}>
+            className={`flex-1 py-2 rounded-lg text-xs font-medium text-center ${nextElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
             Nächst. &rarr;
           </button>
         </div>
         {/* Zeile 2: Status | Pos. | Protokollname | Modus */}
-        <div className="flex items-center gap-2 mt-2">
-          {st && <span className={`px-3 py-1 rounded text-sm font-medium w-24 text-center shrink-0 ${st.css}`}>{st.label}</span>}
-          <span className="text-sm text-ping-blue-light">Pos. {elem.Position}</span>
-          <span className="text-sm text-ping-blue-light/70 truncate">{protokoll.Name}</span>
-          <span className={`text-sm shrink-0 ml-auto ${istNeu ? 'text-green-300' : 'text-ping-blue-light'}`}>
+        <div className="flex items-center gap-2 mt-1.5">
+          {st && <span className={`px-2 py-0.5 rounded text-[10px] font-medium w-20 text-center shrink-0 ${st.css}`}>{st.label}</span>}
+          <span className="text-xs text-ping-blue-light">Pos. {elem.Position}</span>
+          <span className="text-[10px] text-ping-blue-light/70 truncate">{protokoll.Name}</span>
+          <span className={`text-[10px] shrink-0 ml-auto ${istNeu ? 'text-green-300' : 'text-ping-blue-light'}`}>
             ({istNeu ? 'editierbar' : 'Status/GPS'})
           </span>
         </div>
       </div>
 
       {/* Buttons direkt unter Header */}
-      <div className="px-4 pt-3 flex gap-2">
+      <div className="px-3 pt-2 flex gap-2">
         <button onClick={speichern}
-          className={`flex-1 py-3.5 rounded-lg font-medium text-white text-base transition ${
+          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-sm transition ${
             gespeichert ? 'bg-green-600' : dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-ping-blue hover:bg-ping-blue-dark'
           }`}>
           {gespeichert ? 'Gespeichert' : dirty ? 'Speichern!' : 'Speichern'}
         </button>
         <button onClick={() => { setElem({ ...element }); setDirty(false); setGespeichert(false); }}
           disabled={!dirty}
-          className={`flex-1 py-3.5 rounded-lg font-medium text-base transition ${dirty ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-gray-100 text-gray-600 cursor-default'}`}>
+          className={`flex-1 py-2.5 rounded-lg font-medium text-sm transition ${dirty ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-gray-100 text-gray-400 cursor-default'}`}>
           Rückgängig
         </button>
       </div>
 
-      <div className="p-4 space-y-3.5">
+      <div className="p-3 space-y-2.5">
 
         {/* Vorgänger/Nachfolger Navigation */}
         {(vorgaenger.length > 0 || nachfolger.length > 0) && (
-          <div className="bg-amber-50 rounded-lg p-3.5 border border-amber-200">
+          <div className="bg-amber-50 rounded-lg p-2 border border-amber-200">
             {vorgaenger.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-amber-600 font-medium">Vorgänger:</span>
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-[10px] text-amber-600 font-medium">Vorgänger:</span>
                 {vorgaenger.map(v => (
                   <button key={v.Id} onClick={() => onNavigate(v)}
-                    className="text-sm bg-amber-100 text-amber-800 px-3 py-2 rounded hover:bg-amber-200">
+                    className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded hover:bg-amber-200">
                     Pos. {v.Position} — {v.Positionstext.slice(0, 40)}...
                   </button>
                 ))}
               </div>
             )}
             {nachfolger.length > 0 && (
-              <div className="flex items-center gap-2 flex-wrap mt-1">
-                <span className="text-sm text-amber-600 font-medium">Nachfolger:</span>
+              <div className="flex items-center gap-1 flex-wrap mt-1">
+                <span className="text-[10px] text-amber-600 font-medium">Nachfolger:</span>
                 {nachfolger.map(n => (
                   <button key={n.Id} onClick={() => onNavigate(n)}
-                    className="text-sm bg-amber-100 text-amber-800 px-3 py-2 rounded hover:bg-amber-200">
+                    className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded hover:bg-amber-200">
                     Pos. {n.Position} — {n.Positionstext.slice(0, 40)}...
                   </button>
                 ))}
@@ -300,42 +300,42 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         )}
 
         {/* Positionstext */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium">Positionstext</label>
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase">Positionstext</label>
           {istNeu ? (
             <textarea value={elem.Positionstext} onChange={(e) => update({ Positionstext: e.target.value })}
               onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
               ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none mt-0.5 min-h-[9rem] max-h-[50vh] overflow-auto" />
+              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none mt-0.5 min-h-[9rem] max-h-[50vh] overflow-auto" />
           ) : (
-            <p className="text-base text-gray-700 mt-0.5">{elem.Positionstext || '—'}</p>
+            <p className="text-sm text-gray-700 mt-0.5">{elem.Positionstext || '—'}</p>
           )}
         </div>
 
         {/* Status */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Status</label>
-          <div className="flex gap-2 flex-wrap">
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase mb-1.5 block">Status</label>
+          <div className="flex gap-1 flex-wrap">
             {HAUPT_STATUS.map(s => (
               <button key={s} onClick={() => updateStatus(s)}
-                className={`px-4 py-2.5 rounded text-sm font-medium transition ${
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                   elem.Status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
                 }`}>
                 {STATUS_MAP[s].label}
               </button>
             ))}
             <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
-              className={`px-4 py-2.5 rounded text-sm font-medium transition ${
+              className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                 istWeitererStatus && !showWeitereStatus ? STATUS_MAP[elem.Status].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
               }`}>
               {istWeitererStatus && !showWeitereStatus ? STATUS_MAP[elem.Status].label : '...'}
             </button>
           </div>
           {showWeitereStatus && (
-            <div className="flex gap-2 flex-wrap mt-1.5 pt-1.5 border-t border-gray-200">
+            <div className="flex gap-1 flex-wrap mt-1.5 pt-1.5 border-t border-gray-100">
               {WEITERE_STATUS.map(s => STATUS_MAP[s] && (
                 <button key={s} onClick={() => updateStatus(s)}
-                  className={`px-4 py-2.5 rounded text-sm font-medium transition ${
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                     elem.Status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
                   }`}>
                   {STATUS_MAP[s].label}
@@ -346,48 +346,48 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         </div>
 
         {/* Position / Thema / Termin */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-            <label className="text-sm text-gray-600 font-medium block mb-1">Position</label>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Position</label>
             {istNeu ? (
               <input type="text" value={elem.Position} onChange={(e) => update({ Position: e.target.value })}
-                className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
             ) : (
-              <p className="text-sm text-gray-700 font-mono">{elem.Position}</p>
+              <p className="text-xs text-gray-700 font-mono">{elem.Position}</p>
             )}
           </div>
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-            <label className="text-sm text-gray-600 font-medium block mb-1">Thema</label>
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
             {istNeu ? (
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <select value={elem.Thema}
                   onChange={(e) => update({ Thema: e.target.value })}
-                  className="flex-1 min-w-0 px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                  className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
                   {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
                   {elem.Thema && !themenVorschlaege.includes(elem.Thema) && <option value={elem.Thema}>{elem.Thema}</option>}
                 </select>
                 <button onClick={() => { const val = prompt('Neues Thema eingeben:', elem.Thema); if (val != null) update({ Thema: val }); }}
-                  className="px-3 py-2 bg-ping-blue text-white rounded text-sm font-bold shrink-0" title="Neues Thema">+</button>
+                  className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
               </div>
             ) : (
-              <p className="text-sm text-gray-700">{elem.Thema || '—'}</p>
+              <p className="text-xs text-gray-700">{elem.Thema || '—'}</p>
             )}
           </div>
-          <div className="col-span-2 bg-white rounded-lg p-3.5 border border-gray-200 overflow-hidden">
-            <label className="text-sm text-gray-600 font-medium block mb-1">Termin</label>
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
             {istNeu ? (
               <input type="date" value={elem.Termin ? elem.Termin.slice(0, 10) : ''}
                 onChange={(e) => update({ Termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
-                className="w-full max-w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue box-border" />
+                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
             ) : (
-              <p className={`text-sm ${terminUeberfaellig ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>{elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE') : '—'}</p>
+              <p className={`text-xs ${terminUeberfaellig ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>{elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE') : '—'}</p>
             )}
           </div>
         </div>
 
         {/* Verantwortlich */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Verantwortlich (Firma)</label>
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich (Firma)</label>
           {istNeu ? (
             <select value={elem.VerantwortlicherFirmaOid}
               onChange={(e) => {
@@ -395,35 +395,35 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
                 const t = alleFirmen.find(t => t.Oid === v);
                 update({ VerantwortlicherFirmaOid: t?.Oid || '', VerantwortlicherFirmaName: t?.Name || '' });
               }}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue">
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
               <option value=""></option>
               {alleFirmen.map(t => (
                 <option key={t.Oid} value={t.Oid}>{t.Name}</option>
               ))}
             </select>
           ) : (
-            <p className="text-sm text-gray-700">{elem.VerantwortlicherFirmaName || '—'}</p>
+            <p className="text-xs text-gray-700">{elem.VerantwortlicherFirmaName || '—'}</p>
           )}
         </div>
 
         {/* GPS */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
-            <label className="text-sm text-gray-600 font-medium">GPS-Standort</label>
-            <div className="flex gap-2">
-              <button onClick={gpsErfassen} className="bg-green-600 text-white px-3 py-2 rounded text-sm">Erfassen</button>
-              <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-3 py-2 rounded text-sm">Karte</button>
+            <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
+            <div className="flex gap-1">
+              <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
+              <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
               {elem.MobileErfassung.GeoLat != null && (
                 <button onClick={() => updateMobile({ GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoHeading: null, GeoText: null })}
-                  className="bg-red-500 text-white px-3 py-2 rounded text-sm">Löschen</button>
+                  className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px]">Löschen</button>
               )}
             </div>
           </div>
           {elem.MobileErfassung.GeoLat != null
-            ? <p className="text-sm text-gray-600">
+            ? <p className="text-[10px] text-gray-600">
                 {formatCoord(elem.MobileErfassung.GeoLat, elem.MobileErfassung.GeoLon!, elem.MobileErfassung.GeoAccuracy, elem.MobileErfassung.GeoHeading)}
               </p>
-            : <p className="text-sm text-gray-500">Kein Standort</p>}
+            : <p className="text-[10px] text-gray-300">Kein Standort</p>}
         </div>
         {karteOffen && (
           <MapEditorModal
@@ -444,23 +444,23 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
 
         {/* Fotos */}
         {istNeu && (
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm text-gray-600 font-medium">Fotos ({fotos.length})</label>
-              <div className="flex gap-2">
-                <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-3 py-2 rounded text-sm flex items-center gap-1"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
-                <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-3 py-2 rounded text-sm">Galerie</button>
+              <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
+              <div className="flex gap-1">
+                <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
+                <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">Galerie</button>
               </div>
               <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={fotoHinzufuegen} className="hidden" />
               <input ref={galerieRef} type="file" accept="image/*" multiple onChange={fotoHinzufuegen} className="hidden" />
             </div>
             {fotos.length > 0 && (
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-1 flex-wrap">
                 {fotos.map(f => (
-                  <div key={f.fotoId} className="relative w-16 h-16">
+                  <div key={f.fotoId} className="relative w-10 h-10">
                     <img src={f.url} alt="" className="w-full h-full object-cover rounded" />
                     <button onClick={() => fotoLoeschen(f.fotoId)}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white w-8 h-8 rounded-full text-sm flex items-center justify-center">×</button>
+                      className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
                   </div>
                 ))}
               </div>
@@ -468,39 +468,39 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </div>
         )}
         {!istNeu && fotos.length > 0 && (
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-            <label className="text-sm text-gray-600 font-medium">Fotos ({fotos.length})</label>
-            <div className="flex gap-2 flex-wrap mt-1">
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({fotos.length})</label>
+            <div className="flex gap-1 flex-wrap mt-1">
               {fotos.map(f => (
-                <img key={f.fotoId} src={f.url} alt="" className="w-16 h-16 object-cover rounded" />
+                <img key={f.fotoId} src={f.url} alt="" className="w-10 h-10 object-cover rounded" />
               ))}
             </div>
           </div>
         )}
 
         {/* Bemerkung (intern) */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Bemerkung (intern)</label>
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Bemerkung (intern)</label>
           {istNeu ? (
             <textarea value={elem.Bemerkung} onChange={(e) => update({ Bemerkung: e.target.value })} rows={2}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
           ) : (
-            <p className="text-sm text-gray-700">{elem.Bemerkung || '—'}</p>
+            <p className="text-xs text-gray-700">{elem.Bemerkung || '—'}</p>
           )}
         </div>
 
         {/* Titel */}
         {istNeu && (
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-            <label className="text-sm text-gray-600 font-medium block mb-1">Titel (optional, für Gestaltung)</label>
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel (optional, für Gestaltung)</label>
             <input type="text" value={elem.Positionstitel} onChange={(e) => update({ Positionstitel: e.target.value })}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
           </div>
         )}
         {!istNeu && elem.Positionstitel && (
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-            <label className="text-sm text-gray-600 font-medium block mb-1">Titel</label>
-            <p className="text-sm text-gray-700">{elem.Positionstitel}</p>
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel</label>
+            <p className="text-xs text-gray-700">{elem.Positionstitel}</p>
           </div>
         )}
 
@@ -508,7 +508,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         {istBautagebuch && (
           <button
             onClick={() => setShowBtWizard(true)}
-            className="w-full py-3.5 rounded-lg font-medium text-base bg-amber-600 text-white hover:bg-amber-700 transition"
+            className="w-full py-2.5 rounded-lg font-medium text-sm bg-amber-600 text-white hover:bg-amber-700 transition"
           >
             Bautagebuch bearbeiten
           </button>
@@ -516,10 +516,10 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
 
         {/* Verschieben in anderes Protokoll (nur neue Elemente) */}
         {istNeu && verschiebungsziele.length > 0 && (
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <button
               onClick={() => setShowProtokollWahl(!showProtokollWahl)}
-              className="w-full py-3.5 rounded-lg font-medium text-base bg-indigo-600 text-white hover:bg-indigo-700 transition"
+              className="w-full py-2.5 rounded-lg font-medium text-sm bg-indigo-600 text-white hover:bg-indigo-700 transition"
             >
               In anderes Protokoll verschieben
             </button>
@@ -533,7 +533,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
                       await updateElement(updated);
                       onBack();
                     }}
-                    className="w-full text-left px-4 py-3 rounded bg-gray-50 hover:bg-indigo-50 text-base border border-gray-200"
+                    className="w-full text-left px-3 py-2 rounded bg-gray-50 hover:bg-indigo-50 text-xs border border-gray-200"
                   >
                     {p.Name} {p.Nummer < 0 ? '(Anhang)' : p._neu ? '(Entwurf)' : `Nr. ${p.Nummer}`}
                   </button>
@@ -551,7 +551,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               await deleteElement(elem.Id);
               onBack();
             }}
-            className="w-full py-3.5 rounded-lg font-medium text-base bg-red-600 text-white hover:bg-red-700 transition"
+            className="w-full py-2.5 rounded-lg font-medium text-sm bg-red-600 text-white hover:bg-red-700 transition"
           >
             Punkt löschen
           </button>
@@ -561,7 +561,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         {!istNeu && !istBautagebuch && (
           <div className="flex gap-2">
             <button onClick={() => onNachfolger(elem)}
-              className="flex-1 py-3.5 rounded-lg font-medium text-base bg-ping-gold text-white hover:bg-ping-gold-dark transition">
+              className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-ping-gold text-white hover:bg-ping-gold-dark transition">
               Nachfolger
             </button>
             {onClone && (
@@ -573,7 +573,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
                 geoAcc: elem.MobileErfassung.GeoAccuracy, geoHeading: elem.MobileErfassung.GeoHeading,
                 geoText: elem.MobileErfassung.GeoText || '',
               })}
-                className="flex-1 py-3.5 rounded-lg font-medium text-base bg-amber-600 text-white hover:bg-amber-700 transition">
+                className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-amber-600 text-white hover:bg-amber-700 transition">
                 Klonen
               </button>
             )}

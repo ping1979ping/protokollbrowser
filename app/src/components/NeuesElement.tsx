@@ -338,14 +338,14 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         </button>
       </div>
 
-      <div className="p-4 space-y-3.5">
+      <div className="p-3 space-y-2.5">
         {/* Schnelltyp */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Schnelltyp</label>
-          <div className="flex gap-2">
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-1.5">Schnelltyp</label>
+          <div className="flex gap-1.5">
             {SCHNELLTYPEN.map((s, i) => (
               <button key={s.label} onClick={() => schnelltyp(i)}
-                className={`flex-1 py-2.5 rounded text-sm font-medium transition ${
+                className={`flex-1 py-1.5 rounded text-xs font-medium transition ${
                   typ === i
                     ? i === 1 ? 'bg-red-100 text-red-700 ring-2 ring-red-400' : 'bg-ping-blue-light text-ping-blue ring-2 ring-ping-blue'
                     : 'bg-gray-50 text-gray-500'
@@ -357,39 +357,39 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         </div>
 
         {/* Positionstext */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Positionstext *</label>
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Positionstext *</label>
           <textarea value={positionstext} onChange={(e) => { setPositionstext(e.target.value); setDirty(true); }}
             onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
             ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
             placeholder="Beschreibung des Punktes..."
-            className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none min-h-[9rem] max-h-[50vh] overflow-auto" />
+            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none min-h-[9rem] max-h-[50vh] overflow-auto" />
         </div>
 
         {/* Status — Neu/Offen/Erledigt direkt, Rest unter "..." */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium mb-1 block">Status</label>
-          <div className="flex gap-2 flex-wrap">
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase mb-1.5 block">Status</label>
+          <div className="flex gap-1 flex-wrap">
             {HAUPT_STATUS.map(s => (
               <button key={s} onClick={() => { setStatus(s); setShowWeitereStatus(false); }}
-                className={`px-4 py-2.5 rounded text-sm font-medium transition ${
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                   status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
                 }`}>
                 {STATUS_MAP[s].label}
               </button>
             ))}
             <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
-              className={`px-4 py-2.5 rounded text-sm font-medium transition ${
+              className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                 istWeitererStatus && !showWeitereStatus ? STATUS_MAP[status].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
               }`}>
               {istWeitererStatus && !showWeitereStatus ? STATUS_MAP[status].label : '...'}
             </button>
           </div>
           {showWeitereStatus && (
-            <div className="flex gap-2 flex-wrap mt-2 pt-2 border-t border-gray-200">
+            <div className="flex gap-1 flex-wrap mt-1.5 pt-1.5 border-t border-gray-100">
               {WEITERE_STATUS.map(s => STATUS_MAP[s] && (
                 <button key={s} onClick={() => { setStatus(s); setShowWeitereStatus(false); }}
-                  className={`px-4 py-2.5 rounded text-sm font-medium transition ${
+                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
                     status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
                   }`}>
                   {STATUS_MAP[s].label}
@@ -399,38 +399,38 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
           )}
         </div>
 
-        {/* Position / Thema / Termin */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-            <label className="text-sm text-gray-600 font-medium block mb-1">Position</label>
+        {/* Position / Thema / Termin in einer Zeile */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Position</label>
             <input type="text" value={position} onChange={(e) => setPosition(e.target.value)} placeholder="auto"
-              className="w-full px-3 py-2.5 border border-gray-200 rounded text-base font-mono focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ping-blue" />
           </div>
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-            <label className="text-sm text-gray-600 font-medium block mb-1">Thema</label>
-            <div className="flex gap-2">
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
+            <div className="flex gap-1">
               <select value={thema}
                 onChange={(e) => setThema(e.target.value)}
-                className="flex-1 min-w-0 px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
                 {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
                 {thema && !themenVorschlaege.includes(thema) && <option value={thema}>{thema}</option>}
               </select>
               <button onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) setThema(val); }}
-                className="px-2.5 bg-ping-blue text-white rounded text-sm font-bold shrink-0" title="Neues Thema">+</button>
+                className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-3.5 border border-gray-200 col-span-2 overflow-hidden">
-            <label className="text-sm text-gray-600 font-medium block mb-1">Termin</label>
+          <div className="bg-white rounded-lg p-2.5 border border-gray-100 overflow-hidden">
+            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
             <input type="date" value={termin} onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
-              className={`w-full max-w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
+              className={`w-full max-w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
           </div>
         </div>
 
         {/* Verantwortlich */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Verantwortlich</label>
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
           <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue">
+            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
             <option value=""></option>
             {alleFirmen.map(t => (
               <option key={t.Oid} value={t.Oid}>{t.Name}</option>
@@ -439,19 +439,19 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         </div>
 
         {/* GPS */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
-            <label className="text-sm text-gray-600 font-medium">GPS-Standort</label>
-            <div className="flex gap-2">
-              <button onClick={gpsErfassen} className="bg-green-600 text-white px-3 py-2 rounded text-sm">Erfassen</button>
-              <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-3 py-2 rounded text-sm">Karte</button>
+            <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
+            <div className="flex gap-1">
+              <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
+              <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
               {geoLat != null && (
                 <button onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
-                  className="bg-red-500 text-white px-3 py-2 rounded text-sm">Löschen</button>
+                  className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px]">Löschen</button>
               )}
             </div>
           </div>
-          {geoText ? <p className="text-sm text-gray-600">{geoText}</p> : <p className="text-sm text-gray-500">{autoGps ? 'Wird ermittelt...' : 'Kein Standort'}</p>}
+          {geoText ? <p className="text-[10px] text-gray-600">{geoText}</p> : <p className="text-[10px] text-gray-300">{autoGps ? 'Wird ermittelt...' : 'Kein Standort'}</p>}
           {karteOffen && (
             <MapEditorModal
               lat={geoLat}
@@ -468,10 +468,10 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         </div>
 
         {/* Auto-GPS Toggle */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200 flex items-center justify-between">
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100 flex items-center justify-between">
           <div>
-            <label className="text-sm text-gray-600 font-medium block">Auto-GPS</label>
-            <p className="text-sm text-gray-500">Position automatisch erfassen</p>
+            <label className="text-[10px] text-gray-400 font-medium uppercase block">Auto-GPS</label>
+            <p className="text-[10px] text-gray-500">Position automatisch erfassen</p>
           </div>
           <button
             onClick={toggleAutoGps}
@@ -482,12 +482,12 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         </div>
 
         {/* Fotos */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
           <div className="flex items-center justify-between mb-1">
-            <label className="text-sm text-gray-600 font-medium">Fotos ({tempFotos.length})</label>
-            <div className="flex gap-2">
-              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-3 py-2 rounded text-sm flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
-              <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-3 py-2 rounded text-sm">Galerie</button>
+            <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({tempFotos.length})</label>
+            <div className="flex gap-1">
+              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
+              <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">Galerie</button>
             </div>
             <input ref={fotoRef} type="file" accept="image/*" capture="environment"
               onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); fotoRef.current!.value = ''; } }}
@@ -497,12 +497,12 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               className="hidden" />
           </div>
           {tempFotos.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-1 flex-wrap">
               {tempFotos.map((f, i) => (
-                <div key={i} className="relative w-16 h-16">
+                <div key={i} className="relative w-10 h-10">
                   <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover rounded" />
                   <button onClick={() => setTempFotos(prev => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-1 -right-1 bg-red-500 text-white w-8 h-8 rounded-full text-sm flex items-center justify-center">×</button>
+                    className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
                 </div>
               ))}
             </div>
@@ -510,17 +510,17 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         </div>
 
         {/* Bemerkung (intern) — unten */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Bemerkung (intern)</label>
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Bemerkung (intern)</label>
           <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={2}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
         </div>
 
         {/* Titel — ganz unten */}
-        <div className="bg-white rounded-lg p-3.5 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Titel (optional, für Gestaltung)</label>
+        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel (optional, für Gestaltung)</label>
           <input type="text" value={titel} onChange={(e) => setTitel(e.target.value)}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded text-base focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
         </div>
       </div>
 

@@ -161,13 +161,13 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
       {/* Header */}
       <div className="bg-ping-blue text-white p-3">
         <div className="flex items-center justify-between mb-1">
-          <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-base">&larr; Projekte</button>
+          <button onClick={onZurueck} className="text-ping-blue-light hover:text-white text-sm">&larr; Projekte</button>
           <div className="flex items-center gap-2">
             <SyncIndicator sync={sync} />
             {hatAenderungen && (
               <button
                 onClick={() => setZeigeAenderungen(!zeigeAenderungen)}
-                className="bg-orange-500 text-white px-3 h-8 rounded-lg text-sm font-bold flex items-center"
+                className="bg-orange-500 text-white px-3 h-7 rounded-lg text-[10px] font-bold flex items-center"
               >
                 {anzahlGeaendert > 0 && <span>{anzahlGeaendert}*</span>}
                 {anzahlGeaendert > 0 && anzahlNeu > 0 && ' '}
@@ -177,7 +177,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
             {aktivProt && (
               <button
                 onClick={() => handleExport(aktivProt, gruppe)}
-                className={`px-3 h-8 rounded-lg text-sm text-white flex items-center ${
+                className={`px-3 h-7 rounded-lg text-xs text-white flex items-center ${
                   hatAenderungen ? 'bg-red-500 hover:bg-red-600' : 'bg-ping-blue-dark hover:bg-ping-blue'
                 }`}
               >
@@ -186,8 +186,8 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
             )}
           </div>
         </div>
-        <h1 className="text-lg font-bold leading-tight">{gruppe.ProjektName}</h1>
-        <p className="text-ping-blue-light text-sm">{gruppe.Name}</p>
+        <h1 className="text-base font-bold leading-tight">{gruppe.ProjektName}</h1>
+        <p className="text-ping-blue-light text-xs">{gruppe.Name}</p>
       </div>
 
       {/* Protokoll-Tabs */}
@@ -195,7 +195,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         <div className="flex">
           <button
             onClick={() => setAnsicht('alle')}
-            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 ${
+            className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
               ansicht === 'alle' ? 'border-ping-gold-dark bg-ping-gold-dark text-white' : 'border-transparent text-ping-gold-dark bg-ping-gold-light/40'
             }`}
           >
@@ -203,7 +203,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
           </button>
           <button
             onClick={() => setAnsicht('karte')}
-            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 ${
+            className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
               ansicht === 'karte' ? 'border-ping-gold-dark bg-ping-gold-dark text-white' : 'border-transparent bg-ping-blue-light text-ping-blue'
             }`}
           >
@@ -216,7 +216,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                 key={p.Id}
                 ref={ansicht === 'einzeln' && gewaehltesProt?.Id === p.Id ? activeTabRef : undefined}
                 onClick={() => { setAnsicht('einzeln'); ladeElemente(p); }}
-                className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 ${
+                className={`px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 ${
                   ansicht === 'einzeln' && gewaehltesProt?.Id === p.Id
                     ? isDraft ? 'border-green-600 bg-green-600 text-white' : 'border-ping-blue bg-ping-blue text-white'
                     : isDraft ? 'border-transparent text-green-600' : 'border-transparent text-gray-500'
@@ -224,7 +224,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
               >
                 {p.Nummer < 0
                   ? p.Name.replace(/\s*-?\d+\s*[-–]\s*\d+$/, '').trim() || p.Name
-                  : <>Nr. {p.Nummer}<span className="text-gray-500 ml-1">{new Date(p.Datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</span></>
+                  : <>Nr. {p.Nummer}<span className="text-gray-400 ml-1">{new Date(p.Datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</span></>
                 }
                 {isDraft && <span className="text-green-500 ml-0.5">*</span>}
               </button>
@@ -234,19 +234,19 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
       </div>
 
       {/* Filter */}
-      <div className="px-2 py-2 bg-white border-b flex gap-2 items-center">
+      <div className="px-2 py-1.5 bg-white border-b flex gap-1.5 items-center">
         <input
           type="text"
           placeholder="Text suchen..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="flex-1 min-w-0 px-2 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue"
+          className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue"
         />
         {[null, 10, 11, 20, 0].map(s => (
           <button
             key={String(s)}
             onClick={() => setStatusFilter(s)}
-            className={`px-3 py-2 rounded text-sm font-medium whitespace-nowrap ${
+            className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
               statusFilter === s ? 'bg-ping-blue text-white' : 'bg-gray-100 text-gray-600'
             }`}
           >
@@ -257,12 +257,12 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
 
       {/* Protokollkopf */}
       {ansicht === 'alle' && (
-        <div className="px-3 py-2 bg-ping-blue-light border-b text-sm text-gray-600 font-medium">
+        <div className="px-3 py-1.5 bg-ping-blue-light border-b text-xs text-gray-600 font-medium">
           Gesamtprotokoll
         </div>
       )}
       {ansicht === 'einzeln' && aktivProt && (
-        <div className="px-3 py-2 bg-ping-blue-light border-b text-sm text-gray-600">
+        <div className="px-3 py-1.5 bg-ping-blue-light border-b text-xs text-gray-600">
           <span className="font-medium">{aktivProt.Name}</span> &middot; {new Date(aktivProt.Datum).toLocaleDateString('de-DE')} &middot; {aktivProt.Ort} &middot; {aktivProt.Autor}
           {aktivProt.Erledigt && <span className="ml-2 text-green-600 font-medium">erledigt</span>}
         </div>
@@ -271,11 +271,11 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
       {/* Änderungsübersicht */}
       {zeigeAenderungen && (
         <div className="bg-orange-50 border-b border-orange-200 max-h-[40vh] overflow-auto">
-          <div className="px-3 py-2 flex items-center justify-between sticky top-0 bg-orange-50">
-            <span className="text-sm font-medium text-orange-800">
+          <div className="px-3 py-1.5 flex items-center justify-between sticky top-0 bg-orange-50">
+            <span className="text-xs font-medium text-orange-800">
               {anzahlGeaendert} geändert, {anzahlNeu} neu
             </span>
-            <button onClick={() => setZeigeAenderungen(false)} className="text-orange-400 hover:text-orange-600 text-base px-2">×</button>
+            <button onClick={() => setZeigeAenderungen(false)} className="text-orange-400 hover:text-orange-600 text-sm px-1">×</button>
           </div>
           {alleElemente.filter(e => e._geaendert || e._neu).map(elem => {
             const st = STATUS_MAP[elem.Status];
@@ -287,14 +287,14 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                   if (prot) handleSelectElement(elem, prot, gruppe, undefined);
                   setZeigeAenderungen(false);
                 }}
-                className="w-full text-left px-3 py-3 border-t border-orange-100 hover:bg-orange-100 flex items-center gap-2"
+                className="w-full text-left px-3 py-1.5 border-t border-orange-100 hover:bg-orange-100 flex items-center gap-2"
               >
-                <span className="text-sm font-mono text-gray-600 w-10 shrink-0">{elem.Position}</span>
-                {elem._neu && <span className="text-sm bg-green-100 text-green-700 px-1.5 rounded shrink-0">+neu</span>}
-                {elem._geaendert && !elem._neu && <span className="text-sm bg-orange-100 text-orange-700 px-1.5 rounded shrink-0">*</span>}
-                {st && <span className={`text-sm px-1.5 rounded shrink-0 ${st.css}`}>{st.label}</span>}
-                <span className="text-sm text-gray-700 truncate">{elem.Positionstext?.slice(0, 60) || elem.Positionstitel || '—'}</span>
-                <span className="text-sm text-gray-500 shrink-0 ml-auto">{elem._protName}</span>
+                <span className="text-[10px] font-mono text-gray-400 w-8 shrink-0">{elem.Position}</span>
+                {elem._neu && <span className="text-[9px] bg-green-100 text-green-700 px-1 rounded shrink-0">+neu</span>}
+                {elem._geaendert && !elem._neu && <span className="text-[9px] bg-orange-100 text-orange-700 px-1 rounded shrink-0">*</span>}
+                {st && <span className={`text-[9px] px-1 rounded shrink-0 ${st.css}`}>{st.label}</span>}
+                <span className="text-xs text-gray-700 truncate">{elem.Positionstext?.slice(0, 60) || elem.Positionstitel || '—'}</span>
+                <span className="text-[9px] text-gray-400 shrink-0 ml-auto">{elem._protName}</span>
               </button>
             );
           })}
@@ -359,7 +359,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
             })}
           </div>
           {aktuelleElemente.length === 0 && (
-            <p className="text-center text-gray-600 py-6 text-base">Keine Elemente gefunden.</p>
+            <p className="text-center text-gray-400 py-6 text-sm">Keine Elemente gefunden.</p>
           )}
         </div>
       )}

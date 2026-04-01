@@ -352,7 +352,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
 
       <div className="p-4 space-y-4">
         {/* Format-Umschalter */}
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
+        <div className="bg-white rounded-xl p-4 border border-gray-100">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-medium text-gray-900 text-sm">Export-Format</h2>
@@ -376,10 +376,10 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         </div>
 
         {/* Zusammenfassung */}
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
+        <div className="bg-white rounded-xl p-4 border border-gray-100">
           <h2 className="font-medium text-gray-900 mb-2">Zusammenfassung</h2>
           {stats && (
-            <div className="text-base text-gray-600 space-y-1">
+            <div className="text-sm text-gray-600 space-y-1">
               <p><span className="font-medium text-orange-600">{stats.geaendert}</span> geänderte Elemente</p>
               <p><span className="font-medium text-green-600">{stats.neu}</span> neue Elemente</p>
             </div>
@@ -387,66 +387,66 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         </div>
 
         {pendingCount > 0 && !exported && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-            <p className="text-yellow-800 text-base font-medium">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+            <p className="text-yellow-800 text-sm font-medium">
               {pendingCount} Export{pendingCount > 1 ? 's' : ''} wartet auf Upload
             </p>
-            <p className="text-yellow-600 text-sm mt-0.5">
+            <p className="text-yellow-600 text-xs mt-0.5">
               Wird automatisch gesendet sobald der Server erreichbar ist.
             </p>
           </div>
         )}
 
         {/* Protokoll-Metadaten */}
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Neues Protokoll-Datum</label>
+        <div className="bg-white rounded-xl p-3 border border-gray-100">
+          <label className="text-xs text-gray-400 font-medium block mb-1">Neues Protokoll-Datum</label>
           <input
             type="date"
             value={datum}
             onChange={(e) => setDatum(e.target.value)}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-ping-blue"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue"
           />
         </div>
 
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Autor</label>
+        <div className="bg-white rounded-xl p-3 border border-gray-100">
+          <label className="text-xs text-gray-400 font-medium block mb-1">Autor</label>
           <input
             type="text"
             value={autor}
             onChange={(e) => setAutor(e.target.value)}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-ping-blue"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue"
           />
         </div>
 
-        <div className="bg-white rounded-xl p-4 border border-gray-200">
-          <label className="text-sm text-gray-600 font-medium block mb-1">Vorbemerkung</label>
+        <div className="bg-white rounded-xl p-3 border border-gray-100">
+          <label className="text-xs text-gray-400 font-medium block mb-1">Vorbemerkung</label>
           <textarea
             value={vorbemerkung}
             onChange={(e) => setVorbemerkung(e.target.value)}
             rows={2}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-ping-blue resize-none"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ping-blue resize-none"
           />
         </div>
 
         <button
           onClick={exportieren}
           disabled={exporting || exported}
-          className="w-full bg-green-600 text-white py-4 rounded-xl font-medium text-base hover:bg-green-700 active:bg-green-800 transition disabled:opacity-50"
+          className="w-full bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 active:bg-green-800 transition disabled:opacity-50"
         >
           {exporting ? (wetterStatus || 'Exportiere...') : exported ? 'Exportiert' : 'ZIP exportieren'}
         </button>
 
         {uploadResult === 'ok' && (
-          <p className="text-green-600 text-base font-medium text-center">Erfolgreich an Server gesendet!</p>
+          <p className="text-green-600 text-sm font-medium text-center">Erfolgreich an Server gesendet!</p>
         )}
 
         {exported && uploadResult !== 'ok' && (
-          <p className="text-yellow-600 text-base font-medium text-center">
+          <p className="text-yellow-600 text-sm font-medium text-center">
             Export gespeichert. Wird automatisch an Server gesendet sobald erreichbar.
           </p>
         )}
 
-        <p className="text-sm text-gray-600 text-center">
+        <p className="text-xs text-gray-400 text-center">
           Die Protokollnummer N+1 wird beim Re-Import in DOCUframe automatisch berechnet.
         </p>
       </div>

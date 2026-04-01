@@ -63,12 +63,12 @@ export default function ImportScreen({ onImported, onServerImport, onSettings }:
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
         <img src={logo} alt="PETTER INGENIEURE" className="h-14 mb-6" />
         <h1 className="text-xl font-bold text-ping-blue mb-1">Protokoll-App</h1>
-        <p className="text-ping-text-mid text-base mb-8">Mobile Protokollerfassung</p>
+        <p className="text-ping-text-mid text-sm mb-8">Mobile Protokollerfassung</p>
 
         <div className="space-y-4">
           <button
             onClick={() => fileRef.current?.click()}
-            className="w-full bg-ping-blue text-white py-4 px-4 rounded-xl font-medium hover:bg-ping-blue-dark active:brightness-90 transition"
+            className="w-full bg-ping-blue text-white py-3 px-4 rounded-xl font-medium hover:bg-ping-blue-dark active:brightness-90 transition"
           >
             JSON-Datei importieren
           </button>
@@ -83,7 +83,7 @@ export default function ImportScreen({ onImported, onServerImport, onSettings }:
           {onServerImport && (
             <button
               onClick={onServerImport}
-              className="w-full bg-ping-blue text-white py-4 px-4 rounded-xl font-medium hover:bg-ping-blue-dark active:brightness-90 transition"
+              className="w-full bg-ping-blue text-white py-3 px-4 rounded-xl font-medium hover:bg-ping-blue-dark active:brightness-90 transition"
             >
               Vom Server laden
             </button>
@@ -100,7 +100,7 @@ export default function ImportScreen({ onImported, onServerImport, onSettings }:
 
           <button
             onClick={handleTestdaten}
-            className="w-full bg-ping-blue-light text-ping-blue py-4 px-4 rounded-xl font-medium hover:bg-ping-gold-light hover:text-ping-gold-dark transition"
+            className="w-full bg-ping-blue-light text-ping-blue py-3 px-4 rounded-xl font-medium hover:bg-ping-gold-light hover:text-ping-gold-dark transition"
           >
             Testdaten laden
           </button>
@@ -113,7 +113,7 @@ export default function ImportScreen({ onImported, onServerImport, onSettings }:
               await clearAll();
               alert('Alle Daten gelöscht.');
             }}
-            className="w-full text-red-500 py-3.5 px-4 rounded-xl text-base hover:bg-red-50 transition"
+            className="w-full text-red-500 py-2 px-4 rounded-xl text-sm hover:bg-red-50 transition"
           >
             Alle Daten löschen
           </button>
@@ -121,13 +121,13 @@ export default function ImportScreen({ onImported, onServerImport, onSettings }:
         {onSettings && (
           <button
             onClick={onSettings}
-            className="mt-4 text-ping-text-light text-sm hover:text-ping-blue transition"
+            className="mt-4 text-ping-text-light text-xs hover:text-ping-blue transition"
           >
             Server-Einstellungen
           </button>
         )}
       </div>
-      <p className="mt-4 text-sm text-gray-600 font-mono">Build: {version}</p>
+      <p className="mt-4 text-[10px] text-gray-400 font-mono">Build: {version}</p>
     </div>
   );
 }
