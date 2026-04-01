@@ -49,9 +49,16 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
     }
   }, []);
 
-  const mitGps = useMemo(() => elementeWithGps(elemente), [elemente]);
+  const mitGpsRaw = useMemo(() => elementeWithGps(elemente), [elemente]);
+  const mitGps = useMemo(() => mitGpsRaw.filter(e =>
+    !(e.MobileErfassung.GeoLat === 0 && e.MobileErfassung.GeoLon === 0)
+  ), [mitGpsRaw]);
+  const aufUrsprung = useMemo(() => mitGpsRaw.filter(e =>
+    e.MobileErfassung.GeoLat === 0 && e.MobileErfassung.GeoLon === 0
+  ), [mitGpsRaw]);
   const ohneGps = useMemo(() => elemente.filter(e => e.MobileErfassung.GeoLat == null || e.MobileErfassung.GeoLon == null), [elemente]);
   const [showOhneGps, setShowOhneGps] = useState(false);
+  const [showUrsprungListe, setShowUrsprungListe] = useState(false);
 
   const bounds = useMemo(() => {
     if (mitGps.length === 0) return null;
@@ -164,6 +171,31 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
               );
             })}
           </MapContainer>
+        )}
+        {aufUrsprung.length > 0 && (
+          <div className="absolute top-2 right-2 z-[1000]">
+            <button onClick={() => setShowUrsprungListe(!showUrsprungListe)}
+              className="bg-amber-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-lg"
+              title={`${aufUrsprung.length} Punkt(e) ohne GPS`}>
+              !
+            </button>
+            {showUrsprungListe && (
+              <div className="absolute top-10 right-0 bg-white rounded-lg shadow-xl border border-gray-200 p-3 w-64 max-h-60 overflow-auto">
+                <h4 className="text-xs font-bold text-gray-700 mb-2">
+                  {aufUrsprung.length} Punkt(e) auf Ursprung (0,0)
+                </h4>
+                <div className="space-y-1">
+                  {aufUrsprung.map(elem => (
+                    <button key={elem.Id} onClick={() => { onElementClick(elem); setShowUrsprungListe(false); }}
+                      className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gray-100 transition">
+                      <span className="font-mono font-medium">Pos. {elem.Position}</span>
+                      <span className="text-gray-500 ml-1">{elem.Positionstext.slice(0, 40)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

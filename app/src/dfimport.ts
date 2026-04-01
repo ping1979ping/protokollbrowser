@@ -346,10 +346,12 @@ function parseDfJsonHierarchical(raw: unknown[]): { pakete: ProtokollPaket[]; ve
 function parseMobileErfassungFromElement(eRaw: Record<string, unknown>): Protokollelement['MobileErfassung'] {
   const empty = { GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, GeoHeading: null, GeoAltitude: null, Fotos: [] };
 
+  let result: Protokollelement['MobileErfassung'];
+
   // V5c Format: _PING-Prefix Felder
   const hasV5c = typeof eRaw['_PINGGeoLat'] === 'number' || typeof eRaw['_PINGGeoLon'] === 'number';
   if (hasV5c) {
-    return {
+    result = {
       GeoLat: typeof eRaw['_PINGGeoLat'] === 'number' ? eRaw['_PINGGeoLat'] : null,
       GeoLon: typeof eRaw['_PINGGeoLon'] === 'number' ? eRaw['_PINGGeoLon'] : null,
       GeoAccuracy: typeof eRaw['_PINGGeoAccuracy'] === 'number' ? eRaw['_PINGGeoAccuracy'] : null,
@@ -358,35 +360,42 @@ function parseMobileErfassungFromElement(eRaw: Record<string, unknown>): Protoko
       GeoAltitude: typeof eRaw['_PINGGeoAltitude'] === 'number' ? eRaw['_PINGGeoAltitude'] : null,
       Fotos: [],
     };
+  } else {
+    // Neues Format: flache deutsche Feldnamen direkt auf dem Element (V5c: Umlaute, V6: ASCII)
+    const hasFlat = typeof eRaw['Breitengrad'] === 'number' || typeof eRaw['Längengrad'] === 'number' || typeof eRaw['Laengengrad'] === 'number';
+    if (hasFlat) {
+      result = {
+        GeoLat: typeof eRaw['Breitengrad'] === 'number' ? eRaw['Breitengrad'] : null,
+        GeoLon: typeof eRaw['Laengengrad'] === 'number' ? eRaw['Laengengrad'] : (typeof eRaw['Längengrad'] === 'number' ? eRaw['Längengrad'] : null),
+        GeoAccuracy: typeof eRaw['Genauigkeit'] === 'number' ? eRaw['Genauigkeit'] : null,
+        GeoText: (eRaw['Standort-Anzeigetext'] as string) || null,
+        GeoHeading: typeof eRaw['Kompassrichtung'] === 'number' ? eRaw['Kompassrichtung'] : null,
+        GeoAltitude: typeof eRaw['Hoehe ueber NN'] === 'number' ? eRaw['Hoehe ueber NN'] : (typeof eRaw['Höhe über NN'] === 'number' ? eRaw['Höhe über NN'] : null),
+        Fotos: [],
+      };
+    } else {
+      // Altes Format: verschachteltes MobileErfassung-Objekt (Rückwärtskompatibilität)
+      const raw = eRaw['MobileErfassung'];
+      if (!raw || typeof raw !== 'object') return empty;
+      const m = raw as Record<string, unknown>;
+      result = {
+        GeoLat: typeof m['GeoLat'] === 'number' ? m['GeoLat'] : null,
+        GeoLon: typeof m['GeoLon'] === 'number' ? m['GeoLon'] : null,
+        GeoAccuracy: typeof m['GeoAccuracy'] === 'number' ? m['GeoAccuracy'] : null,
+        GeoText: (m['GeoText'] as string) || null,
+        GeoHeading: typeof m['GeoHeading'] === 'number' ? m['GeoHeading'] : null,
+        GeoAltitude: typeof m['GeoAltitude'] === 'number' ? m['GeoAltitude'] : null,
+        Fotos: Array.isArray(m['Fotos']) ? m['Fotos'] : [],
+      };
+    }
   }
 
-  // Neues Format: flache deutsche Feldnamen direkt auf dem Element (V5c: Umlaute, V6: ASCII)
-  const hasFlat = typeof eRaw['Breitengrad'] === 'number' || typeof eRaw['Längengrad'] === 'number' || typeof eRaw['Laengengrad'] === 'number';
-  if (hasFlat) {
-    return {
-      GeoLat: typeof eRaw['Breitengrad'] === 'number' ? eRaw['Breitengrad'] : null,
-      GeoLon: typeof eRaw['Laengengrad'] === 'number' ? eRaw['Laengengrad'] : (typeof eRaw['Längengrad'] === 'number' ? eRaw['Längengrad'] : null),
-      GeoAccuracy: typeof eRaw['Genauigkeit'] === 'number' ? eRaw['Genauigkeit'] : null,
-      GeoText: (eRaw['Standort-Anzeigetext'] as string) || null,
-      GeoHeading: typeof eRaw['Kompassrichtung'] === 'number' ? eRaw['Kompassrichtung'] : null,
-      GeoAltitude: typeof eRaw['Hoehe ueber NN'] === 'number' ? eRaw['Hoehe ueber NN'] : (typeof eRaw['Höhe über NN'] === 'number' ? eRaw['Höhe über NN'] : null),
-      Fotos: [],
-    };
+  // 0,0-Koordinaten (Ursprung) ignorieren — DOCUframe exportiert 0,0 wenn keine GPS-Daten
+  if (result.GeoLat === 0 && result.GeoLon === 0) {
+    return empty;
   }
 
-  // Altes Format: verschachteltes MobileErfassung-Objekt (Rückwärtskompatibilität)
-  const raw = eRaw['MobileErfassung'];
-  if (!raw || typeof raw !== 'object') return empty;
-  const m = raw as Record<string, unknown>;
-  return {
-    GeoLat: typeof m['GeoLat'] === 'number' ? m['GeoLat'] : null,
-    GeoLon: typeof m['GeoLon'] === 'number' ? m['GeoLon'] : null,
-    GeoAccuracy: typeof m['GeoAccuracy'] === 'number' ? m['GeoAccuracy'] : null,
-    GeoText: (m['GeoText'] as string) || null,
-    GeoHeading: typeof m['GeoHeading'] === 'number' ? m['GeoHeading'] : null,
-    GeoAltitude: typeof m['GeoAltitude'] === 'number' ? m['GeoAltitude'] : null,
-    Fotos: Array.isArray(m['Fotos']) ? m['Fotos'] : [],
-  };
+  return result;
 }
 
 function parseTeilnehmer(raw: unknown): Teilnehmer[] {
