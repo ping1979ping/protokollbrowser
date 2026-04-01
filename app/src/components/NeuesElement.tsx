@@ -6,6 +6,8 @@ import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord } from './map/mapUtils';
 import BautagebuchWizard from './BautagebuchWizard';
+import ScrollToTopFab from './ScrollToTopFab';
+import StatusBadge from './StatusBadge';
 
 interface Props {
   protokoll: Protokoll;
@@ -18,12 +20,6 @@ interface Props {
   onSavedAndNew?: () => void;
   onSavedAndClone?: (clone: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string }) => void;
 }
-
-const SCHNELLTYPEN = [
-  { label: 'Allgemein', thema: '', status: 0 },
-  { label: 'Mangel', thema: 'Mangel', status: 11 },
-  { label: 'Info', thema: 'Info', status: 0 },
-];
 
 const HAUPT_STATUS = [0, 10, 20];
 const WEITERE_STATUS = [19, 11, 25, 17, 21];
@@ -60,9 +56,8 @@ function naechsteBtPosition(elems: { Position: string }[]): string {
 }
 
 export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isBautagebuch, onBack, onSaved, onSavedAndNew, onSavedAndClone }: Props) {
-  const [typ, setTyp] = useState(clone ? (clone.thema === 'Mangel' ? 1 : 0) : vorgaenger?.Thema === 'Mangel' ? 1 : 0);
   const [position, setPosition] = useState('');
-  const [thema, setThema] = useState(clone?.thema ?? vorgaenger?.Thema ?? SCHNELLTYPEN[0].thema);
+  const [thema, setThema] = useState(clone?.thema ?? vorgaenger?.Thema ?? '');
   const [positionstext, setPositionstext] = useState('');
   const [status, setStatus] = useState(clone?.status ?? (isBautagebuch ? 20 : vorgaenger?.Thema === 'Mangel' ? 11 : 0));
   const [termin, setTermin] = useState(clone?.termin ?? '');
@@ -79,9 +74,9 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
   const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
   const [autoGps, setAutoGps] = useState(() => localStorage.getItem('autoGps') !== 'false');
-  const [showWeitereStatus, setShowWeitereStatus] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [showBtWizard, setShowBtWizard] = useState(!!isBautagebuch);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
   const galerieRef = useRef<HTMLInputElement>(null);
 
@@ -170,18 +165,13 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   // Kein Auto-Select der ersten Firma — Standard ist "(keine)"
 
   const alleFirmen = firmen.length > 0
-    ? firmen.map(f => ({ Oid: f.ID, Name: f.Name }))
+    ? firmen.map(f => ({ Oid: f.ID, Kuerzel: f.Kuerzel, Name: f.Name }))
     : [
-        ...protokoll.Teilnehmer,
-        ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
+        ...protokoll.Teilnehmer.map(t => ({ Oid: t.Oid, Kuerzel: t.Nummer || '', Name: t.Name })),
+        ...protokoll.Verteiler
+          .filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid))
+          .map(v => ({ Oid: v.Oid, Kuerzel: v.Nummer || '', Name: v.Name })),
       ];
-
-  function schnelltyp(i: number) {
-    setTyp(i);
-    setThema(SCHNELLTYPEN[i].thema);
-    setStatus(SCHNELLTYPEN[i].status);
-    setDirty(true);
-  }
 
   function gpsErfassen() {
     if (!window.isSecureContext) { alert('GPS erfordert eine HTTPS-Verbindung.\nBitte Server mit SSL-Zertifikat starten.'); return; }
@@ -198,7 +188,6 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
     );
   }
 
-  const istWeitererStatus = WEITERE_STATUS.includes(status);
   const terminUeberfaellig = termin && [0, 10].includes(status) && new Date(termin) < new Date(new Date().toDateString());
 
   async function doSave(): Promise<boolean> {
@@ -301,203 +290,201 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
 
   return (
     <div className="min-h-screen bg-ping-bg">
-      {/* Header */}
-      <div className="bg-ping-blue text-white p-4">
-        <div className="text-center">
+      {/* Compact Header — 2 lines */}
+      <div className="bg-ping-blue text-white p-3">
+        {/* Line 1: 3 equal buttons */}
+        <div className="flex gap-2">
           <button onClick={() => {
             if (dirty && !confirm('Änderungen werden nicht gespeichert. Zur Übersicht?')) return;
             onBack();
-          }} className="text-ping-blue-light hover:text-white text-sm">&larr; Übersicht</button>
-          <p className="text-sm text-ping-blue-light/70 mt-0.5">{protokoll.Name}</p>
-          <h1 className="text-lg font-bold mt-0.5">
-            {vorgaenger ? 'Nachfolger erstellen' : 'Neues Element'}
-          </h1>
-          {vorgaenger && (
-            <p className="text-sm text-ping-blue-light mt-0.5">
-              Vorgänger: Pos. {vorgaenger.Position} — {vorgaenger.Positionstext.slice(0, 50)}...
-            </p>
+          }} className="flex-1 py-2 rounded-lg font-bold text-sm bg-ping-blue-dark hover:bg-ping-blue-dark/80 transition">
+            &larr; Übersicht
+          </button>
+          <button onClick={speichern}
+            className={`flex-1 py-2 rounded-lg font-bold text-sm text-white transition ${
+              dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'
+            }`}>
+            &#10003; Speichern
+          </button>
+          <button onClick={speichernUndNeu}
+            className="flex-1 py-2 rounded-lg font-bold text-sm bg-ping-blue-dark hover:bg-ping-blue-dark/80 transition">
+            + Speichern &amp; Neu
+          </button>
+          {onSavedAndClone && (
+            <button onClick={speichernUndKlonen}
+              className="flex-1 py-2 rounded-lg font-bold text-sm bg-ping-blue-dark hover:bg-ping-blue-dark/80 transition">
+              &#x2398; Klonen
+            </button>
           )}
         </div>
-      </div>
-
-      {/* Buttons direkt unter Header */}
-      <div className="px-4 pt-3 flex gap-2">
-        <button onClick={speichern}
-          className={`flex-[2] py-3.5 rounded-lg font-bold text-white text-sm transition ${
-            dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-ping-blue hover:bg-ping-blue-dark'
-          }`}>
-          Speichern
-        </button>
-        <button onClick={speichernUndNeu}
-          className="flex-1 py-3.5 rounded-lg font-medium text-sm transition bg-gray-200 text-gray-700 hover:bg-gray-300">
-          & Neu
-        </button>
-        <button onClick={speichernUndKlonen}
-          className="flex-1 py-3.5 rounded-lg font-medium text-sm transition bg-gray-200 text-gray-700 hover:bg-gray-300">
-          & Klonen
-        </button>
-      </div>
-
-      <div className="p-3 space-y-2.5">
-        {/* Schnelltyp */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-1.5">Schnelltyp</label>
-          <div className="flex gap-1.5">
-            {SCHNELLTYPEN.map((s, i) => (
-              <button key={s.label} onClick={() => schnelltyp(i)}
-                className={`flex-1 py-1.5 rounded text-xs font-medium transition ${
-                  typ === i
-                    ? i === 1 ? 'bg-red-100 text-red-700 ring-2 ring-red-400' : 'bg-ping-blue-light text-ping-blue ring-2 ring-ping-blue'
-                    : 'bg-gray-50 text-gray-500'
-                }`}>
-                {s.label}
-              </button>
-            ))}
-          </div>
+        {/* Line 2: Status + Protocol name + title */}
+        <div className="flex items-center gap-2 mt-2 text-sm">
+          <StatusBadge status={0} />
+          <span className="text-ping-blue-light/70 truncate">{protokoll.Name}</span>
+          <span className="font-semibold ml-auto whitespace-nowrap">
+            {vorgaenger ? 'Nachfolger erstellen' : 'Neues Element'}
+          </span>
         </div>
+        {vorgaenger && (
+          <p className="text-xs text-ping-blue-light mt-1">
+            Vorgänger: Pos. {vorgaenger.Position} — {vorgaenger.Positionstext.slice(0, 50)}...
+          </p>
+        )}
+      </div>
 
-        {/* Positionstext */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Positionstext *</label>
+      {/* Body — viewport-filling */}
+      <div className="flex flex-col p-3 gap-2.5" style={{ minHeight: 'calc(100vh - 76px)' }}>
+
+        {/* 1. Positionstext — flex-1 */}
+        <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300 flex flex-col">
+          <label className="text-xs text-gray-700 font-semibold block mb-0.5">Positionstext *</label>
           <textarea value={positionstext} onChange={(e) => { setPositionstext(e.target.value); setDirty(true); }}
             onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
             ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
             placeholder="Beschreibung des Punktes..."
-            className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none min-h-[9rem] max-h-[50vh] overflow-auto" />
+            className="flex-1 w-full px-2 py-1 border border-gray-200 rounded text-sm text-gray-400 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none min-h-[9rem] max-h-[50vh] overflow-auto" />
         </div>
 
-        {/* Status — Neu/Offen/Erledigt direkt, Rest unter "..." */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase mb-1.5 block">Status</label>
-          <div className="flex gap-1 flex-wrap">
-            {HAUPT_STATUS.map(s => (
-              <button key={s} onClick={() => { setStatus(s); setShowWeitereStatus(false); }}
-                className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                  status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-                }`}>
-                {STATUS_MAP[s].label}
-              </button>
-            ))}
-            <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
-              className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                istWeitererStatus && !showWeitereStatus ? STATUS_MAP[status].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-              }`}>
-              {istWeitererStatus && !showWeitereStatus ? STATUS_MAP[status].label : '...'}
-            </button>
-          </div>
-          {showWeitereStatus && (
-            <div className="flex gap-1 flex-wrap mt-1.5 pt-1.5 border-t border-gray-100">
-              {WEITERE_STATUS.map(s => STATUS_MAP[s] && (
-                <button key={s} onClick={() => { setStatus(s); setShowWeitereStatus(false); }}
-                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                    status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-                  }`}>
-                  {STATUS_MAP[s].label}
-                </button>
+        {/* 2. Verantwortlich (flex:2) + Thema (flex:1) + Termin (flex:1) — one row */}
+        <div className="flex gap-2">
+          <div className="flex-[2] bg-white rounded-lg p-2.5 border-2 border-gray-300">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>
+            <select value={verantwFirmaOid} onChange={(e) => { setVerantwFirmaOid(e.target.value); setDirty(true); }}
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+              <option value=""></option>
+              {alleFirmen.map(t => (
+                <option key={t.Oid} value={t.Oid}>{t.Kuerzel ? `${t.Kuerzel} — ${t.Name}` : t.Name}</option>
               ))}
-            </div>
-          )}
-        </div>
-
-        {/* Position / Thema / Termin in einer Zeile */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Position</label>
-            <input type="text" value={position} onChange={(e) => setPosition(e.target.value)} placeholder="auto"
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+            </select>
           </div>
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
+          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Thema</label>
             <div className="flex gap-1">
               <select value={thema}
-                onChange={(e) => setThema(e.target.value)}
+                onChange={(e) => { setThema(e.target.value); setDirty(true); }}
                 className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                <option value=""></option>
                 {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
                 {thema && !themenVorschlaege.includes(thema) && <option value={thema}>{thema}</option>}
               </select>
-              <button onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) setThema(val); }}
+              <button onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) { setThema(val); setDirty(true); } }}
                 className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
             </div>
           </div>
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100 overflow-hidden">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
+          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300 overflow-hidden">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
             <input type="date" value={termin} onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
               className={`w-full max-w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
           </div>
         </div>
 
-        {/* Verantwortlich */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
-          <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
-            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-            <option value=""></option>
-            {alleFirmen.map(t => (
-              <option key={t.Oid} value={t.Oid}>{t.Name}</option>
-            ))}
-          </select>
+        {/* 3. Status (flex:2) + Titel (flex:2) — one row */}
+        <div className="flex gap-2">
+          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-700 font-semibold">Status</span>
+              <StatusBadge status={status} />
+              <button onClick={() => setShowStatusPicker(!showStatusPicker)}
+                className="ml-auto px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200 transition">
+                &middot;&middot;&middot;
+              </button>
+            </div>
+            {showStatusPicker && (
+              <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-gray-100">
+                {[...HAUPT_STATUS, ...WEITERE_STATUS].map(s => STATUS_MAP[s] && (
+                  <button key={s} onClick={() => { setStatus(s); setShowStatusPicker(false); setDirty(true); }}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
+                      status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
+                    }`}>
+                    {STATUS_MAP[s].label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
+            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Titel</label>
+            <input type="text" value={titel} onChange={(e) => { setTitel(e.target.value); setDirty(true); }}
+              placeholder="Optional, für Gestaltung"
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+          </div>
         </div>
 
-        {/* GPS */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[10px] text-gray-400 font-medium uppercase">GPS-Standort</label>
-            <div className="flex gap-1">
-              <button onClick={gpsErfassen} className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px]">Erfassen</button>
-              <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]">Karte</button>
-              {geoLat != null && (
-                <button onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
-                  className="bg-red-500 text-white px-2 py-0.5 rounded text-[10px]">Löschen</button>
-              )}
+        {/* 5. Position (flex:1) + Bemerkung (flex:2) — one row, NO labels */}
+        <div className="flex gap-2">
+          <div className="flex-1 bg-white rounded-lg p-2.5 border border-gray-200">
+            <input type="text" value={position} onChange={(e) => setPosition(e.target.value)}
+              placeholder="Position (auto)"
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+          </div>
+          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
+            <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={1}
+              placeholder="Optionale Bemerkung (intern)"
+              className="w-full px-2 py-1 border border-gray-200 rounded text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+          </div>
+        </div>
+
+        {/* 6. Standort + Fotos — combined in ONE card */}
+        <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+          <div className="flex gap-4">
+            {/* Left: Standort */}
+            <div className="flex-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-medium block mb-1">Standort</span>
+              <div className="flex gap-1">
+                <button onClick={gpsErfassen}
+                  className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
+                  📍 GPS
+                </button>
+                <button onClick={() => setKarteOffen(true)}
+                  className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
+                  🗺 Karte
+                </button>
+                {geoLat != null && (
+                  <button onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
+                    className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-xs font-medium">
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Right: Fotos */}
+            <div className="flex-1">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-medium block mb-1">Fotos</span>
+              <div className="flex gap-1 items-center">
+                <button onClick={() => fotoRef.current?.click()}
+                  className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
+                  📷
+                </button>
+                <button onClick={() => galerieRef.current?.click()}
+                  className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-xs font-medium">
+                  🖼
+                </button>
+                {tempFotos.length > 0 && (
+                  <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+                    {tempFotos.length}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          {geoText ? <p className="text-[10px] text-gray-600">{geoText}</p> : <p className="text-[10px] text-gray-300">{autoGps ? 'Wird ermittelt...' : 'Kein Standort'}</p>}
-          {karteOffen && (
-            <MapEditorModal
-              lat={geoLat}
-              lon={geoLon}
-              heading={geoHeading}
-              onSave={(lat, lon, heading) => {
-                setGeoLat(lat); setGeoLon(lon); setGeoHeading(heading);
-                setGeoText(formatCoord(lat, lon, null, heading));
-                setKarteOffen(false);
-              }}
-              onCancel={() => setKarteOffen(false)}
-            />
-          )}
-        </div>
-
-        {/* Auto-GPS Toggle */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100 flex items-center justify-between">
-          <div>
-            <label className="text-[10px] text-gray-400 font-medium uppercase block">Auto-GPS</label>
-            <p className="text-[10px] text-gray-500">Position automatisch erfassen</p>
-          </div>
-          <button
-            onClick={toggleAutoGps}
-            className={`relative inline-flex items-center w-10 h-5 rounded-full transition ${autoGps ? 'bg-green-500' : 'bg-gray-300'}`}
-          >
-            <span className={`inline-block w-4 h-4 bg-white rounded-full shadow transition-transform ${autoGps ? 'translate-x-[1.3rem]' : 'translate-x-0.5'}`} />
-          </button>
-        </div>
-
-        {/* Fotos */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[10px] text-gray-400 font-medium uppercase">Fotos ({tempFotos.length})</label>
-            <div className="flex gap-1">
-              <button onClick={() => fotoRef.current?.click()} className="bg-purple-600 text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>Foto</button>
-              <button onClick={() => galerieRef.current?.click()} className="bg-blue-600 text-white px-2 py-0.5 rounded text-[10px]">Galerie</button>
+          {/* GPS text + Auto-GPS toggle */}
+          <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-gray-100">
+            <div className="text-xs text-gray-600">
+              {geoText ? geoText : (autoGps ? 'Wird ermittelt...' : 'Kein Standort')}
             </div>
-            <input ref={fotoRef} type="file" accept="image/*" capture="environment"
-              onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); fotoRef.current!.value = ''; } }}
-              className="hidden" />
-            <input ref={galerieRef} type="file" accept="image/*" multiple
-              onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); } }}
-              className="hidden" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider">Auto-GPS</span>
+              <button
+                onClick={toggleAutoGps}
+                className={`relative inline-flex items-center w-8 h-4 rounded-full transition ${autoGps ? 'bg-green-500' : 'bg-gray-300'}`}
+              >
+                <span className={`inline-block w-3 h-3 bg-white rounded-full shadow transition-transform ${autoGps ? 'translate-x-[1rem]' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
           </div>
+          {/* Foto thumbnails */}
           {tempFotos.length > 0 && (
-            <div className="flex gap-1 flex-wrap">
+            <div className="flex gap-1 flex-wrap mt-2">
               {tempFotos.map((f, i) => (
                 <div key={i} className="relative w-10 h-10">
                   <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover rounded" />
@@ -507,21 +494,29 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               ))}
             </div>
           )}
+          {/* Hidden file inputs */}
+          <input ref={fotoRef} type="file" accept="image/*" capture="environment"
+            onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); fotoRef.current!.value = ''; } }}
+            className="hidden" />
+          <input ref={galerieRef} type="file" accept="image/*" multiple
+            onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); } }}
+            className="hidden" />
         </div>
 
-        {/* Bemerkung (intern) — unten */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Bemerkung (intern)</label>
-          <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={2}
-            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
-        </div>
-
-        {/* Titel — ganz unten */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-          <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Titel (optional, für Gestaltung)</label>
-          <input type="text" value={titel} onChange={(e) => setTitel(e.target.value)}
-            className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-        </div>
+        {/* Map Editor Modal */}
+        {karteOffen && (
+          <MapEditorModal
+            lat={geoLat}
+            lon={geoLon}
+            heading={geoHeading}
+            onSave={(lat, lon, heading) => {
+              setGeoLat(lat); setGeoLon(lon); setGeoHeading(heading);
+              setGeoText(formatCoord(lat, lon, null, heading));
+              setKarteOffen(false);
+            }}
+            onCancel={() => setKarteOffen(false)}
+          />
+        )}
       </div>
 
       {/* Bautagebuch Wizard */}
@@ -547,6 +542,8 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
           }}
         />
       )}
+
+      <ScrollToTopFab />
     </div>
   );
 }
