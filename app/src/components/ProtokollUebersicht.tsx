@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
-import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll, findBautagebuchProtokoll } from '../db';
+import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll, findBautagebuchProtokoll, getVerantwortliche } from '../db';
 import MapOverview from './map/MapOverview';
 import ScrollToTopFab from './ScrollToTopFab';
 import SyncIndicator from './SyncIndicator';
@@ -42,6 +42,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
   const [anzahlGeaendert, setAnzahlGeaendert] = useState(0);
   const [anzahlNeu, setAnzahlNeu] = useState(0);
   const [zeigeAenderungen, setZeigeAenderungen] = useState(false);
+  const [verantwMap, setVerantwMap] = useState<Map<string, string>>(new Map());
   const activeTabRef = useRef<HTMLButtonElement>(null);
 
   // Refs für synchronen Zugriff auf aktuellen State (vermeidet Race Conditions)
@@ -88,6 +89,16 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
   }, [gewaehltesProt?.Id, ansicht]);
 
   useEffect(() => { laden(); }, []);
+
+  useEffect(() => {
+    getVerantwortliche().then(firmen => {
+      const map = new Map<string, string>();
+      for (const f of firmen) {
+        map.set(f.ID, f.Kuerzel || f.Name);
+      }
+      setVerantwMap(map);
+    });
+  }, []);
 
   async function laden() {
     const grp = await getProtokollgruppe(gruppeId);
@@ -326,7 +337,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                     <div className={`text-base font-mono font-semibold ${elem.MobileErfassung?.GeoLat != null ? 'text-ping-blue' : 'text-gray-500'}`}>
                       {elem.Position}
                     </div>
-                    <div className="text-sm text-gray-500 leading-tight mt-0.5">{elem.Thema || '-'}</div>
+                    <div className="text-sm text-gray-500 leading-tight mt-0.5 truncate">{elem.Thema || '-'}</div>
                     <div className="flex gap-1 mt-1 flex-wrap">
                       {(elem.Verweise?.length > 0) && <span className="text-amber-500 text-sm">↩</span>}
                       {elem._neu && <span className="text-sm bg-green-100 text-green-700 px-1.5 rounded">+neu</span>}
@@ -352,7 +363,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                       {elem.Termin ? new Date(elem.Termin).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) : ''}
                     </div>
                     <div className="text-sm text-gray-500 mt-0.5 truncate">
-                      {elem.VerantwortlicherFirmaName || ''}
+                      {verantwMap.get(elem.VerantwortlicherFirmaOid) || elem.VerantwortlicherFirmaName || ''}
                     </div>
                   </div>
                 </button>
