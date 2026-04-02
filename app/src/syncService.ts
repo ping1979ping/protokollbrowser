@@ -2,8 +2,9 @@
  * Sync-Service: PWA ↔ Exchange Server
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste } from './db';
 import { parseDfJson } from './dfimport';
+import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { getDeviceId, getDeviceName, getUserName } from './deviceIdentity';
 
 const TIMEOUT_MS = 5000;
@@ -193,4 +194,32 @@ export async function syncProject(gruppeId: string): Promise<{ downloaded: boole
   });
 
   return { downloaded };
+}
+
+/** Projekt-Katalog vom Server laden, filtern und in IndexedDB importieren */
+export async function downloadProjectCatalog(): Promise<{ total: number; imported: number }> {
+  const resp = await fetchApi('/api/projects-catalog');
+  const raw = await resp.json();
+
+  if (!Array.isArray(raw)) {
+    throw new Error('Projekt-Katalog: Ungueltiges Format (kein Array)');
+  }
+
+  const { projekte, wertelisten } = parseProjekteJson(raw);
+
+  // Wertelisten zuerst importieren (wird fuer Filter benoetigt)
+  if (wertelisten.length > 0) {
+    await importWertelisten(wertelisten);
+  }
+
+  // Status-Filter: nur "in Arbeit" + "Gewaehrleistung"
+  const statusWerteliste = await getWerteliste('Projekt', '_IMSStatus');
+  const filtered = filterProjekteByStatus(
+    projekte,
+    ['in Arbeit', 'Gewährleistung'],
+    statusWerteliste,
+  );
+
+  await importProjekte(filtered);
+  return { total: projekte.length, imported: filtered.length };
 }

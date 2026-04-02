@@ -1,9 +1,9 @@
 import { openDB } from 'idb';
 import type { IDBPDatabase } from 'idb';
-import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket } from './types';
+import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste } from './types';
 
 const DB_NAME = 'protokoll-app';
-const DB_VERSION = 6;
+const DB_VERSION = 8;
 
 export interface ProtokollMitGruppe extends Protokoll {
   gruppe_id: string;
@@ -38,6 +38,30 @@ async function getDb(): Promise<IDBPDatabase> {
         fotoStore.createIndex('byElement', 'elementId');
         db.createObjectStore('verantwortliche', { keyPath: 'id' });
       }
+      // v7: legacy_id Indexes fuer Dedup bei Re-Import
+      if (oldVersion < 7) {
+        const storesForLegacyIdx = ['protokollgruppen', 'protokolle', 'elemente', 'verantwortliche'];
+        for (const storeName of storesForLegacyIdx) {
+          if (db.objectStoreNames.contains(storeName)) {
+            const store = tx.objectStore(storeName);
+            if (!store.indexNames.contains('byLegacyId')) {
+              store.createIndex('byLegacyId', 'legacy_id');
+            }
+          }
+        }
+      }
+      // v8: Projekt-Katalog + Wertelisten Stores
+      if (oldVersion < 8) {
+        if (!db.objectStoreNames.contains('projekte')) {
+          const projStore = db.createObjectStore('projekte', { keyPath: 'id' });
+          projStore.createIndex('byLegacyId', 'legacy_id');
+          projStore.createIndex('byNummer', 'nummer');
+        }
+        if (!db.objectStoreNames.contains('wertelisten')) {
+          const wlStore = db.createObjectStore('wertelisten', { keyPath: 'id' });
+          wlStore.createIndex('byKlasseFeld', ['klasse', 'feld']);
+        }
+      }
       if (!db.objectStoreNames.contains('syncMeta')) {
         db.createObjectStore('syncMeta', { keyPath: 'gruppeId' });
       }
@@ -50,22 +74,63 @@ async function getDb(): Promise<IDBPDatabase> {
 
 export async function importPakete(pakete: ProtokollPaket[]): Promise<void> {
   const db = await getDb();
+
+  // Dedup: legacy_id → bestehende UUID Mappings laden
+  const gruppenMap = await buildLegacyIdMap(db, 'protokollgruppen');
+  const protMap = await buildLegacyIdMap(db, 'protokolle');
+  const elemMap = await buildLegacyIdMap(db, 'elemente');
+
   const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente'], 'readwrite');
   for (const paket of pakete) {
+    // Gruppe: bestehende UUID wiederverwenden
+    const existingGruppeId = gruppenMap.get(paket.protokollgruppe.legacy_id);
+    if (existingGruppeId) paket.protokollgruppe.id = existingGruppeId;
+
     await tx.objectStore('protokollgruppen').put(paket.protokollgruppe);
+
+    // Protokoll: bestehende UUID wiederverwenden
+    const existingProtId = protMap.get(paket.protokoll.legacy_id);
+    if (existingProtId) paket.protokoll.id = existingProtId;
+
     const protMitGruppe: ProtokollMitGruppe = { ...paket.protokoll, gruppe_id: paket.protokollgruppe.id };
     await tx.objectStore('protokolle').put(protMitGruppe);
+
     for (const elem of paket.protokollelemente) {
+      // Element: bestehende UUID wiederverwenden
+      const existingElemId = elemMap.get(elem.legacy_id);
+      if (existingElemId) {
+        // Lokale Flags bewahren
+        const existing = await tx.objectStore('elemente').get(existingElemId);
+        if (existing?.is_modified) elem.is_modified = true;
+        if (existing?.is_new) elem.is_new = true;
+        elem.id = existingElemId;
+      }
+      // protokoll_id auf (evtl. korrigierte) Protokoll-UUID setzen
+      elem.protokoll_id = paket.protokoll.id;
       await tx.objectStore('elemente').put(elem);
     }
   }
   await tx.done;
 }
 
+async function buildLegacyIdMap(db: IDBPDatabase, storeName: string): Promise<Map<string, string>> {
+  const all = await db.getAll(storeName);
+  const map = new Map<string, string>();
+  for (const obj of all as Array<{ id: string; legacy_id?: string }>) {
+    if (obj.legacy_id) {
+      map.set(obj.legacy_id, obj.id);
+    }
+  }
+  return map;
+}
+
 export async function importVerantwortliche(firmen: Verantwortlicher[]): Promise<void> {
   const db = await getDb();
+  const verantwMap = await buildLegacyIdMap(db, 'verantwortliche');
   const tx = db.transaction('verantwortliche', 'readwrite');
   for (const f of firmen) {
+    const existingId = verantwMap.get(f.legacy_id);
+    if (existingId) f.id = existingId;
     await tx.objectStore('verantwortliche').put(f);
   }
   await tx.done;
@@ -198,13 +263,18 @@ export async function findNachfolger(vorgaengerId: string): Promise<Protokollele
 
 export async function clearAll(): Promise<void> {
   const db = await getDb();
-  const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente', 'fotos', 'verantwortliche', 'syncMeta'], 'readwrite');
+  const storeNames: string[] = ['protokollgruppen', 'protokolle', 'elemente', 'fotos', 'verantwortliche', 'syncMeta'];
+  if (db.objectStoreNames.contains('projekte')) storeNames.push('projekte');
+  if (db.objectStoreNames.contains('wertelisten')) storeNames.push('wertelisten');
+  const tx = db.transaction(storeNames, 'readwrite');
   await tx.objectStore('protokollgruppen').clear();
   await tx.objectStore('protokolle').clear();
   await tx.objectStore('elemente').clear();
   await tx.objectStore('fotos').clear();
   await tx.objectStore('verantwortliche').clear();
   await tx.objectStore('syncMeta').clear();
+  if (db.objectStoreNames.contains('projekte')) await tx.objectStore('projekte').clear();
+  if (db.objectStoreNames.contains('wertelisten')) await tx.objectStore('wertelisten').clear();
   await tx.done;
 }
 
@@ -316,4 +386,56 @@ export async function getLetzteBautagebuchElemente(gruppeId: string): Promise<Pr
   if (elems.length === 0) return [];
   elems.sort((a, b) => b.position.localeCompare(a.position, undefined, { numeric: true }));
   return elems;
+}
+
+// --- Projekte (Nachschlage-Tabelle) ---
+
+export async function importProjekte(projekte: Projekt[]): Promise<void> {
+  const db = await getDb();
+  const existingMap = await buildLegacyIdMap(db, 'projekte');
+  const tx = db.transaction('projekte', 'readwrite');
+  for (const p of projekte) {
+    const existingId = existingMap.get(p.legacy_id);
+    if (existingId) p.id = existingId;
+    await tx.objectStore('projekte').put(p);
+  }
+  await tx.done;
+}
+
+export async function getAllProjekte(): Promise<Projekt[]> {
+  const db = await getDb();
+  return db.getAll('projekte');
+}
+
+export async function getProjektByNummer(nummer: string): Promise<Projekt | undefined> {
+  const db = await getDb();
+  const results = await db.getAllFromIndex('projekte', 'byNummer', nummer);
+  return results[0];
+}
+
+// --- Wertelisten ---
+
+export async function importWertelisten(listen: Werteliste[]): Promise<void> {
+  const db = await getDb();
+  const tx = db.transaction('wertelisten', 'readwrite');
+  const existing = await tx.objectStore('wertelisten').getAll();
+  const existingMap = new Map(existing.map((w: Werteliste) => [`${w.klasse}|${w.feld}`, w.id]));
+  for (const wl of listen) {
+    const key = `${wl.klasse}|${wl.feld}`;
+    const existingId = existingMap.get(key);
+    if (existingId) wl.id = existingId;
+    await tx.objectStore('wertelisten').put(wl);
+  }
+  await tx.done;
+}
+
+export async function getWerteliste(klasse: string, feld: string): Promise<Werteliste | undefined> {
+  const db = await getDb();
+  const results = await db.getAllFromIndex('wertelisten', 'byKlasseFeld', [klasse, feld]);
+  return results[0];
+}
+
+export async function getAllWertelisten(): Promise<Werteliste[]> {
+  const db = await getDb();
+  return db.getAll('wertelisten');
 }

@@ -378,6 +378,21 @@ def get_export(project_id: str):
     return data
 
 
+@app.get("/api/projects-catalog")
+def get_projects_catalog():
+    """Projekt-Katalog aus DOCUframe-Export (projekte.json)."""
+    projekte_path = EXPORT_DIR / "projekte.json"
+    if not projekte_path.exists():
+        raise HTTPException(404, "Kein Projekt-Katalog vorhanden (projekte.json)")
+
+    try:
+        data = read_json_auto_encoding(projekte_path)
+    except (json.JSONDecodeError, ValueError, OSError) as e:
+        raise HTTPException(500, f"Fehler beim Lesen: {e}")
+
+    return data
+
+
 @app.get("/api/projects/{project_id}/status")
 def get_status(project_id: str):
     """Sync-Status: wann zuletzt exportiert, pending changes. Hub-Envelope."""

@@ -137,3 +137,31 @@ export function emptyMobileErfassung(): MobileErfassung {
     fotos: [],
   };
 }
+
+// --- Projekt (Nachschlage-Tabelle aus DOCUframe) ---
+
+export interface Projekt extends HubEntity {
+  object_type: 'projekt';
+  legacy_id: string;
+  nummer: string;
+  bezeichnung: string;
+  status: number;
+  projektleiter_kuerzel: string;
+  projektleiter_name: string;
+  projektleiter_oid: string;
+  raw_data: Record<string, unknown>;
+}
+
+// --- Werteliste (DOCUframe Wertefeld-Aufloesung) ---
+
+export interface WertelistenEintrag {
+  wert: number;
+  text: string;
+}
+
+export interface Werteliste {
+  id: string;
+  klasse: string;
+  feld: string;
+  eintraege: WertelistenEintrag[];
+}
