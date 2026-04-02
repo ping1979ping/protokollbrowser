@@ -70,9 +70,11 @@ export async function listRemoteProjects(): Promise<{
   pendingChanges: number;
 }[]> {
   const resp = await fetchApi('/api/projects');
-  const envelope = await resp.json();
+  const json = await resp.json();
   // Hub-Envelope: { data: [...], meta: {...}, errors: [] }
-  return envelope.data ?? envelope;
+  // Fallback: direktes Array (alter Server ohne Envelope)
+  const list = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
+  return list;
 }
 
 /** Projekt vom Server herunterladen und in IndexedDB importieren */
@@ -134,8 +136,8 @@ export async function getRemoteStatus(projectId: string): Promise<{
   lastUpload?: string;
 }> {
   const resp = await fetchApi(`/api/projects/${projectId}/status`);
-  const envelope = await resp.json();
-  return envelope.data ?? envelope;
+  const json = await resp.json();
+  return json.data ?? json;
 }
 
 /** ZIP-Datei (JSON + Fotos) an den Server hochladen */
