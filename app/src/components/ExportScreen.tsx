@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Protokoll, Protokollgruppe, Protokollelement } from '../types';
-import { getElemente, getFotos, clearSyncFlags, getProtokolleByGruppe, savePendingExport, getPendingExports, deletePendingExport, updateElement } from '../db';
+import { getElemente, getFotos, clearSyncFlags, getProtokolleByGruppe, savePendingExport, getPendingExports, deletePendingExport, updateElement, getVerantwortliche } from '../db';
 import { checkConnectivity, uploadZip } from '../syncService';
 import { fetchWeather } from '../weatherService';
 import JSZip from 'jszip';
@@ -30,14 +30,18 @@ function buildV5cExportJson(
   datum: string,
   autor: string,
   vorbemerkung: string,
+  verantwortlicheMap?: Map<string, string>,
 ): unknown[] {
   const exportArray: unknown[] = [];
 
-  // Manifest (wird vom Import-Makro geskippt)
+  // Manifest (wird vom Import-Makro als Element[0] gelesen)
   exportArray.push({
     timestamp: formatDfDatum(new Date().toISOString()),
-    version: 'app',
-    GruppeId: gruppe.id,
+    version: 'hub',
+    gruppe_id: gruppe.legacy_id || gruppe.id,
+    gruppe_name: gruppe.name,
+    // Abwaertskompatibel
+    GruppeId: gruppe.legacy_id || gruppe.id,
     GruppeName: gruppe.name,
   });
 
@@ -56,8 +60,10 @@ function buildV5cExportJson(
     const isAnhang = prot.nummer < 0;
 
     exportArray.push({
-      Id: prot.id,
-      _ProtokollgruppeOid: gruppe.id,
+      object_type: 'protokoll',
+      id: prot.id,
+      legacy_id: prot.legacy_id || '',
+      _ProtokollgruppeOid: gruppe.legacy_id || gruppe.id,
       Name: prot.name,
       Datum: isAnhang ? formatDfDatum(prot.datum) : formatDfDatum(datum + 'T09:00:00'),
       Ort: prot.ort,
@@ -78,32 +84,39 @@ function buildV5cExportJson(
   for (const elem of relevante) {
     const geo = elem.mobile_erfassung || { geo_lat: null, geo_lon: null, geo_accuracy: null, geo_text: null, geo_heading: null, geo_altitude: null };
     exportArray.push({
-      Id: elem.id,
-      _ProtokollOid: elem.protokoll_id,
-      Position: elem.position,
-      Positionstitel: elem.positionstitel,
-      Positionstext: elem.positionstext,
-      Thema: elem.thema,
-      Status: elem.status,
-      Bemerkung: elem.bemerkung,
-      Erinnerung: elem.erinnerung,
-      Wert: elem.wert,
-      Termin: formatDfDatum(elem.termin),
-      _VerantwortlicherOid: elem.verantwortlicher_id,
-      Breitengrad: geo.geo_lat ?? 0,
-      Laengengrad: geo.geo_lon ?? 0,
-      Genauigkeit: geo.geo_accuracy ?? 0,
-      Kompassrichtung: geo.geo_heading ?? 0,
-      'Standort-Anzeigetext': geo.geo_text || '',
-      'Hoehe ueber NN': geo.geo_altitude ?? 0,
-      'Anzahl Fotos': elem.foto_anzahl ?? 0,
-      'Pfad Foto-Ordner': elem.foto_pfad ?? '',
-      'Mobil erfasst': elem.mobil_erfasst ?? true,
-      'Benutzer Kuerzel': elem.mobil_user ?? '',
-      'Freitext-Notiz': elem.notiz ?? '',
-      Info: elem.info ?? '',
-      'Datum Mobil': elem.mobil_datum ? formatDfDatum(elem.mobil_datum) : '',
-      VerweisArray: elem.verweise || [],
+      object_type: 'protokollelement',
+      id: elem.id,
+      legacy_id: elem.legacy_id || '',
+      is_new: elem.is_new || false,
+      is_modified: elem.is_modified || false,
+      protokoll_id: elem.protokoll_id,
+      position: elem.position,
+      positionstitel: elem.positionstitel,
+      positionstext: elem.positionstext,
+      thema: elem.thema,
+      status: elem.status,
+      bemerkung: elem.bemerkung,
+      erinnerung: elem.erinnerung,
+      wert: elem.wert,
+      termin: formatDfDatum(elem.termin),
+      verantwortlicher_id: elem.verantwortlicher_id,
+      verantwortlicher_legacy_id: (elem.verantwortlicher_id && verantwortlicheMap?.get(elem.verantwortlicher_id)) || '',
+      mobile_erfassung: {
+        geo_lat: geo.geo_lat ?? 0,
+        geo_lon: geo.geo_lon ?? 0,
+        geo_accuracy: geo.geo_accuracy ?? 0,
+        geo_heading: geo.geo_heading ?? 0,
+        geo_text: geo.geo_text || '',
+        geo_altitude: geo.geo_altitude ?? 0,
+      },
+      foto_anzahl: elem.foto_anzahl ?? 0,
+      foto_pfad: elem.foto_pfad ?? '',
+      mobil_erfasst: elem.mobil_erfasst ?? true,
+      mobil_user: elem.mobil_user ?? '',
+      notiz: elem.notiz ?? '',
+      info: elem.info ?? '',
+      mobil_datum: elem.mobil_datum ? formatDfDatum(elem.mobil_datum) : '',
+      verweise: elem.verweise || [],
     });
   }
 
@@ -273,9 +286,13 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         setWetterStatus(null);
       }
 
+      // Verantwortliche-Lookup (UUID → legacy_id) fuer Hub-Format
+      const verantwortliche = await getVerantwortliche();
+      const verantwortlicheMap = new Map(verantwortliche.map(v => [v.id, v.legacy_id]));
+
       // JSON bauen je nach Format
       const exportJson = exportFormat === 'v5c'
-        ? buildV5cExportJson(gruppe, prots, relevante, protokoll, datum, autor, vorbemerkung)
+        ? buildV5cExportJson(gruppe, prots, relevante, protokoll, datum, autor, vorbemerkung, verantwortlicheMap)
         : buildClassicExportJson(gruppe, prots, relevante, protokoll, datum, autor, vorbemerkung);
 
       const jsonFilename = exportFormat === 'v5c' ? 'protokolle.json' : 'protocol_export.json';
