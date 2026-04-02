@@ -306,6 +306,20 @@ def list_projects():
             except (json.JSONDecodeError, ValueError, OSError):
                 info["projektName"] = projekt_dir.name
 
+        # Fallback: Manifest-Daten aus protokolle.json extrahieren (erstes Element)
+        if "projektName" not in info and protokolle_path.exists():
+            try:
+                data = read_json_auto_encoding(protokolle_path)
+                if isinstance(data, list) and len(data) > 0:
+                    first = data[0]
+                    if isinstance(first, dict) and ("version" in first or "ProjektName" in first or "GruppeName" in first):
+                        info["projektName"] = first.get("ProjektName", projekt_dir.name)
+                        info["gruppeName"] = first.get("GruppeName")
+                        info["timestamp"] = first.get("timestamp")
+                        info["projektNummer"] = first.get("ProjektNummer") or first.get("ProjektId", "")
+            except (json.JSONDecodeError, ValueError, OSError):
+                pass
+
         # Pending changes (App -> DOCUframe) aus ready/ zählen
         ready_dir = IMPORT_DIR / projekt_dir.name / "ready"
         if ready_dir.exists():
