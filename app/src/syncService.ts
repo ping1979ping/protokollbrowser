@@ -59,7 +59,7 @@ export async function checkConnectivity(): Promise<boolean> {
   }
 }
 
-/** Verfügbare Projekte vom Server */
+/** Verfuegbare Projekte vom Server (Hub-Envelope) */
 export async function listRemoteProjects(): Promise<{
   id: string;
   projektName?: string;
@@ -70,7 +70,9 @@ export async function listRemoteProjects(): Promise<{
   pendingChanges: number;
 }[]> {
   const resp = await fetchApi('/api/projects');
-  return resp.json();
+  const envelope = await resp.json();
+  // Hub-Envelope: { data: [...], meta: {...}, errors: [] }
+  return envelope.data ?? envelope;
 }
 
 /** Projekt vom Server herunterladen und in IndexedDB importieren */
@@ -84,7 +86,7 @@ export async function downloadProject(projectId: string): Promise<void> {
   if (verantwortliche.length > 0) await importVerantwortliche(verantwortliche);
 
   // Alte PendingExports dieser Gruppe aufräumen (Daten sind jetzt im Server)
-  const gruppeId = pakete[0].Protokollgruppe.Id;
+  const gruppeId = pakete[0].protokollgruppe.id;
   try {
     const pending = await getPendingExports();
     for (const exp of pending) {
@@ -104,7 +106,7 @@ export async function downloadProject(projectId: string): Promise<void> {
 /** Geänderte/neue Elemente hochladen */
 export async function uploadChanges(gruppeId: string): Promise<number> {
   const alle = await getAllElemente();
-  const geaendert = alle.filter(e => e._geaendert || e._neu);
+  const geaendert = alle.filter(e => e.is_modified || e.is_new);
 
   if (geaendert.length === 0) return 0;
 
@@ -125,14 +127,15 @@ export async function uploadChanges(gruppeId: string): Promise<number> {
   return geaendert.length;
 }
 
-/** Sync-Status eines Projekts vom Server abfragen */
+/** Sync-Status eines Projekts vom Server abfragen (Hub-Envelope) */
 export async function getRemoteStatus(projectId: string): Promise<{
   lastExport?: string;
   pendingChanges: number;
   lastUpload?: string;
 }> {
   const resp = await fetchApi(`/api/projects/${projectId}/status`);
-  return resp.json();
+  const envelope = await resp.json();
+  return envelope.data ?? envelope;
 }
 
 /** ZIP-Datei (JSON + Fotos) an den Server hochladen */

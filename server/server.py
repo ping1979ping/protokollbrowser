@@ -26,6 +26,11 @@ import time
 from pathlib import Path
 from datetime import datetime
 
+# Server-Verzeichnis in sys.path, damit core/models/schemas/routers importiert werden
+_server_dir = Path(__file__).resolve().parent
+if str(_server_dir) not in sys.path:
+    sys.path.insert(0, str(_server_dir))
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
@@ -272,6 +277,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- Hub-kompatible SQLite-DB initialisieren ---
+from core.database import create_tables
+
+@app.on_event("startup")
+def startup_db():
+    create_tables()
+    log.info("Hub SQLite-DB initialisiert")
+
+# --- Hub-kompatible Router registrieren ---
+from routers.protokollgruppen import router as gruppen_router
+from routers.protokolle import router as protokolle_router
+from routers.elemente import router as elemente_router
+from routers.verantwortliche import router as verantwortliche_router
+
+app.include_router(gruppen_router)
+app.include_router(protokolle_router)
+app.include_router(elemente_router)
+app.include_router(verantwortliche_router)
+
 
 @app.get("/api/health")
 def health():
@@ -279,11 +303,13 @@ def health():
 
 
 @app.get("/api/projects")
-def list_projects():
-    """Liste aller verfügbaren Projekte (aus export/)."""
+def list_projects(page: int = 1, size: int = 50):
+    """Liste aller verfuegbaren Projekte (aus export/). Hub-Envelope."""
+    from core.schemas import paginated_response
+
     projects = []
     if not EXPORT_DIR.exists():
-        return projects
+        return paginated_response(items=[], total=0, page=page, size=size)
 
     for projekt_dir in sorted(EXPORT_DIR.iterdir()):
         if not projekt_dir.is_dir():
@@ -320,7 +346,7 @@ def list_projects():
             except (json.JSONDecodeError, ValueError, OSError):
                 pass
 
-        # Pending changes (App -> DOCUframe) aus ready/ zählen
+        # Pending changes (App -> DOCUframe) aus ready/ zaehlen
         ready_dir = IMPORT_DIR / projekt_dir.name / "ready"
         if ready_dir.exists():
             changes = list(ready_dir.glob("changes_*.json"))
@@ -330,7 +356,11 @@ def list_projects():
 
         projects.append(info)
 
-    return projects
+    # Pagination
+    total = len(projects)
+    start = (page - 1) * size
+    end = start + size
+    return paginated_response(items=projects[start:end], total=total, page=page, size=size)
 
 
 @app.get("/api/projects/{project_id}/export")
@@ -350,7 +380,9 @@ def get_export(project_id: str):
 
 @app.get("/api/projects/{project_id}/status")
 def get_status(project_id: str):
-    """Sync-Status: wann zuletzt exportiert, pending changes."""
+    """Sync-Status: wann zuletzt exportiert, pending changes. Hub-Envelope."""
+    from core.schemas import single_response
+
     result = {"projectId": project_id}
 
     manifest_path = EXPORT_DIR / project_id / "manifest.json"
@@ -370,11 +402,10 @@ def get_status(project_id: str):
     else:
         result["pendingChanges"] = 0
 
-    # Auch done/ für Gesamthistorie
     done_dir = IMPORT_DIR / project_id / "done"
     result["processedChanges"] = len(list(done_dir.glob("changes_*.json"))) if done_dir.exists() else 0
 
-    return result
+    return single_response(result)
 
 
 @app.post("/api/projects/{project_id}/sync")
@@ -400,7 +431,8 @@ async def upload_changes(project_id: str, changes: dict):
     # index.json aktualisieren
     _update_index_json(ready_dir)
 
-    return {"status": "ok", "file": filename, "timestamp": timestamp}
+    from core.schemas import single_response
+    return single_response({"status": "ok", "file": filename, "timestamp": timestamp})
 
 
 @app.post("/api/projects/{project_id}/upload-zip")
@@ -461,7 +493,8 @@ async def upload_zip(project_id: str, file: UploadFile = File(...)):
     # index.json aktualisieren (Liste aller ausstehenden changes_*.json)
     _update_index_json(ready_dir)
 
-    return {"status": "ok", "file": zip_name, "size": len(content), "extracted": extracted}
+    from core.schemas import single_response
+    return single_response({"status": "ok", "file": zip_name, "size": len(content), "extracted": extracted})
 
 
 @app.post("/api/projects/{project_id}/photos")
@@ -479,7 +512,8 @@ async def upload_photos(project_id: str, files: list[UploadFile] = File(...)):
         target.write_bytes(content)
         saved.append(file.filename)
 
-    return {"status": "ok", "saved": saved, "count": len(saved)}
+    from core.schemas import single_response
+    return single_response({"status": "ok", "saved": saved, "count": len(saved)})
 
 
 # --- Abonnement-Verwaltung ---
@@ -509,7 +543,8 @@ async def put_subscriptions(device_id: str, body: dict):
     }
 
     _write_subscriptions(subs)
-    return {"status": "ok", "deviceId": device_id}
+    from core.schemas import single_response
+    return single_response({"status": "ok", "deviceId": device_id})
 
 
 @app.get("/api/subscriptions")

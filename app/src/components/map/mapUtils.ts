@@ -19,7 +19,7 @@ export function headingArrow(deg: number): string {
 }
 
 export function elementeWithGps(elemente: Protokollelement[]): Protokollelement[] {
-  return elemente.filter(e => e.MobileErfassung.GeoLat != null && e.MobileErfassung.GeoLon != null);
+  return elemente.filter(e => e.mobile_erfassung.geo_lat != null && e.mobile_erfassung.geo_lon != null);
 }
 
 // Tile coordinate calculation for offline caching

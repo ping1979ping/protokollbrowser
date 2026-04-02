@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
-import { STATUS_MAP } from '../types';
+import { STATUS_MAP, emptyMobileErfassung } from '../types';
 import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
@@ -26,22 +26,22 @@ const WEITERE_STATUS = [19, 11, 25, 17, 21];
 
 /**
  * Erkennt das Positions-Nummernschema im Bautagebuch-Protokoll und setzt fort.
- * Beispiele: "1","2","3" → "4" | "BT-001","BT-002" → "BT-003" | "1.1","1.2" → "1.3"
+ * Beispiele: "1","2","3" -> "4" | "BT-001","BT-002" -> "BT-003" | "1.1","1.2" -> "1.3"
  */
-function naechsteBtPosition(elems: { Position: string }[]): string {
+function naechsteBtPosition(elems: { position: string }[]): string {
   if (elems.length === 0) return '1';
 
-  const positionen = elems.map(e => e.Position).filter(Boolean);
+  const positionen = elems.map(e => e.position).filter(Boolean);
   positionen.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   const letzte = positionen[positionen.length - 1];
 
-  // Pattern: Prefix + Zahl (evtl. mit führenden Nullen)
+  // Pattern: Prefix + Zahl (evtl. mit fuehrenden Nullen)
   const match = letzte.match(/^(.*?)(\d+)$/);
   if (match) {
     const prefix = match[1];
     const numStr = match[2];
     const nextNum = parseInt(numStr, 10) + 1;
-    // Führende Nullen beibehalten
+    // Fuehrende Nullen beibehalten
     const padded = String(nextNum).padStart(numStr.length, '0');
     return prefix + padded;
   }
@@ -57,18 +57,18 @@ function naechsteBtPosition(elems: { Position: string }[]): string {
 
 export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isBautagebuch, onBack, onSaved, onSavedAndNew, onSavedAndClone }: Props) {
   const [position, setPosition] = useState('');
-  const [thema, setThema] = useState(clone?.thema ?? vorgaenger?.Thema ?? '');
+  const [thema, setThema] = useState(clone?.thema ?? vorgaenger?.thema ?? '');
   const [positionstext, setPositionstext] = useState('');
-  const [status, setStatus] = useState(clone?.status ?? (isBautagebuch ? 20 : vorgaenger?.Thema === 'Mangel' ? 11 : 0));
+  const [status, setStatus] = useState(clone?.status ?? (isBautagebuch ? 20 : vorgaenger?.thema === 'Mangel' ? 11 : 0));
   const [termin, setTermin] = useState(clone?.termin ?? '');
-  const [verantwFirmaOid, setVerantwFirmaOid] = useState(clone?.verantwOid ?? vorgaenger?.VerantwortlicherFirmaOid ?? '');
+  const [verantwFirmaOid, setVerantwFirmaOid] = useState(clone?.verantwOid ?? vorgaenger?.verantwortlicher_id ?? '');
   const [bemerkung, setBemerkung] = useState('');
   const [titel, setTitel] = useState('');
-  const [geoText, setGeoText] = useState(clone?.geoText ?? vorgaenger?.MobileErfassung.GeoText ?? '');
-  const [geoLat, setGeoLat] = useState<number | null>(clone?.geoLat ?? vorgaenger?.MobileErfassung.GeoLat ?? null);
-  const [geoLon, setGeoLon] = useState<number | null>(clone?.geoLon ?? vorgaenger?.MobileErfassung.GeoLon ?? null);
-  const [geoAcc, setGeoAcc] = useState<number | null>(clone?.geoAcc ?? vorgaenger?.MobileErfassung.GeoAccuracy ?? null);
-  const [geoHeading, setGeoHeading] = useState<number | null>(clone?.geoHeading ?? vorgaenger?.MobileErfassung.GeoHeading ?? null);
+  const [geoText, setGeoText] = useState(clone?.geoText ?? vorgaenger?.mobile_erfassung.geo_text ?? '');
+  const [geoLat, setGeoLat] = useState<number | null>(clone?.geoLat ?? vorgaenger?.mobile_erfassung.geo_lat ?? null);
+  const [geoLon, setGeoLon] = useState<number | null>(clone?.geoLon ?? vorgaenger?.mobile_erfassung.geo_lon ?? null);
+  const [geoAcc, setGeoAcc] = useState<number | null>(clone?.geoAcc ?? vorgaenger?.mobile_erfassung.geo_accuracy ?? null);
+  const [geoHeading, setGeoHeading] = useState<number | null>(clone?.geoHeading ?? vorgaenger?.mobile_erfassung.geo_heading ?? null);
   const [karteOffen, setKarteOffen] = useState(false);
   const [tempFotos, setTempFotos] = useState<File[]>([]);
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
@@ -82,7 +82,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
 
   // Auto-GPS mit BBox-Fallback
   useEffect(() => {
-    if (!autoGps || clone || geoLat != null || protokoll.Nummer < 0) return;
+    if (!autoGps || clone || geoLat != null || protokoll.nummer < 0) return;
 
     let deviceErfolg = false;
 
@@ -103,25 +103,25 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
     }
 
     async function fallbackAusBbox() {
-      const prots = await getProtokolleByGruppe(gruppe.Id);
-      const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
-      const mitGps = alleElems.filter(e => e.MobileErfassung.GeoLat != null);
+      const prots = await getProtokolleByGruppe(gruppe.id);
+      const alleElems = (await Promise.all(prots.map(p => getElemente(p.id)))).flat();
+      const mitGps = alleElems.filter(e => e.mobile_erfassung.geo_lat != null);
       if (mitGps.length > 0) {
-        const lats = mitGps.map(e => e.MobileErfassung.GeoLat!);
-        const lons = mitGps.map(e => e.MobileErfassung.GeoLon!);
+        const lats = mitGps.map(e => e.mobile_erfassung.geo_lat!);
+        const lons = mitGps.map(e => e.mobile_erfassung.geo_lon!);
         const lat = Math.min(...lats);
         const lon = Math.max(...lons);
         // Kleiner Versatz basierend auf Anzahl existierender Punkte
         const offset = 0.000018 * mitGps.length;
         setGeoLat(lat - offset); setGeoLon(lon + offset); setGeoAcc(50);
-        setGeoText(`${(lat - offset).toFixed(7)}, ${(lon + offset).toFixed(7)} (geschätzt)`);
+        setGeoText(`${(lat - offset).toFixed(7)}, ${(lon + offset).toFixed(7)} (geschaetzt)`);
       }
     }
   }, []);
 
   // Auto-Kompass
   useEffect(() => {
-    if (protokoll.Nummer < 0) return;
+    if (protokoll.nummer < 0) return;
     if (!('DeviceOrientationEvent' in window)) return;
     let captured = false;
     const handler = (e: DeviceOrientationEvent) => {
@@ -154,9 +154,9 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   useEffect(() => {
     getVerantwortliche().then(setFirmen);
     (async () => {
-      const prots = await getProtokolleByGruppe(gruppe.Id);
-      const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
-      const themen = [...new Set(alleElems.map(e => e.Thema).filter(t => t && t !== 'Bautagebuch'))];
+      const prots = await getProtokolleByGruppe(gruppe.id);
+      const alleElems = (await Promise.all(prots.map(p => getElemente(p.id)))).flat();
+      const themen = [...new Set(alleElems.map(e => e.thema).filter(t => t && t !== 'Bautagebuch'))];
       themen.sort();
       setThemenVorschlaege(themen);
     })();
@@ -165,17 +165,17 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   // Kein Auto-Select der ersten Firma — Standard ist "(keine)"
 
   const alleFirmen = firmen.length > 0
-    ? firmen.map(f => ({ Oid: f.ID, Kuerzel: f.Kuerzel, Name: f.Name }))
+    ? firmen.map(f => ({ oid: f.id, kuerzel: f.kuerzel, name: f.name }))
     : [
-        ...protokoll.Teilnehmer.map(t => ({ Oid: t.Oid, Kuerzel: t.Nummer || '', Name: t.Name })),
-        ...protokoll.Verteiler
-          .filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid))
-          .map(v => ({ Oid: v.Oid, Kuerzel: v.Nummer || '', Name: v.Name })),
+        ...protokoll.teilnehmer.map(t => ({ oid: t.oid, kuerzel: t.nummer || '', name: t.name })),
+        ...protokoll.verteiler
+          .filter(v => !protokoll.teilnehmer.some(t => t.oid === v.oid))
+          .map(v => ({ oid: v.oid, kuerzel: v.nummer || '', name: v.name })),
       ];
 
   function gpsErfassen() {
     if (!window.isSecureContext) { alert('GPS erfordert eine HTTPS-Verbindung.\nBitte Server mit SSL-Zertifikat starten.'); return; }
-    if (!navigator.geolocation) { alert('GPS nicht verfügbar.'); return; }
+    if (!navigator.geolocation) { alert('GPS nicht verfuegbar.'); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude, lon = pos.coords.longitude;
@@ -195,17 +195,17 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
 
     let pos = position.trim();
     if (!pos) {
-      if (protokoll.Nummer < 0) {
+      if (protokoll.nummer < 0) {
         // Anhangprotokoll (BT, Mehrkosten, QM): Nummernschema innerhalb des Protokolls fortsetzen
-        const protElems = await getElemente(protokoll.Id);
+        const protElems = await getElemente(protokoll.id);
         pos = naechsteBtPosition(protElems);
       } else {
-        const allProts = await getProtokolleByGruppe(gruppe.Id);
+        const allProts = await getProtokolleByGruppe(gruppe.id);
         let maxPos = 0;
         for (const p of allProts) {
-          const elems = await getElemente(p.Id);
+          const elems = await getElemente(p.id);
           for (const e of elems) {
-            const num = parseFloat(e.Position);
+            const num = parseFloat(e.position);
             if (num > maxPos) maxPos = num;
           }
         }
@@ -213,50 +213,56 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
       }
     }
 
-    const verantw = alleFirmen.find(t => t.Oid === verantwFirmaOid);
-    const elemId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const verantw = alleFirmen.find(t => t.oid === verantwFirmaOid);
+    const now = new Date().toISOString();
 
     // Einheitliche Bild-Benennung: [ProjektNr]_[Gruppe]_[Position]_Bild_[Nr].jpg
     const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, '_').replace(/_+/g, '_');
     const fotoRefs = [];
     const fotoNamen: string[] = [];
+    const elemId = crypto.randomUUID();
     for (let i = 0; i < tempFotos.length; i++) {
       const fotoId = `foto-${Date.now()}-${i}`;
-      const fileName = `${gruppe.Protokollnummer}_${sanitize(gruppe.Name)}_${pos}_Bild_${i + 1}.jpg`;
+      const fileName = `${gruppe.protokollnummer}_${sanitize(gruppe.name)}_${pos}_Bild_${i + 1}.jpg`;
       await saveFoto(fotoId, elemId, tempFotos[i], fileName);
-      fotoRefs.push({ FileName: fileName, RelativePath: `photos/${fileName}`, ZielPfad: '' });
+      fotoRefs.push({ file_name: fileName, relative_path: `photos/${fileName}`, ziel_pfad: '' });
       fotoNamen.push(fileName);
     }
 
-    // Bildnamen in Bemerkung anfügen
+    // Bildnamen in Bemerkung anfuegen
     let finalBemerkung = bemerkung;
     if (fotoNamen.length > 0) {
       const bilderText = `{Bilder: ${fotoNamen.join(', ')}}`;
       finalBemerkung = finalBemerkung.trim() ? `${finalBemerkung.trim()} ${bilderText}` : bilderText;
     }
 
-    const verweise: string[] = vorgaenger ? [vorgaenger.Id] : [];
+    const verweise: string[] = vorgaenger ? [vorgaenger.id] : [];
 
     const neuesElem: Protokollelement = {
-      Id: elemId,
-      ProtokollId: protokoll.Id,
-      Position: pos,
-      Positionstitel: titel,
-      Positionstext: positionstext,
-      Thema: thema,
-      Status: status,
-      Termin: termin ? termin + 'T00:00:00' : '',
-      VerantwortlicherFirmaOid: verantw?.Oid || '',
-      VerantwortlicherFirmaName: verantw?.Name || '',
-      Bemerkung: finalBemerkung,
-      Erinnerung: false,
-      Wert: 0,
-      Verweise: verweise,
-      MobileErfassung: {
-        GeoLat: geoLat, GeoLon: geoLon, GeoAccuracy: geoAcc,
-        GeoText: geoText || null, GeoHeading: geoHeading, GeoAltitude: null, Fotos: fotoRefs,
+      id: elemId,
+      created_at: now,
+      updated_at: now,
+      created_by: null,
+      object_type: 'protokollelement',
+      legacy_id: '',
+      protokoll_id: protokoll.id,
+      position: pos,
+      positionstitel: titel,
+      positionstext: positionstext,
+      thema: thema,
+      status: status,
+      termin: termin ? termin + 'T00:00:00' : '',
+      verantwortlicher_id: verantw?.oid || null,
+      verantwortlicher_name: verantw?.name || '',
+      bemerkung: finalBemerkung,
+      erinnerung: false,
+      wert: 0,
+      verweise: verweise,
+      mobile_erfassung: {
+        geo_lat: geoLat, geo_lon: geoLon, geo_accuracy: geoAcc,
+        geo_text: geoText || null, geo_heading: geoHeading, geo_altitude: null, fotos: fotoRefs,
       },
-      _neu: true,
+      is_new: true,
     };
 
     await addElement(neuesElem);
@@ -295,10 +301,10 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         {/* Line 1: 3 equal buttons */}
         <div className="flex gap-2">
           <button onClick={() => {
-            if (dirty && !confirm('Änderungen werden nicht gespeichert. Zur Übersicht?')) return;
+            if (dirty && !confirm('Aenderungen werden nicht gespeichert. Zur Uebersicht?')) return;
             onBack();
           }} className="flex-1 py-2 rounded-lg font-bold text-sm bg-ping-blue-dark hover:bg-ping-blue-dark/80 transition">
-            &larr; Übersicht
+            &larr; Uebersicht
           </button>
           <button onClick={speichern}
             className={`flex-1 py-2 rounded-lg font-bold text-sm text-white transition ${
@@ -320,14 +326,14 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         {/* Line 2: Status + Protocol name + title */}
         <div className="flex items-center gap-2 mt-2 text-sm">
           <StatusBadge status={0} />
-          <span className="text-ping-blue-light/70 truncate">{protokoll.Name}</span>
+          <span className="text-ping-blue-light/70 truncate">{protokoll.name}</span>
           <span className="font-semibold ml-auto whitespace-nowrap">
             {vorgaenger ? 'Nachfolger erstellen' : 'Neues Element'}
           </span>
         </div>
         {vorgaenger && (
           <p className="text-xs text-ping-blue-light mt-1">
-            Vorgänger: Pos. {vorgaenger.Position} — {vorgaenger.Positionstext.slice(0, 50)}...
+            Vorgaenger: Pos. {vorgaenger.position} — {vorgaenger.positionstext.slice(0, 50)}...
           </p>
         )}
       </div>
@@ -358,7 +364,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
               <option value=""></option>
               {alleFirmen.map(t => (
-                <option key={t.Oid} value={t.Oid}>{t.Kuerzel ? `${t.Kuerzel} — ${t.Name}` : t.Name}</option>
+                <option key={t.oid} value={t.oid}>{t.kuerzel ? `${t.kuerzel} — ${t.name}` : t.name}</option>
               ))}
             </select>
           </div>
@@ -433,16 +439,16 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               <div className="flex gap-1">
                 <button onClick={gpsErfassen}
                   className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
-                  📍 GPS
+                  GPS
                 </button>
                 <button onClick={() => setKarteOffen(true)}
                   className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
-                  🗺 Karte
+                  Karte
                 </button>
                 {geoLat != null && (
                   <button onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
                     className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-xs font-medium">
-                    ✕
+                    x
                   </button>
                 )}
               </div>
@@ -489,7 +495,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
                 <div key={i} className="relative w-10 h-10">
                   <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover rounded" />
                   <button onClick={() => setTempFotos(prev => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">×</button>
+                    className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">x</button>
                 </div>
               ))}
             </div>

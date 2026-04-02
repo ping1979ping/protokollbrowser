@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
-import { STATUS_MAP } from '../types';
+import { STATUS_MAP, emptyMobileErfassung } from '../types';
 import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
 import type { Verantwortlicher } from '../db';
 import { extractGpsFromImage } from '../exifGps';
@@ -48,9 +48,9 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
   useEffect(() => {
     getVerantwortliche().then(setFirmen);
     (async () => {
-      const prots = await getProtokolleByGruppe(gruppe.Id);
-      const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
-      const themen = [...new Set(alleElems.map(e => e.Thema).filter(t => t && t !== 'Bautagebuch'))];
+      const prots = await getProtokolleByGruppe(gruppe.id);
+      const alleElems = (await Promise.all(prots.map(p => getElemente(p.id)))).flat();
+      const themen = [...new Set(alleElems.map(e => e.thema).filter(t => t && t !== 'Bautagebuch'))];
       themen.sort();
       setThemenVorschlaege(themen);
     })();
@@ -81,17 +81,17 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
 
     // 2. BBox-Fallback aus existierenden Punkten
     async function fallbackAusBbox() {
-      const prots = await getProtokolleByGruppe(gruppe.Id);
-      const alleElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
-      const mitGps = alleElems.filter(e => e.MobileErfassung.GeoLat != null);
+      const prots = await getProtokolleByGruppe(gruppe.id);
+      const alleElems = (await Promise.all(prots.map(p => getElemente(p.id)))).flat();
+      const mitGps = alleElems.filter(e => e.mobile_erfassung.geo_lat != null);
       if (mitGps.length > 0) {
-        const lats = mitGps.map(e => e.MobileErfassung.GeoLat!);
-        const lons = mitGps.map(e => e.MobileErfassung.GeoLon!);
-        // Südost-Ecke der Bounding-Box als Startpunkt
+        const lats = mitGps.map(e => e.mobile_erfassung.geo_lat!);
+        const lons = mitGps.map(e => e.mobile_erfassung.geo_lon!);
+        // Suedost-Ecke der Bounding-Box als Startpunkt
         setFallbackGps({ lat: Math.min(...lats), lon: Math.max(...lons) });
         setGpsStatus('bbox');
       } else {
-        // 3. Gar keine GPS-Daten → Karte anbieten
+        // 3. Gar keine GPS-Daten -> Karte anbieten
         setGpsStatus('keins');
         setShowMapPicker(true);
       }
@@ -99,13 +99,13 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
   }, [phase]);
 
   const alleFirmen = firmen.length > 0
-    ? firmen.map(f => ({ Oid: f.ID, Name: f.Name }))
+    ? firmen.map(f => ({ oid: f.id, name: f.name }))
     : [
-        ...protokoll.Teilnehmer,
-        ...protokoll.Verteiler.filter(v => !protokoll.Teilnehmer.some(t => t.Oid === v.Oid)),
+        ...protokoll.teilnehmer,
+        ...protokoll.verteiler.filter(v => !protokoll.teilnehmer.some(t => t.oid === v.oid)),
       ];
 
-  // Files einlesen: arrayBuffer() liest die echten Binärdaten,
+  // Files einlesen: arrayBuffer() liest die echten Binaerdaten,
   // bevor iOS Safari die FileList-Referenzen invalidieren kann
   async function fotoHinzufuegenBase(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -142,26 +142,26 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
     if (fotos.length === 0) { alert('Keine Fotos aufgenommen.'); return; }
     setVerarbeitet(true);
 
-    // Höchste Position finden — bei Anhangprotokoll nur im aktuellen Protokoll
+    // Hoechste Position finden — bei Anhangprotokoll nur im aktuellen Protokoll
     let maxPos = 0;
-    if (protokoll.Nummer < 0) {
-      const elems = await getElemente(protokoll.Id);
+    if (protokoll.nummer < 0) {
+      const elems = await getElemente(protokoll.id);
       for (const e of elems) {
-        const num = parseFloat(e.Position);
+        const num = parseFloat(e.position);
         if (num > maxPos) maxPos = num;
       }
     } else {
-      const allProts = await getProtokolleByGruppe(gruppe.Id);
+      const allProts = await getProtokolleByGruppe(gruppe.id);
       for (const p of allProts) {
-        const elems = await getElemente(p.Id);
+        const elems = await getElemente(p.id);
         for (const e of elems) {
-          const num = parseFloat(e.Position);
+          const num = parseFloat(e.position);
           if (num > maxPos) maxPos = num;
         }
       }
     }
 
-    const verantw = alleFirmen.find(t => t.Oid === verantwFirmaOid);
+    const verantw = alleFirmen.find(t => t.oid === verantwFirmaOid);
     let count = 0;
 
     for (let i = 0; i < fotos.length; i++) {
@@ -181,49 +181,55 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
         finalLat = deviceGps.lat; finalLon = deviceGps.lon;
         accuracy = deviceGps.acc; gpsSource = `${deviceGps.acc} m`;
       } else if (fallbackGps) {
-        // ca. 0.000018° Breite ≈ 2m Versatz pro Punkt
+        // ca. 0.000018 Breite = 2m Versatz pro Punkt
         const offset = 0.000018 * i;
         finalLat = fallbackGps.lat - offset;
         finalLon = fallbackGps.lon + offset;
-        accuracy = 50; gpsSource = 'geschätzt';
+        accuracy = 50; gpsSource = 'geschaetzt';
       }
 
       const pos = `${Math.floor(maxPos) + 1 + i}`;
-      const elemId = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const now = new Date().toISOString();
+      const elemId = crypto.randomUUID();
 
       // Foto speichern — einheitliche Benennung: [ProjektNr]_[Gruppe]_[Position]_Bild_[Nr].jpg
       const fotoId = `foto-${Date.now()}-${i}`;
       const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]/g, '_').replace(/_+/g, '_');
-      const fileName = `${gruppe.Protokollnummer}_${sanitize(gruppe.Name)}_${pos}_Bild_1.jpg`;
+      const fileName = `${gruppe.protokollnummer}_${sanitize(gruppe.name)}_${pos}_Bild_1.jpg`;
       await saveFoto(fotoId, elemId, file, fileName);
 
       const text = positionstext.trim() || file.name.replace(/\.[^.]+$/, '');
 
       const neuesElem: Protokollelement = {
-        Id: elemId,
-        ProtokollId: protokoll.Id,
-        Position: pos,
-        Positionstitel: '',
-        Positionstext: text,
-        Thema: thema,
-        Status: status,
-        Termin: termin ? termin + 'T00:00:00' : '',
-        VerantwortlicherFirmaOid: verantw?.Oid || '',
-        VerantwortlicherFirmaName: verantw?.Name || '',
-        Bemerkung: `{Bilder: ${fileName}}`,
-        Erinnerung: false,
-        Wert: 0,
-        Verweise: [],
-        MobileErfassung: {
-          GeoLat: finalLat,
-          GeoLon: finalLon,
-          GeoAccuracy: accuracy,
-          GeoText: finalLat != null ? `${finalLat.toFixed(7)}, ${finalLon!.toFixed(7)} (${gpsSource})` : null,
-          GeoHeading: null,
-          GeoAltitude: null,
-          Fotos: [{ FileName: fileName, RelativePath: `photos/${fileName}`, ZielPfad: '' }],
+        id: elemId,
+        created_at: now,
+        updated_at: now,
+        created_by: null,
+        object_type: 'protokollelement',
+        legacy_id: '',
+        protokoll_id: protokoll.id,
+        position: pos,
+        positionstitel: '',
+        positionstext: text,
+        thema: thema,
+        status: status,
+        termin: termin ? termin + 'T00:00:00' : '',
+        verantwortlicher_id: verantw?.oid || null,
+        verantwortlicher_name: verantw?.name || '',
+        bemerkung: `{Bilder: ${fileName}}`,
+        erinnerung: false,
+        wert: 0,
+        verweise: [],
+        mobile_erfassung: {
+          geo_lat: finalLat,
+          geo_lon: finalLon,
+          geo_accuracy: accuracy,
+          geo_text: finalLat != null ? `${finalLat.toFixed(7)}, ${finalLon!.toFixed(7)} (${gpsSource})` : null,
+          geo_heading: null,
+          geo_altitude: null,
+          fotos: [{ file_name: fileName, relative_path: `photos/${fileName}`, ziel_pfad: '' }],
         },
-        _neu: true,
+        is_new: true,
       };
 
       await addElement(neuesElem);
@@ -238,8 +244,8 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
   const gpsIndikator = {
     ermitteln: { farbe: 'bg-yellow-400 animate-pulse', text: 'GPS wird ermittelt...' },
     device:    { farbe: 'bg-green-400', text: `GPS: ${deviceGps?.acc ?? '?'} m` },
-    bbox:      { farbe: 'bg-amber-400', text: 'Position geschätzt (aus vorh. Punkten)' },
-    manuell:   { farbe: 'bg-amber-400', text: 'Manuell gewählt' },
+    bbox:      { farbe: 'bg-amber-400', text: 'Position geschaetzt (aus vorh. Punkten)' },
+    manuell:   { farbe: 'bg-amber-400', text: 'Manuell gewaehlt' },
     keins:     { farbe: 'bg-red-400', text: 'Kein GPS' },
   }[gpsStatus];
 
@@ -248,9 +254,9 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
     return (
       <div className="min-h-screen bg-ping-bg">
         <div className="bg-ping-blue text-white p-3">
-          <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Übersicht</button>
+          <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Uebersicht</button>
           <h1 className="text-base font-bold mt-0.5">Schnellerstellung</h1>
-          <p className="text-xs text-ping-blue-light">Voreinstellungen für Foto-Batch</p>
+          <p className="text-xs text-ping-blue-light">Voreinstellungen fuer Foto-Batch</p>
         </div>
 
         <div className="p-3 space-y-2.5">
@@ -258,7 +264,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           <div className="bg-white rounded-lg p-2.5 border border-gray-100">
             <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Positionstext (optional)</label>
             <textarea value={positionstext} onChange={(e) => setPositionstext(e.target.value)} rows={3}
-              placeholder="Wird für alle Punkte übernommen. Leer = Dateiname."
+              placeholder="Wird fuer alle Punkte uebernommen. Leer = Dateiname."
               className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
           </div>
 
@@ -307,7 +313,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
               className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
               <option value=""></option>
               {alleFirmen.map(t => (
-                <option key={t.Oid} value={t.Oid}>{t.Name}</option>
+                <option key={t.oid} value={t.oid}>{t.name}</option>
               ))}
             </select>
           </div>
@@ -362,19 +368,19 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           <input ref={galerieRef} type="file" accept="image/*" multiple
             onChange={fotoAusGalerie} className="hidden" />
 
-          {/* Kein GPS? Manuell per Karte wählen */}
+          {/* Kein GPS? Manuell per Karte waehlen */}
           {(gpsStatus === 'keins' || gpsStatus === 'bbox' || gpsStatus === 'manuell') && (
             <button
               onClick={() => setShowMapPicker(true)}
               className="w-full py-2 rounded-lg text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition"
             >
-              Startposition auf Karte wählen
+              Startposition auf Karte waehlen
             </button>
           )}
 
           {/* Auto-Capture Toggle */}
           <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-gray-100">
-            <span className="text-xs text-gray-600">Kamera automatisch erneut öffnen</span>
+            <span className="text-xs text-gray-600">Kamera automatisch erneut oeffnen</span>
             <button
               onClick={() => setAutoCapture(!autoCapture)}
               className={`relative inline-flex items-center w-10 h-5 rounded-full transition ${autoCapture ? 'bg-green-500' : 'bg-gray-300'}`}
@@ -404,7 +410,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
                       <img src={fotoUrls[i]} alt="" className="w-full h-full object-cover rounded-lg" />
                       <button onClick={() => fotoEntfernen(i)}
                         className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow">
-                        ×
+                        x
                       </button>
                     </div>
                   ))}
@@ -413,19 +419,19 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
             </div>
           )}
 
-          {/* Abschließen */}
+          {/* Abschliessen */}
           {fotos.length > 0 && (
             <button
               onClick={abschliessen}
               disabled={verarbeitet}
               className="w-full py-3 rounded-lg font-medium text-white text-sm bg-green-600 hover:bg-green-700 transition disabled:opacity-50"
             >
-              {verarbeitet ? 'Wird erstellt...' : `Abschließen (${fotos.length} Punkte erstellen)`}
+              {verarbeitet ? 'Wird erstellt...' : `Abschliessen (${fotos.length} Punkte erstellen)`}
             </button>
           )}
         </div>
 
-        {/* MapEditorModal für manuelle Startposition */}
+        {/* MapEditorModal fuer manuelle Startposition */}
         {showMapPicker && (
           <MapEditorModal
             lat={fallbackGps?.lat ?? null}
@@ -456,7 +462,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           onClick={onDone}
           className="w-full py-2.5 rounded-lg font-medium text-white text-sm bg-ping-blue hover:bg-ping-blue-dark transition"
         >
-          Zur Übersicht
+          Zur Uebersicht
         </button>
       </div>
     </div>

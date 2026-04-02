@@ -27,7 +27,7 @@ interface Props {
 }
 
 /**
- * Fuzzy-Match: Normalisiert einen Firmennamen für Vergleich.
+ * Fuzzy-Match: Normalisiert einen Firmennamen fuer Vergleich.
  * Entfernt Rechtsform, Satzzeichen, mehrfache Leerzeichen, lowercase.
  */
 function normalizeName(name: string): string {
@@ -43,32 +43,32 @@ function normalizeName(name: string): string {
  * Fuzzy-Match: Findet den besten Treffer aus der Verantwortlichen-Liste.
  * 1. Exakter Match
  * 2. Normalisierter Match
- * 3. Einer enthält den anderen
+ * 3. Einer enthaelt den anderen
  */
 function fuzzyMatchFirma(firmaName: string, verantwortliche: Verantwortlicher[]): Verantwortlicher | null {
   // 1. Exakt
-  const exact = verantwortliche.find(v => v.Name === firmaName);
+  const exact = verantwortliche.find(v => v.name === firmaName);
   if (exact) return exact;
 
   const normInput = normalizeName(firmaName);
 
   // 2. Normalisiert exakt
-  const normMatch = verantwortliche.find(v => normalizeName(v.Name) === normInput);
+  const normMatch = verantwortliche.find(v => normalizeName(v.name) === normInput);
   if (normMatch) return normMatch;
 
-  // 3. Enthält (bidirektional)
+  // 3. Enthaelt (bidirektional)
   const containsMatch = verantwortliche.find(v => {
-    const normV = normalizeName(v.Name);
+    const normV = normalizeName(v.name);
     return normV.includes(normInput) || normInput.includes(normV);
   });
   if (containsMatch) return containsMatch;
 
-  // 4. Wort-Überlappung (mind. 2 gemeinsame Wörter oder 1 langes Wort)
+  // 4. Wort-Ueberlappung (mind. 2 gemeinsame Woerter oder 1 langes Wort)
   const inputWords = normInput.split(' ').filter(w => w.length > 1);
   let bestScore = 0;
   let bestMatch: Verantwortlicher | null = null;
   for (const v of verantwortliche) {
-    const vWords = normalizeName(v.Name).split(' ').filter(w => w.length > 1);
+    const vWords = normalizeName(v.name).split(' ').filter(w => w.length > 1);
     const overlap = inputWords.filter(w => vWords.some(vw => vw.includes(w) || w.includes(vw)));
     const score = overlap.length;
     if (score > bestScore && (score >= 2 || overlap.some(w => w.length >= 5))) {
@@ -94,7 +94,6 @@ function parseBautagebuchText(text: string): { wetter: string; firmen: Bautagebu
       continue;
     }
     // Firma — flexibles Format: "- Name: X Mitarbeiter | Baustand: ..."
-    // Auch: "- Name: X MA | Baustand: ..." oder "- Name: X Mitarbeiter, Baustand: ..."
     const firmaMatch = line.match(/^[-–•]\s*(.+?):\s*(\d+)\s*(?:Mitarbeiter|MA|Pers\.?|Mann)\s*[|,;]\s*Baustand\s*:\s*(.+)/i);
     if (firmaMatch) {
       firmen.push({
@@ -134,7 +133,7 @@ function generatePositionstext(wetter: string, firmen: BautagebuchFirma[]): stri
 
 export default function BautagebuchWizard({ gruppe, existingElement, onUebernehmen, onAbbrechen }: Props) {
   const [datum, setDatum] = useState(() => {
-    if (existingElement?.Termin) return existingElement.Termin.slice(0, 10);
+    if (existingElement?.termin) return existingElement.termin.slice(0, 10);
     return new Date().toISOString().slice(0, 10);
   });
   const [wetter, setWetter] = useState('');
@@ -142,9 +141,9 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
   const [wetterLaedt, setWetterLaedt] = useState(false);
   const [firmen, setFirmen] = useState<BautagebuchFirma[]>([]);
   const [verfuegbareFirmen, setVerfuegbareFirmen] = useState<Verantwortlicher[]>([]);
-  const [geoLat, setGeoLat] = useState<number | null>(existingElement?.MobileErfassung?.GeoLat ?? null);
-  const [geoLon, setGeoLon] = useState<number | null>(existingElement?.MobileErfassung?.GeoLon ?? null);
-  const [geoAcc, setGeoAcc] = useState<number | null>(existingElement?.MobileErfassung?.GeoAccuracy ?? null);
+  const [geoLat, setGeoLat] = useState<number | null>(existingElement?.mobile_erfassung?.geo_lat ?? null);
+  const [geoLon, setGeoLon] = useState<number | null>(existingElement?.mobile_erfassung?.geo_lon ?? null);
+  const [geoAcc, setGeoAcc] = useState<number | null>(existingElement?.mobile_erfassung?.geo_accuracy ?? null);
   const [firmaDropdown, setFirmaDropdown] = useState(false);
 
   useEffect(() => { initWizard(); }, []);
@@ -155,35 +154,35 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
 
     if (existingElement) {
       // Bearbeiten: Parse existing text
-      const parsed = parseBautagebuchText(existingElement.Positionstext);
+      const parsed = parseBautagebuchText(existingElement.positionstext);
       setWetter(parsed.wetter);
       const firmenMitOid = parsed.firmen.map(f => {
         const match = fuzzyMatchFirma(f.name, verantw);
-        return { ...f, oid: match?.ID || '', name: match?.Name || f.name };
+        return { ...f, oid: match?.id || '', name: match?.name || f.name };
       });
       setFirmen(firmenMitOid);
       setWetterGeladen(!!parsed.wetter);
     } else {
       // Neu: Letzten Eintrag im BT-Protokoll laden
-      const btElems = await getLetzteBautagebuchElemente(gruppe.Id);
+      const btElems = await getLetzteBautagebuchElemente(gruppe.id);
       if (btElems.length > 0) {
         const letzter = btElems[0];
-        const parsed = parseBautagebuchText(letzter.Positionstext);
+        const parsed = parseBautagebuchText(letzter.positionstext);
 
         if (parsed.firmen.length > 0) {
-          // Firmen übernehmen, Mitarbeiter auf 0
+          // Firmen uebernehmen, Mitarbeiter auf 0
           const firmenMitOid = parsed.firmen.map(f => {
             const match = fuzzyMatchFirma(f.name, verantw);
-            return { ...f, oid: match?.ID || '', name: match?.Name || f.name, mitarbeiter: 0 };
+            return { ...f, oid: match?.id || '', name: match?.name || f.name, mitarbeiter: 0 };
           });
           setFirmen(firmenMitOid);
         }
 
-        // GPS vom Vorgänger
-        if (letzter.MobileErfassung?.GeoLat != null) {
-          setGeoLat(letzter.MobileErfassung.GeoLat);
-          setGeoLon(letzter.MobileErfassung.GeoLon);
-          setGeoAcc(letzter.MobileErfassung.GeoAccuracy);
+        // GPS vom Vorgaenger
+        if (letzter.mobile_erfassung?.geo_lat != null) {
+          setGeoLat(letzter.mobile_erfassung.geo_lat);
+          setGeoLon(letzter.mobile_erfassung.geo_lon);
+          setGeoAcc(letzter.mobile_erfassung.geo_accuracy);
         }
       }
     }
@@ -220,8 +219,8 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
   }
 
   function firmaHinzufuegen(verantw: Verantwortlicher) {
-    if (firmen.some(f => f.oid === verantw.ID)) return;
-    setFirmen([...firmen, { oid: verantw.ID, name: verantw.Name, mitarbeiter: 0, baustand: '' }]);
+    if (firmen.some(f => f.oid === verantw.id)) return;
+    setFirmen([...firmen, { oid: verantw.id, name: verantw.name, mitarbeiter: 0, baustand: '' }]);
     setFirmaDropdown(false);
   }
 
@@ -239,7 +238,7 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
   }
 
   const nichtVerwendeteFirmen = verfuegbareFirmen.filter(
-    v => !firmen.some(f => f.oid === v.ID)
+    v => !firmen.some(f => f.oid === v.id)
   );
 
   return (
@@ -279,7 +278,7 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
               className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue"
             />
             {!wetterGeladen && !wetterLaedt && geoLat == null && (
-              <p className="text-[9px] text-gray-400 mt-0.5">Kein GPS-Standort verfügbar. Wetter manuell eingeben.</p>
+              <p className="text-[9px] text-gray-400 mt-0.5">Kein GPS-Standort verfuegbar. Wetter manuell eingeben.</p>
             )}
           </div>
 
@@ -298,11 +297,11 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
                   <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-auto min-w-[200px]">
                     {nichtVerwendeteFirmen.map(v => (
                       <button
-                        key={v.ID}
+                        key={v.id}
                         onClick={() => firmaHinzufuegen(v)}
                         className="block w-full text-left px-3 py-1.5 text-xs hover:bg-ping-blue-light border-b border-gray-50 last:border-0"
                       >
-                        {v.Name}
+                        {v.name}
                       </button>
                     ))}
                   </div>
@@ -311,7 +310,7 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
             </div>
 
             {firmen.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-2">Keine Firmen — "Firma hinzufügen" klicken</p>
+              <p className="text-xs text-gray-400 text-center py-2">Keine Firmen — "Firma hinzufuegen" klicken</p>
             )}
 
             <div className="space-y-2">
@@ -323,7 +322,7 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
                       onClick={() => firmaEntfernen(i)}
                       className="text-red-400 hover:text-red-600 text-sm leading-none px-1"
                     >
-                      ×
+                      x
                     </button>
                   </div>
 
@@ -334,7 +333,7 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
                       onClick={() => updateFirma(i, { mitarbeiter: Math.max(0, firma.mitarbeiter - 1) })}
                       className="w-7 h-7 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-bold hover:bg-gray-200"
                     >
-                      −
+                      -
                     </button>
                     <span className="text-sm font-mono font-medium w-6 text-center">{firma.mitarbeiter}</span>
                     <button
@@ -374,7 +373,7 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
             onClick={uebernehmen}
             className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-green-600 text-white hover:bg-green-700 transition"
           >
-            Übernehmen
+            Uebernehmen
           </button>
         </div>
       </div>

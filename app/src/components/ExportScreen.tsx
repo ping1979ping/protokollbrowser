@@ -13,7 +13,7 @@ interface Props {
 
 type ExportFormat = 'classic' | 'v5c';
 
-// ISO → DOCUframe Datumsformat "DD.MM.YYYY HH:MM:SS"
+// ISO -> DOCUframe Datumsformat "DD.MM.YYYY HH:MM:SS"
 function formatDfDatum(iso: string): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -37,73 +37,73 @@ function buildV5cExportJson(
   exportArray.push({
     timestamp: formatDfDatum(new Date().toISOString()),
     version: 'app',
-    GruppeId: gruppe.Id,
-    GruppeName: gruppe.Name,
+    GruppeId: gruppe.id,
+    GruppeName: gruppe.name,
   });
 
   // Elemente nach Quell-Protokoll gruppieren
   const byProtokoll = new Map<string, Protokollelement[]>();
   for (const e of relevante) {
-    const list = byProtokoll.get(e.ProtokollId) || [];
+    const list = byProtokoll.get(e.protokoll_id) || [];
     list.push(e);
-    byProtokoll.set(e.ProtokollId, list);
+    byProtokoll.set(e.protokoll_id, list);
   }
 
   // Protokolle (fuer jeden betroffenen Protokoll)
   for (const [protId] of byProtokoll) {
-    const prot = prots.find(p => p.Id === protId);
+    const prot = prots.find(p => p.id === protId);
     if (!prot) continue;
-    const isAnhang = prot.Nummer < 0;
+    const isAnhang = prot.nummer < 0;
 
     exportArray.push({
-      Id: prot.Id,
-      _ProtokollgruppeOid: gruppe.Id,
-      Name: prot.Name,
-      Datum: isAnhang ? formatDfDatum(prot.Datum) : formatDfDatum(datum + 'T09:00:00'),
-      Ort: prot.Ort,
-      Autor: isAnhang ? prot.Autor : autor,
-      Vorbemerkung: isAnhang ? prot.Vorbemerkung : vorbemerkung,
-      Nachbemerkung: prot.Nachbemerkung || '',
-      Signatur: prot.Signatur || '',
-      Erledigt: prot.Erledigt,
-      Erstellt: prot.Erstellt,
+      Id: prot.id,
+      _ProtokollgruppeOid: gruppe.id,
+      Name: prot.name,
+      Datum: isAnhang ? formatDfDatum(prot.datum) : formatDfDatum(datum + 'T09:00:00'),
+      Ort: prot.ort,
+      Autor: isAnhang ? prot.autor : autor,
+      Vorbemerkung: isAnhang ? prot.vorbemerkung : vorbemerkung,
+      Nachbemerkung: prot.nachbemerkung || '',
+      Signatur: prot.signatur || '',
+      Erledigt: prot.erledigt,
+      Erstellt: prot.erstellt,
       Verteilt: false,
       TeilnehmerAnmerkung: '',
-      _TeilnehmerOids: prot.Teilnehmer?.map(t => t.Oid).filter(Boolean) || [],
-      _VerteilerOids: prot.Verteiler?.map(t => t.Oid).filter(Boolean) || [],
+      _TeilnehmerOids: prot.teilnehmer?.map(t => t.oid).filter(Boolean) || [],
+      _VerteilerOids: prot.verteiler?.map(t => t.oid).filter(Boolean) || [],
     });
   }
 
   // Elemente (nur geaenderte/neue)
   for (const elem of relevante) {
-    const geo = elem.MobileErfassung || { GeoLat: null, GeoLon: null, GeoAccuracy: null, GeoText: null, GeoHeading: null, GeoAltitude: null };
+    const geo = elem.mobile_erfassung || { geo_lat: null, geo_lon: null, geo_accuracy: null, geo_text: null, geo_heading: null, geo_altitude: null };
     exportArray.push({
-      Id: elem.Id,
-      _ProtokollOid: elem.ProtokollId,
-      Position: elem.Position,
-      Positionstitel: elem.Positionstitel,
-      Positionstext: elem.Positionstext,
-      Thema: elem.Thema,
-      Status: elem.Status,
-      Bemerkung: elem.Bemerkung,
-      Erinnerung: elem.Erinnerung,
-      Wert: elem.Wert,
-      Termin: formatDfDatum(elem.Termin),
-      _VerantwortlicherOid: elem.VerantwortlicherFirmaOid,
-      Breitengrad: geo.GeoLat ?? 0,
-      Laengengrad: geo.GeoLon ?? 0,
-      Genauigkeit: geo.GeoAccuracy ?? 0,
-      Kompassrichtung: geo.GeoHeading ?? 0,
-      'Standort-Anzeigetext': geo.GeoText || '',
-      'Hoehe ueber NN': geo.GeoAltitude ?? 0,
-      'Anzahl Fotos': elem.FotoAnzahl ?? 0,
-      'Pfad Foto-Ordner': elem.FotoPfad ?? '',
-      'Mobil erfasst': elem.MobilErfasst ?? true,
-      'Benutzer Kuerzel': elem.MobilUser ?? '',
-      'Freitext-Notiz': elem.Notiz ?? '',
-      Info: elem.Info ?? '',
-      'Datum Mobil': elem.MobilDatum ? formatDfDatum(elem.MobilDatum) : '',
-      VerweisArray: elem.Verweise || [],
+      Id: elem.id,
+      _ProtokollOid: elem.protokoll_id,
+      Position: elem.position,
+      Positionstitel: elem.positionstitel,
+      Positionstext: elem.positionstext,
+      Thema: elem.thema,
+      Status: elem.status,
+      Bemerkung: elem.bemerkung,
+      Erinnerung: elem.erinnerung,
+      Wert: elem.wert,
+      Termin: formatDfDatum(elem.termin),
+      _VerantwortlicherOid: elem.verantwortlicher_id,
+      Breitengrad: geo.geo_lat ?? 0,
+      Laengengrad: geo.geo_lon ?? 0,
+      Genauigkeit: geo.geo_accuracy ?? 0,
+      Kompassrichtung: geo.geo_heading ?? 0,
+      'Standort-Anzeigetext': geo.geo_text || '',
+      'Hoehe ueber NN': geo.geo_altitude ?? 0,
+      'Anzahl Fotos': elem.foto_anzahl ?? 0,
+      'Pfad Foto-Ordner': elem.foto_pfad ?? '',
+      'Mobil erfasst': elem.mobil_erfasst ?? true,
+      'Benutzer Kuerzel': elem.mobil_user ?? '',
+      'Freitext-Notiz': elem.notiz ?? '',
+      Info: elem.info ?? '',
+      'Datum Mobil': elem.mobil_datum ? formatDfDatum(elem.mobil_datum) : '',
+      VerweisArray: elem.verweise || [],
     });
   }
 
@@ -120,42 +120,42 @@ function buildClassicExportJson(
   vorbemerkung: string,
 ): unknown[] {
   function buildExportElement(e: Protokollelement) {
-    const isNeu = e._neu;
+    const isNeu = e.is_new;
     const base: Record<string, unknown> = {
       Aktion: isNeu ? 'CREATE' : 'UPDATE',
-      DfElementId: isNeu ? null : e.Id,
+      DfElementId: isNeu ? null : e.id,
     };
 
     if (isNeu) {
-      base.Position = e.Position;
-      base.Positionstitel = e.Positionstitel;
-      base.Positionstext = e.Positionstext;
-      base.Thema = e.Thema;
-      base.Status = e.Status;
-      base.Termin = e.Termin;
-      base.Verweise = e.Verweise || [];
+      base.Position = e.position;
+      base.Positionstitel = e.positionstitel;
+      base.Positionstext = e.positionstext;
+      base.Thema = e.thema;
+      base.Status = e.status;
+      base.Termin = e.termin;
+      base.Verweise = e.verweise || [];
     } else {
-      base.StatusNeu = e.Status;
-      base.TerminNeu = e.Termin;
+      base.StatusNeu = e.status;
+      base.TerminNeu = e.termin;
     }
 
-    base.BemerkungNeu = e.Bemerkung;
-    base.VerantwortlicherFirmaOidNeu = e.VerantwortlicherFirmaOid;
+    base.BemerkungNeu = e.bemerkung;
+    base.VerantwortlicherFirmaOidNeu = e.verantwortlicher_id;
     base.MobileDaten = {
-      GeoLat: e.MobileErfassung.GeoLat,
-      GeoLon: e.MobileErfassung.GeoLon,
-      GeoAccuracy: e.MobileErfassung.GeoAccuracy,
-      GeoText: e.MobileErfassung.GeoText || '',
-      GeoHeading: e.MobileErfassung.GeoHeading,
-      GeoAltitude: e.MobileErfassung.GeoAltitude,
-      Fotos: e.MobileErfassung.Fotos,
-      FotoAnzahl: e.FotoAnzahl ?? 0,
-      FotoPfad: e.FotoPfad ?? '',
-      MobilErfasst: e.MobilErfasst ?? false,
-      MobilDatum: e.MobilDatum ?? '',
-      MobilUser: e.MobilUser ?? '',
-      Notiz: e.Notiz ?? '',
-      Info: e.Info ?? '',
+      GeoLat: e.mobile_erfassung.geo_lat,
+      GeoLon: e.mobile_erfassung.geo_lon,
+      GeoAccuracy: e.mobile_erfassung.geo_accuracy,
+      GeoText: e.mobile_erfassung.geo_text || '',
+      GeoHeading: e.mobile_erfassung.geo_heading,
+      GeoAltitude: e.mobile_erfassung.geo_altitude,
+      Fotos: e.mobile_erfassung.fotos,
+      FotoAnzahl: e.foto_anzahl ?? 0,
+      FotoPfad: e.foto_pfad ?? '',
+      MobilErfasst: e.mobil_erfasst ?? false,
+      MobilDatum: e.mobil_datum ?? '',
+      MobilUser: e.mobil_user ?? '',
+      Notiz: e.notiz ?? '',
+      Info: e.info ?? '',
     };
 
     return base;
@@ -163,19 +163,19 @@ function buildClassicExportJson(
 
   const byProtokoll = new Map<string, Protokollelement[]>();
   for (const e of relevante) {
-    const list = byProtokoll.get(e.ProtokollId) || [];
+    const list = byProtokoll.get(e.protokoll_id) || [];
     list.push(e);
-    byProtokoll.set(e.ProtokollId, list);
+    byProtokoll.set(e.protokoll_id, list);
   }
 
   const exportJson: unknown[] = [];
   for (const [protId, elems] of byProtokoll) {
-    const prot = prots.find(p => p.Id === protId);
-    const isAnhang = prot && prot.Nummer < 0;
+    const prot = prots.find(p => p.id === protId);
+    const isAnhang = prot && prot.nummer < 0;
 
     if (isAnhang) {
       exportJson.push({
-        ProtokollgruppeId: gruppe.Id,
+        ProtokollgruppeId: gruppe.id,
         ProtokollIdAlt: protId,
         AktionProtokoll: 'APPEND',
         ProtokollMeta: null,
@@ -183,13 +183,13 @@ function buildClassicExportJson(
       });
     } else {
       exportJson.push({
-        ProtokollgruppeId: gruppe.Id,
-        ProtokollIdAlt: protokoll.Id,
+        ProtokollgruppeId: gruppe.id,
+        ProtokollIdAlt: protokoll.id,
         AktionProtokoll: 'CREATE',
         ProtokollMeta: {
-          Name: `${protokoll.Name.replace(/\d+$/, '')}${protokoll.Nummer + 1}`,
+          Name: `${protokoll.name.replace(/\d+$/, '')}${protokoll.nummer + 1}`,
           Datum: datum + 'T09:00:00',
-          Ort: protokoll.Ort,
+          Ort: protokoll.ort,
           Autor: autor,
           Vorbemerkung: vorbemerkung,
           Nachbemerkung: '',
@@ -204,8 +204,8 @@ function buildClassicExportJson(
 
 export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   const [datum, setDatum] = useState(new Date().toISOString().slice(0, 10));
-  const [autor, setAutor] = useState(protokoll.Autor);
-  const [vorbemerkung, setVorbemerkung] = useState(`Folgeprotokoll zu Nr. ${protokoll.Nummer}`);
+  const [autor, setAutor] = useState(protokoll.autor);
+  const [vorbemerkung, setVorbemerkung] = useState(`Folgeprotokoll zu Nr. ${protokoll.nummer}`);
   const [exporting, setExporting] = useState(false);
   const [uploadResult, setUploadResult] = useState<'ok' | 'error' | null>(null);
   const [stats, setStats] = useState<{ geaendert: number; neu: number } | null>(null);
@@ -217,17 +217,17 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   );
 
   useEffect(() => {
-    getProtokolleByGruppe(gruppe.Id).then(async (prots) => {
-      const allElems = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
+    getProtokolleByGruppe(gruppe.id).then(async (prots) => {
+      const allElems = (await Promise.all(prots.map(p => getElemente(p.id)))).flat();
       setStats({
-        geaendert: allElems.filter(e => e._geaendert && !e._neu).length,
-        neu: allElems.filter(e => e._neu).length,
+        geaendert: allElems.filter(e => e.is_modified && !e.is_new).length,
+        neu: allElems.filter(e => e.is_new).length,
       });
     });
     getPendingExports().then(exps => {
-      setPendingCount(exps.filter(e => e.gruppeId === gruppe.Id).length);
+      setPendingCount(exps.filter(e => e.gruppeId === gruppe.id).length);
     });
-  }, [gruppe.Id]);
+  }, [gruppe.id]);
 
   function toggleFormat() {
     const next: ExportFormat = exportFormat === 'v5c' ? 'classic' : 'v5c';
@@ -238,34 +238,34 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   async function exportieren() {
     setExporting(true);
     try {
-      const prots = await getProtokolleByGruppe(gruppe.Id);
-      const alleElemente = (await Promise.all(prots.map(p => getElemente(p.Id)))).flat();
-      const relevante = alleElemente.filter(e => e._geaendert || e._neu);
+      const prots = await getProtokolleByGruppe(gruppe.id);
+      const alleElemente = (await Promise.all(prots.map(p => getElemente(p.id)))).flat();
+      const relevante = alleElemente.filter(e => e.is_modified || e.is_new);
 
       if (relevante.length === 0) {
-        alert('Keine Änderungen zum Exportieren vorhanden.');
+        alert('Keine Aenderungen zum Exportieren vorhanden.');
         setExporting(false);
         return;
       }
 
       // Bautagebuch-Elemente ohne Wetter nachladen
       const btOhneWetter = relevante.filter(e =>
-        e.Thema === 'Bautagebuch' &&
-        e.Positionstext.includes('Wetter: —') &&
-        e.MobileErfassung?.GeoLat != null
+        e.thema === 'Bautagebuch' &&
+        e.positionstext.includes('Wetter: —') &&
+        e.mobile_erfassung?.geo_lat != null
       );
       if (btOhneWetter.length > 0) {
-        setWetterStatus(`Wetter für ${btOhneWetter.length} Eintrag/Einträge nachladen...`);
+        setWetterStatus(`Wetter fuer ${btOhneWetter.length} Eintrag/Eintraege nachladen...`);
         for (const btElem of btOhneWetter) {
           try {
-            const datumMatch = btElem.Termin?.slice(0, 10);
+            const datumMatch = btElem.termin?.slice(0, 10);
             const w = await fetchWeather(
-              btElem.MobileErfassung.GeoLat!,
-              btElem.MobileErfassung.GeoLon!,
+              btElem.mobile_erfassung.geo_lat!,
+              btElem.mobile_erfassung.geo_lon!,
               datumMatch || undefined
             );
             if (w) {
-              btElem.Positionstext = btElem.Positionstext.replace('Wetter: —', `Wetter: ${w}`);
+              btElem.positionstext = btElem.positionstext.replace('Wetter: —', `Wetter: ${w}`);
               await updateElement(btElem);
             }
           } catch { /* ignore */ }
@@ -286,7 +286,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
       const photosFolder = zip.folder('photos')!;
 
       for (const elem of relevante) {
-        const elemFotos = await getFotos(elem.Id);
+        const elemFotos = await getFotos(elem.id);
         for (const foto of elemFotos) {
           photosFolder.file(foto.fileName, foto.blob);
         }
@@ -295,12 +295,12 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
       const content = await zip.generateAsync({ type: 'blob' });
       const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const filename = `protocol_export_${ts}.zip`;
-      const elementIds = relevante.map(e => e.Id);
+      const elementIds = relevante.map(e => e.id);
 
       // ZIP in IndexedDB speichern
       await savePendingExport({
         id: `export-${Date.now()}`,
-        gruppeId: gruppe.Id,
+        gruppeId: gruppe.id,
         blob: content,
         filename,
         elementIds,
@@ -311,7 +311,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
       const online = await checkConnectivity();
       if (online) {
         try {
-          await uploadZip(gruppe.Id, content, filename);
+          await uploadZip(gruppe.id, content, filename);
           await clearSyncFlags(elementIds);
           const exps = await getPendingExports();
           const latest = exps.find(e => e.filename === filename);
@@ -346,7 +346,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   return (
     <div className="min-h-screen bg-ping-bg">
       <div className="bg-ping-blue text-white p-4">
-        <button onClick={onBack} className="text-ping-blue-light hover:text-white text-sm">&larr; Zurück</button>
+        <button onClick={onBack} className="text-ping-blue-light hover:text-white text-sm">&larr; Zurueck</button>
         <h1 className="text-lg font-bold mt-1">Export</h1>
       </div>
 
@@ -380,7 +380,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
           <h2 className="font-medium text-gray-900 mb-2">Zusammenfassung</h2>
           {stats && (
             <div className="text-sm text-gray-600 space-y-1">
-              <p><span className="font-medium text-orange-600">{stats.geaendert}</span> geänderte Elemente</p>
+              <p><span className="font-medium text-orange-600">{stats.geaendert}</span> geaenderte Elemente</p>
               <p><span className="font-medium text-green-600">{stats.neu}</span> neue Elemente</p>
             </div>
           )}

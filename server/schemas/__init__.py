@@ -1,0 +1,1 @@
+# Hub-kompatible Pydantic-Schemas
