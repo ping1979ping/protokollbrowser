@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Protokollgruppe } from '../types';
 import { getAllGruppen, getProtokolleByGruppe, clearProjekt } from '../db';
 import logo from '../assets/ping-logo.png';
@@ -16,6 +16,17 @@ interface ProjektInfo {
 
 export default function ProjektAuswahl({ onSelect, onZurueck, onNeuesImport }: Props) {
   const [projekte, setProjekte] = useState<ProjektInfo[]>([]);
+  const [suchtext, setSuchtext] = useState('');
+
+  const gefiltert = useMemo(() => {
+    if (!suchtext.trim()) return projekte;
+    const s = suchtext.toLowerCase();
+    return projekte.filter(p =>
+      (p.gruppe.ProjektName || '').toLowerCase().includes(s) ||
+      (p.gruppe.ProjektNummer || '').toLowerCase().includes(s) ||
+      (p.gruppe.Name || '').toLowerCase().includes(s)
+    );
+  }, [projekte, suchtext]);
 
   async function laden() {
     const gruppen = await getAllGruppen();
@@ -45,7 +56,14 @@ export default function ProjektAuswahl({ onSelect, onZurueck, onNeuesImport }: P
         <h1 className="text-lg font-bold mt-1">Projektauswahl</h1>
       </div>
       <div className="p-3 space-y-2">
-        {projekte.map(p => (
+        <input
+          type="text"
+          value={suchtext}
+          onChange={e => setSuchtext(e.target.value)}
+          placeholder="Projektnummer oder Name suchen..."
+          className="w-full border-2 border-gray-300 rounded-lg text-sm px-3 py-2 focus:border-ping-blue focus:outline-none"
+        />
+        {gefiltert.map(p => (
           <div key={p.gruppe.Id} className="flex items-stretch bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <button
               onClick={() => onSelect(p.gruppe.Id)}
@@ -66,6 +84,9 @@ export default function ProjektAuswahl({ onSelect, onZurueck, onNeuesImport }: P
             </button>
           </div>
         ))}
+        {gefiltert.length === 0 && suchtext.trim() && (
+          <p className="text-center text-ping-text-light py-8">Keine Treffer für &ldquo;{suchtext}&rdquo;</p>
+        )}
         {projekte.length === 0 && (
           <p className="text-center text-ping-text-light py-8">Keine Projekte geladen.</p>
         )}
