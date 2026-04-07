@@ -25,7 +25,7 @@ INT PINGProtGrpExpJSON_V6( HDIALOG Dialog, _PINGProtokollgruppe &Object )
     STRING Txt;
     STRING GruppeOid;
 
-    STRING ExchangeBasePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\export";
+    STRING ExchangeBasePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\dfexport";
     STRING ExchangeProjPath;
     STRING ExchangeJsonPath;
 

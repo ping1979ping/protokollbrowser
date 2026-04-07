@@ -14,9 +14,11 @@ echo.
 
 REM Verzeichnisse anlegen
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
-if not exist "%INSTALL_DIR%\data\export" mkdir "%INSTALL_DIR%\data\export"
-if not exist "%INSTALL_DIR%\data\import" mkdir "%INSTALL_DIR%\data\import"
-if not exist "%INSTALL_DIR%\data\archive" mkdir "%INSTALL_DIR%\data\archive"
+if not exist "%INSTALL_DIR%\data\dfexport" mkdir "%INSTALL_DIR%\data\dfexport"
+if not exist "%INSTALL_DIR%\data\dfimport" mkdir "%INSTALL_DIR%\data\dfimport"
+if not exist "%INSTALL_DIR%\data\dfimport\done" mkdir "%INSTALL_DIR%\data\dfimport\done"
+if not exist "%INSTALL_DIR%\data\dfimport\archive" mkdir "%INSTALL_DIR%\data\dfimport\archive"
+if not exist "%INSTALL_DIR%\data\dfimport\photos" mkdir "%INSTALL_DIR%\data\dfimport\photos"
 
 REM EXE kopieren
 copy /Y "%~dp0dist\%EXE_NAME%" "%INSTALL_DIR%\%EXE_NAME%"

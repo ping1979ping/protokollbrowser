@@ -19,7 +19,7 @@ INT PING_ExportAllProjekte_Hub( HDIALOG Dialog, DBOBJECT &Object )
     HJSON SetArrJSon;
     HFILE File;
     STRING Txt;
-    STRING FilePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\export\\projekte.json";
+    STRING FilePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\dfexport\\projekte.json";
     STRING strace = "#### Projekt-Export Hub: ";
     STRING ClassName = "Projekt";
 
@@ -239,7 +239,7 @@ INT PING_ExportAllProjekte_Hub( HDIALOG Dialog, DBOBJECT &Object )
     // DATEI SCHREIBEN
     // ============================================================
     Txt = JSon.GetText( TRUE );
-    FileCreatePath( "K:\\Sonstige\\Docuframe-Exchange\\data\\export" );
+    FileCreatePath( "K:\\Sonstige\\Docuframe-Exchange\\data\\dfexport" );
     File.Open( FilePath, FILE_MODE_CREATE | FILE_MODE_WRITE );
     File.WriteString( Txt );
     File.Close();

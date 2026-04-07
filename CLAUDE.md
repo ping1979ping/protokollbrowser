@@ -42,6 +42,11 @@ protokollbrowser/
 │   ├── models/             # ORM/Schemas
 │   ├── schemas/            # Pydantic
 │   ├── data/               # SQLite + Bestände
+│   │   ├── dfexport/       #   DOCUframe → App (per Projekt)
+│   │   └── dfimport/       #   App → DOCUframe (flach, progrp{OID}_{UUID}.json)
+│   │       ├── done/       #     von DOCUframe verarbeitet
+│   │       ├── archive/    #     ZIP-Archive der Uploads
+│   │       └── photos/     #     Notfall-Puffer für Fotos
 │   └── venv/               # Python venv (KAPUTT — neu erstellen)
 ├── docucontrol/            # DOCUframe-Makros (.dfm, UTF-16LE)
 ├── docs/superpowers/       # GSD-Plans und Specs
@@ -105,6 +110,7 @@ Aktuelles Feature: —
 - **DOCUcontrol-Syntax**: nie raten — immer `docucontrol`-Skill-Referenz prüfen (`MessageBox` nicht `MsgBox`, `INT` nicht `INTEGER`, etc.)
 - **`.dfm`-Dateien sind UTF-16LE** mit BOM — beim Lesen mit `sed 's/\x00//g'` filtern
 - **Hub-Format**: snake_case + `object_type` + `legacy_id` (siehe letzte Migration)
+- **dfimport/dfexport**: Server-Datenordner heissen `dfimport/` (App → DF, flach, Datei-Schema `progrp{OID}_{UUID}.json`) und `dfexport/` (DF → App). DOCUframe verarbeitet `dfimport/` ueber den Batch-Wrapper `PINGProtGrpImportBatch_Hub`, der den Worker `PINGProtGrpImpJSON_Hub` je Datei aufruft und fertige Dateien nach `dfimport/done/` verschiebt.
 - **GSD läuft parallel** — `.planning/`, `docs/superpowers/plans/` und FORGE-Pipeline ergänzen sich, ersetzen sich nicht
 - **Vorhandene Skills**: `docucontrol`, `ping-corporate-design`
 

@@ -14,7 +14,7 @@ Wird von der Protokoll-App als Projekt-Nachschlageliste importiert.
 
 ## Output
 
-**Datei:** `K:\Sonstige\Docuframe-Exchange\data\export\projekte.json`
+**Datei:** `K:\Sonstige\Docuframe-Exchange\data\dfexport\projekte.json`
 
 ## JSON-Struktur
 

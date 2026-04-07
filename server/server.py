@@ -5,13 +5,16 @@ Leichtgewichtiger HTTP-Server für Sync zwischen DOCUframe und PWA.
 Verzeichnisstruktur:
   data/
     subscriptions.json             Abo-Verwaltung (Device -> Projekte)
-    export/{ProjektId}/            DOCUframe -> App
-      protokolle.json
-      manifest.json
-    import/{ProjektId}/            App -> DOCUframe
-      incoming/                      Staging (Server schreibt)
-      ready/                         Bereit für DOCUframe-Import
-      done/                          Von DOCUframe verarbeitet
+    dfexport/                      DOCUframe -> App (von DF geschrieben)
+      projekte.json                  Projekt-Katalog (Hub)
+      {ProjektId}/
+        protokolle.json
+        manifest.json
+    dfimport/                      App -> DOCUframe (flach!)
+      progrp{OID}_{UUID}.json        eine Datei je App-Upload
+      done/                          von DOCUframe verarbeitet
+      archive/                       ZIP-Archive der Uploads
+      photos/                        Notfall-Puffer fuer Fotos
 
 Starten: uvicorn server:app --host 0.0.0.0 --port 8080
 """
@@ -23,6 +26,7 @@ import re
 import shutil
 import sys
 import time
+import uuid
 from pathlib import Path
 from datetime import datetime
 
@@ -57,17 +61,25 @@ _script_dir = Path(sys.executable).parent if getattr(sys, 'frozen', False) else 
 
 # Basis-Verzeichnis: data/ neben exe/server.py, oder per Umgebungsvariable
 DATA_DIR = Path(os.environ.get("EXCHANGE_DATA_DIR", _script_dir / "data"))
-EXPORT_DIR = DATA_DIR / "export"
-IMPORT_DIR = DATA_DIR / "import"
-ARCHIVE_DIR = DATA_DIR / "archive"
+DFEXPORT_DIR = DATA_DIR / "dfexport"              # DOCUframe -> App
+DFIMPORT_DIR = DATA_DIR / "dfimport"              # App -> DOCUframe (flach)
+DFIMPORT_DONE_DIR = DFIMPORT_DIR / "done"
+DFIMPORT_ARCHIVE_DIR = DFIMPORT_DIR / "archive"
+DFIMPORT_PHOTOS_DIR = DFIMPORT_DIR / "photos"
 SUBSCRIPTIONS_FILE = DATA_DIR / "subscriptions.json"
 
 # Projektordner-Basis für Foto-Ablage (Fuzzy-Suche Fallback)
 PROJEKTE_BASE = Path(os.environ.get("PROJEKTE_BASE", "K:/projekte"))
 
 # Verzeichnisse anlegen
-for d in [EXPORT_DIR, IMPORT_DIR, ARCHIVE_DIR]:
+for d in [DFEXPORT_DIR, DFIMPORT_DIR, DFIMPORT_DONE_DIR, DFIMPORT_ARCHIVE_DIR, DFIMPORT_PHOTOS_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
+
+def _make_dfimport_filename(project_id: str) -> str:
+    """Flat filename for incoming app uploads: progrp{OID}_{UUID}.json"""
+    safe_id = re.sub(r'[^A-Za-z0-9_-]', '_', project_id)
+    return f"progrp{safe_id}_{uuid.uuid4().hex}.json"
 
 log = logging.getLogger("exchange")
 
@@ -108,19 +120,17 @@ def _find_projekt_pfad(projekt_nummer: str) -> Path | None:
     return result
 
 
-def _copy_photos_to_project(project_id: str, changes_json_path: Path):
-    """Fotos aus ready/photos/ in die Projektstruktur kopieren.
+def _copy_photos_to_project(project_id: str, changes_json_path: Path, photos_src_dir: Path):
+    """Fotos aus einem Quellordner in die Projektstruktur kopieren.
 
     Ziel: {ProjektPfad}\\Fotos\\{GruppeName}\\Protokoll {Nr}\\
-    Ergänzt FotoPfadServer in der changes_*.json.
+    Ergänzt FotoPfadServer in der JSON-Datei.
     """
-    ready_dir = changes_json_path.parent
-    photos_dir = ready_dir / "photos"
-    if not photos_dir.exists() or not any(photos_dir.iterdir()):
+    if not photos_src_dir.exists() or not any(photos_src_dir.iterdir()):
         return  # Keine Fotos vorhanden
 
     # Manifest lesen für ProjektStammverzeichnis und GruppeName
-    manifest_path = EXPORT_DIR / project_id / "manifest.json"
+    manifest_path = DFEXPORT_DIR / project_id / "manifest.json"
     projekt_pfad = None
     gruppe_name = project_id  # Fallback
 
@@ -140,7 +150,7 @@ def _copy_photos_to_project(project_id: str, changes_json_path: Path):
             pass
 
     if not projekt_pfad:
-        log.warning("Kein Projektpfad für %s gefunden — Fotos bleiben in ready/photos/", project_id)
+        log.warning("Kein Projektpfad für %s gefunden — Fotos bleiben in %s", project_id, photos_src_dir)
         return
 
     # Changes-JSON lesen um Protokollnummer zu ermitteln
@@ -173,7 +183,7 @@ def _copy_photos_to_project(project_id: str, changes_json_path: Path):
             # Fotos kopieren
             foto_ziel.mkdir(parents=True, exist_ok=True)
             for foto in fotos:
-                src = photos_dir / foto.get("FileName", "")
+                src = photos_src_dir / foto.get("FileName", "")
                 if src.exists():
                     dst = foto_ziel / src.name
                     try:
@@ -192,16 +202,6 @@ def _copy_photos_to_project(project_id: str, changes_json_path: Path):
             json.dumps(changes, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-
-
-def _update_index_json(ready_dir: Path):
-    """index.json in ready/ aktualisieren mit Liste aller changes_*.json."""
-    changes_files = sorted([f.name for f in ready_dir.glob("changes_*.json")])
-    index_path = ready_dir / "index.json"
-    index_path.write_text(
-        json.dumps({"files": changes_files}, indent=2),
-        encoding="utf-8",
-    )
 
 
 def _scan_projekt_pfade() -> dict[str, str]:
@@ -304,14 +304,14 @@ def health():
 
 @app.get("/api/projects")
 def list_projects(page: int = 1, size: int = 50):
-    """Liste aller verfuegbaren Projekte (aus export/). Hub-Envelope."""
+    """Liste aller verfuegbaren Projekte (aus dfexport/). Hub-Envelope."""
     from core.schemas import paginated_response
 
     projects = []
-    if not EXPORT_DIR.exists():
+    if not DFEXPORT_DIR.exists():
         return paginated_response(items=[], total=0, page=page, size=size)
 
-    for projekt_dir in sorted(EXPORT_DIR.iterdir()):
+    for projekt_dir in sorted(DFEXPORT_DIR.iterdir()):
         if not projekt_dir.is_dir():
             continue
         manifest_path = projekt_dir / "manifest.json"
@@ -346,13 +346,10 @@ def list_projects(page: int = 1, size: int = 50):
             except (json.JSONDecodeError, ValueError, OSError):
                 pass
 
-        # Pending changes (App -> DOCUframe) aus ready/ zaehlen
-        ready_dir = IMPORT_DIR / projekt_dir.name / "ready"
-        if ready_dir.exists():
-            changes = list(ready_dir.glob("changes_*.json"))
-            info["pendingChanges"] = len(changes)
-        else:
-            info["pendingChanges"] = 0
+        # Pending changes (App -> DOCUframe): Dateien im flachen dfimport/ zaehlen
+        # die auf diese Protokollgruppe zeigen (progrp{OID}_*.json)
+        pattern = f"progrp{projekt_dir.name}_*.json"
+        info["pendingChanges"] = len(list(DFIMPORT_DIR.glob(pattern)))
 
         projects.append(info)
 
@@ -366,7 +363,7 @@ def list_projects(page: int = 1, size: int = 50):
 @app.get("/api/projects/{project_id}/export")
 def get_export(project_id: str):
     """Protokolldaten eines Projekts herunterladen."""
-    protokolle_path = EXPORT_DIR / project_id / "protokolle.json"
+    protokolle_path = DFEXPORT_DIR / project_id / "protokolle.json"
     if not protokolle_path.exists():
         raise HTTPException(404, f"Kein Export für Projekt {project_id}")
 
@@ -381,7 +378,7 @@ def get_export(project_id: str):
 @app.get("/api/projects-catalog")
 def get_projects_catalog():
     """Projekt-Katalog aus DOCUframe-Export (projekte.json)."""
-    projekte_path = EXPORT_DIR / "projekte.json"
+    projekte_path = DFEXPORT_DIR / "projekte.json"
     if not projekte_path.exists():
         raise HTTPException(404, "Kein Projekt-Katalog vorhanden (projekte.json)")
 
@@ -400,7 +397,7 @@ def get_status(project_id: str):
 
     result = {"projectId": project_id}
 
-    manifest_path = EXPORT_DIR / project_id / "manifest.json"
+    manifest_path = DFEXPORT_DIR / project_id / "manifest.json"
     if manifest_path.exists():
         try:
             manifest = read_json_auto_encoding(manifest_path)
@@ -408,114 +405,140 @@ def get_status(project_id: str):
         except (json.JSONDecodeError, ValueError, OSError):
             pass
 
-    ready_dir = IMPORT_DIR / project_id / "ready"
-    if ready_dir.exists():
-        changes = sorted(ready_dir.glob("changes_*.json"))
-        result["pendingChanges"] = len(changes)
-        if changes:
-            result["lastUpload"] = changes[-1].stem.replace("changes_", "")
-    else:
-        result["pendingChanges"] = 0
+    pattern = f"progrp{project_id}_*.json"
+    pending = sorted(DFIMPORT_DIR.glob(pattern), key=lambda p: p.stat().st_mtime)
+    result["pendingChanges"] = len(pending)
+    if pending:
+        result["lastUpload"] = datetime.fromtimestamp(pending[-1].stat().st_mtime).isoformat()
 
-    done_dir = IMPORT_DIR / project_id / "done"
-    result["processedChanges"] = len(list(done_dir.glob("changes_*.json"))) if done_dir.exists() else 0
+    result["processedChanges"] = len(list(DFIMPORT_DONE_DIR.glob(pattern))) if DFIMPORT_DONE_DIR.exists() else 0
 
     return single_response(result)
 
 
 @app.post("/api/projects/{project_id}/sync")
 async def upload_changes(project_id: str, changes: dict):
-    """Änderungen von der App hochladen -> incoming/ -> ready/."""
-    incoming_dir = IMPORT_DIR / project_id / "incoming"
-    ready_dir = IMPORT_DIR / project_id / "ready"
-    incoming_dir.mkdir(parents=True, exist_ok=True)
-    ready_dir.mkdir(parents=True, exist_ok=True)
+    """Änderungen von der App hochladen -> dfimport/progrp{OID}_{UUID}.json (atomar)."""
+    DFIMPORT_DIR.mkdir(parents=True, exist_ok=True)
 
-    device_id = changes.get("deviceId", "unknown")[:12]
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"changes_{device_id}_{timestamp}.json"
+    filename = _make_dfimport_filename(project_id)
+    tmp_path = DFIMPORT_DIR / (filename + ".tmp")
+    final_path = DFIMPORT_DIR / filename
 
-    # Erst in incoming/ schreiben, dann nach ready/ verschieben (atomar)
-    incoming_file = incoming_dir / filename
-    incoming_file.write_text(
+    tmp_path.write_text(
         json.dumps(changes, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    shutil.move(str(incoming_file), str(ready_dir / filename))
-
-    # index.json aktualisieren
-    _update_index_json(ready_dir)
+    shutil.move(str(tmp_path), str(final_path))
 
     from core.schemas import single_response
-    return single_response({"status": "ok", "file": filename, "timestamp": timestamp})
+    return single_response({
+        "status": "ok",
+        "file": filename,
+        "timestamp": datetime.now().isoformat(),
+    })
 
 
 @app.post("/api/projects/{project_id}/upload-zip")
 async def upload_zip(project_id: str, file: UploadFile = File(...)):
-    """ZIP-Datei (JSON + Fotos) von der App hochladen -> entpacken -> ready/."""
+    """ZIP-Datei (JSON + Fotos) von der App hochladen.
+
+    Ablauf:
+      1. ZIP entpacken in Temp-Verzeichnis
+      2. Fotos in den Projektordner kopieren (K:\\projekte\\...)
+      3. JSON (mit FotoPfadServer ergaenzt) nach dfimport/progrp{OID}_{UUID}.json
+      4. ZIP als Backup nach dfimport/archive/
+    """
     import zipfile
     import io
+    import tempfile
 
-    incoming_dir = IMPORT_DIR / project_id / "incoming"
-    ready_dir = IMPORT_DIR / project_id / "ready"
-    incoming_dir.mkdir(parents=True, exist_ok=True)
-    ready_dir.mkdir(parents=True, exist_ok=True)
+    DFIMPORT_DIR.mkdir(parents=True, exist_ok=True)
+    DFIMPORT_ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    DFIMPORT_PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
     content = await file.read()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # ZIP auch als Archiv behalten
-    zip_name = f"protocol_export_{timestamp}.zip"
-    zip_path = ready_dir / zip_name
+    # ZIP-Archiv sichern
+    zip_name = f"progrp{re.sub(r'[^A-Za-z0-9_-]', '_', project_id)}_{timestamp}.zip"
+    zip_path = DFIMPORT_ARCHIVE_DIR / zip_name
     zip_path.write_bytes(content)
 
-    # ZIP entpacken: JSON nach ready/, Fotos nach ready/photos/
-    extracted = []
-    try:
-        with zipfile.ZipFile(io.BytesIO(content)) as zf:
-            for name in zf.namelist():
-                if name.endswith('/'):
-                    continue
-                data = zf.read(name)
-                basename = Path(name).name
+    extracted_json: list[str] = []
+    extracted_photos: list[str] = []
 
-                if basename.endswith('.json'):
-                    # JSON-Datei mit Timestamp umbenennen -> ready/
-                    target_name = f"changes_zip_{timestamp}.json" if basename == "protocol_export.json" else basename
-                    target = ready_dir / target_name
-                    target.write_bytes(data)
-                    extracted.append(target_name)
-                else:
-                    # Fotos -> ready/photos/
-                    photos_dir = ready_dir / "photos"
-                    photos_dir.mkdir(exist_ok=True)
-                    (photos_dir / basename).write_bytes(data)
-                    extracted.append(f"photos/{basename}")
-    except zipfile.BadZipFile:
-        # Kein gültiges ZIP — Datei bleibt trotzdem in ready/
-        pass
+    with tempfile.TemporaryDirectory(prefix="dfimport_") as tmpdir:
+        tmp = Path(tmpdir)
+        tmp_json_paths: list[Path] = []
+        tmp_photos_dir = tmp / "photos"
 
-    # Fotos in Projektstruktur kopieren + FotoPfadServer in JSON ergänzen
-    json_files = [f for f in extracted if f.endswith('.json')]
-    for jf in json_files:
-        json_path = ready_dir / jf
-        if json_path.exists():
+        try:
+            with zipfile.ZipFile(io.BytesIO(content)) as zf:
+                for name in zf.namelist():
+                    if name.endswith('/'):
+                        continue
+                    data = zf.read(name)
+                    basename = Path(name).name
+
+                    if basename.endswith('.json'):
+                        target = tmp / basename
+                        target.write_bytes(data)
+                        tmp_json_paths.append(target)
+                        extracted_json.append(basename)
+                    else:
+                        tmp_photos_dir.mkdir(exist_ok=True)
+                        (tmp_photos_dir / basename).write_bytes(data)
+                        extracted_photos.append(basename)
+        except zipfile.BadZipFile:
+            from core.schemas import single_response
+            return single_response({
+                "status": "error",
+                "error": "invalid_zip",
+                "archive": zip_name,
+            })
+
+        final_files: list[str] = []
+        for jp in tmp_json_paths:
+            # 1) Fotos in Projektordner kopieren (ergaenzt FotoPfadServer in jp)
             try:
-                _copy_photos_to_project(project_id, json_path)
+                _copy_photos_to_project(project_id, jp, tmp_photos_dir)
             except Exception as e:
-                log.warning("Foto-Kopie für %s fehlgeschlagen: %s", jf, e)
+                log.warning("Foto-Kopie fuer %s fehlgeschlagen: %s", jp.name, e)
 
-    # index.json aktualisieren (Liste aller ausstehenden changes_*.json)
-    _update_index_json(ready_dir)
+            # 2) Falls Fotos nicht ins Projekt wanderten (kein Projektpfad):
+            #    unbearbeitete Fotos in dfimport/photos/ puffern
+            if tmp_photos_dir.exists():
+                for src in tmp_photos_dir.iterdir():
+                    dst = DFIMPORT_PHOTOS_DIR / src.name
+                    if not dst.exists():
+                        try:
+                            shutil.copy2(str(src), str(dst))
+                        except OSError as e:
+                            log.warning("Foto-Puffer fehlgeschlagen: %s", e)
+
+            # 3) JSON nach dfimport/progrp{OID}_{UUID}.json (atomar)
+            final_name = _make_dfimport_filename(project_id)
+            final_path = DFIMPORT_DIR / final_name
+            tmp_final = DFIMPORT_DIR / (final_name + ".tmp")
+            shutil.copy2(str(jp), str(tmp_final))
+            shutil.move(str(tmp_final), str(final_path))
+            final_files.append(final_name)
 
     from core.schemas import single_response
-    return single_response({"status": "ok", "file": zip_name, "size": len(content), "extracted": extracted})
+    return single_response({
+        "status": "ok",
+        "archive": zip_name,
+        "size": len(content),
+        "files": final_files,
+        "photos": len(extracted_photos),
+    })
 
 
 @app.post("/api/projects/{project_id}/photos")
 async def upload_photos(project_id: str, files: list[UploadFile] = File(...)):
-    """Fotos von der App hochladen (multipart) -> ready/photos/."""
-    photos_dir = IMPORT_DIR / project_id / "ready" / "photos"
+    """Fotos von der App hochladen (multipart) -> dfimport/photos/ (Notfall-Puffer)."""
+    photos_dir = DFIMPORT_PHOTOS_DIR
     photos_dir.mkdir(parents=True, exist_ok=True)
 
     saved = []

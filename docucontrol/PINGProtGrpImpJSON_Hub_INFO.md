@@ -185,8 +185,19 @@ Der V5c-Export muss folgende Felder liefern:
 - **Protokoll-Block im JSON**: Falls ein Protokoll-Block mit Vorrang-Werten
   vorhanden ist, sollen dessen Werte statt der kopierten Werte verwendet werden
 
+## Aufrufkontext
+
+Dieses Makro ist der **Worker** und wird normalerweise nicht direkt
+aufgerufen, sondern vom Batch-Wrapper
+`PINGProtGrpImportBatch_Hub.dfm`. Der Wrapper scannt
+`K:\Sonstige\Docuframe-Exchange\data\dfimport\progrp*.json`, liest jede
+Datei und ruft diesen Worker mit dem JSON-Inhalt als STRING auf.
+Erfolgreich verarbeitete Dateien werden vom Wrapper nach
+`dfimport\done\` verschoben.
+
 ## Dateien
 
-- Makro: `docucontrol/PINGProtGrpImpJSON_Hub.dfm`
+- Worker-Makro: `docucontrol/PINGProtGrpImpJSON_Hub.dfm`
+- Batch-Wrapper: `docucontrol/PINGProtGrpImportBatch_Hub.dfm`
 - Info: `docucontrol/PINGProtGrpImpJSON_Hub_INFO.md` (diese Datei)
 - Spec: `docs/superpowers/specs/2026-04-02-import-makro-hub-design.md`

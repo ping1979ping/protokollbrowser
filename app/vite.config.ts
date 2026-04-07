@@ -45,7 +45,7 @@ export default defineConfig({
       manifest: {
         name: 'Protokoll-App',
         short_name: 'Protokoll',
-        description: 'Mobile Protokollerfassung für DOCUframe — Build 2026-04-02T2010',
+        description: 'Mobile Protokollerfassung für DOCUframe — Build 2026-04-07T2017',
         theme_color: '#1e40af',
         background_color: '#ffffff',
         display: 'standalone',
