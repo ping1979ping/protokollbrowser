@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
-import { STATUS_MAP, emptyMobileErfassung } from '../types';
+import { STATUS_MAP } from '../types';
 import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';

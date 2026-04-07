@@ -18,7 +18,7 @@ export interface Verantwortlicher {
 
 async function getDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
+    upgrade(db, oldVersion, _newVersion, tx) {
       // Bei jedem Schema-Upgrade: Stores neu anlegen
       // v6: Hub-konforme Feldnamen (snake_case, UUID, legacy_id)
       if (oldVersion < 6) {

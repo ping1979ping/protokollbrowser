@@ -80,7 +80,7 @@ export async function listRemoteProjects(): Promise<{
 
 /** Projekt vom Server herunterladen und in IndexedDB importieren */
 export async function downloadProject(projectId: string): Promise<void> {
-  const resp = await fetchApi(`/api/projects/${projectId}/export`);
+  const resp = await fetchApi(`/api/projects/${projectId}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
   const { pakete, verantwortliche } = parseDfJson(raw);
   if (pakete.length === 0) throw new Error('Keine Protokolle in den Server-Daten');
@@ -198,7 +198,7 @@ export async function syncProject(gruppeId: string): Promise<{ downloaded: boole
 
 /** Projekt-Katalog vom Server laden, filtern und in IndexedDB importieren */
 export async function downloadProjectCatalog(): Promise<{ total: number; imported: number }> {
-  const resp = await fetchApi('/api/projects-catalog');
+  const resp = await fetchApi('/api/projects-catalog', { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
 
   if (!Array.isArray(raw)) {

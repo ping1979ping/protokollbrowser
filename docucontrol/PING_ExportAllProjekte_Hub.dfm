@@ -76,7 +76,7 @@ INT PING_ExportAllProjekte_Hub( HDIALOG Dialog, DBOBJECT &Object )
     // ============================================================
     // MANIFEST (erstes Element)
     // ============================================================
-    tNow.Now();
+    tNow = TimeGetCurrTime( FALSE );
     ManifestJSon = JSon.AddElement();
     ManifestJSon.GetMember( "object_type", TRUE ).SetString( "manifest" );
     ManifestJSon.GetMember( "version", TRUE ).SetString( "hub" );
@@ -124,15 +124,16 @@ INT PING_ExportAllProjekte_Hub( HDIALOG Dialog, DBOBJECT &Object )
                             IF( Proj.GetObject( MemberName, RefObj ) )
                                 PaketJSon.GetMember( MemberName + "_oid", TRUE ).SetString( RefObj.GetOID() );
                                 // Try Name1, then Name
-                                IF( RefObj.GetString( "Name1", sVal ) )
-                                    PaketJSon.GetMember( MemberName + "_name", TRUE ).SetString( sVal );
-                                ELSEIF( RefObj.GetString( "Name", sVal ) )
+                                sVal = RefObj.GetString( "Name1" );
+                                IF( sVal == "" )
+                                    sVal = RefObj.GetString( "Name" );
+                                ENDIF
+                                IF( sVal != "" )
                                     PaketJSon.GetMember( MemberName + "_name", TRUE ).SetString( sVal );
                                 ENDIF
-                                // Try Kuerzel, then Kürzel
-                                IF( RefObj.GetString( "Kuerzel", sVal ) )
-                                    PaketJSon.GetMember( MemberName + "_kuerzel", TRUE ).SetString( sVal );
-                                ELSEIF( RefObj.GetString( "Kuerzel", sVal ) )
+                                // Try Kuerzel
+                                sVal = RefObj.GetString( "Kuerzel" );
+                                IF( sVal != "" )
                                     PaketJSon.GetMember( MemberName + "_kuerzel", TRUE ).SetString( sVal );
                                 ENDIF
                             ENDIF
