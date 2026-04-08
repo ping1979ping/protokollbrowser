@@ -34,6 +34,45 @@ export default function SyncSettings({ onBack }: Props) {
     onBack();
   }
 
+  async function handleReset() {
+    if (!confirm(
+      'App komplett zurücksetzen?\n\n' +
+      '• Gespeicherte Server-URL wird gelöscht\n' +
+      '• Service Worker wird entfernt\n' +
+      '• Alle App-Caches werden geleert\n' +
+      '• Karten-Tiles bleiben erhalten\n\n' +
+      'Benutzer-Kürzel, Gerätename und lokale Protokoll-Daten bleiben erhalten.'
+    )) return;
+
+    try {
+      // Server-URL und Update-Marker loeschen (nicht den kompletten LS -
+      // sonst verliert man Device-Id, Kuerzel, autoBackup etc.)
+      localStorage.removeItem('sync-server-url');
+      localStorage.removeItem('app_v');
+
+      // Service Worker abmelden
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+
+      // Caches leeren (ausser Karten-Tiles)
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(
+          names
+            .filter(n => !n.includes('map-tiles'))
+            .map(n => caches.delete(n))
+        );
+      }
+
+      // Hard reload — holt frisches index.html + Assets
+      location.reload();
+    } catch (err) {
+      alert('Reset fehlgeschlagen: ' + (err as Error).message);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-ping-bg">
       <div className="bg-ping-blue text-white p-4">
@@ -118,6 +157,23 @@ export default function SyncSettings({ onBack }: Props) {
         <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-500 space-y-1">
           <p><strong>Geräte-ID:</strong> <code className="break-all">{deviceId}</code></p>
           <p><strong>Hinweis:</strong> Der Exchange-Server muss erreichbar sein (gleiches WLAN).</p>
+        </div>
+
+        {/* Notfall-Reset */}
+        <hr className="border-gray-200" />
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-ping-text">App zurücksetzen</label>
+          <p className="text-xs text-gray-500">
+            Löscht Server-URL, Service Worker und App-Cache. Für den Fall, dass die
+            Verbindung nicht klappt oder ein alter Build hängenbleibt. Protokoll-Daten
+            bleiben erhalten.
+          </p>
+          <button
+            onClick={handleReset}
+            className="w-full bg-red-100 text-red-700 border border-red-300 py-2 px-4 rounded-lg font-medium hover:bg-red-200"
+          >
+            Cache + Service Worker zurücksetzen
+          </button>
         </div>
       </div>
     </div>

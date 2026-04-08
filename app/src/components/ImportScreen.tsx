@@ -4,6 +4,7 @@ import { decodeText, parseDfJson } from '../dfimport';
 import logo from '../assets/ping-logo.png';
 
 const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || '?';
+const BUILD_CODE = import.meta.env.VITE_BUILD_CODE || '';
 
 interface Props {
   onImported: () => void;
@@ -127,7 +128,7 @@ export default function ImportScreen({ onImported, onServerImport, onSettings }:
           </button>
         )}
       </div>
-      <p className="mt-4 text-[10px] text-gray-400 font-mono">Build: {version}</p>
+      <p className="mt-4 text-[10px] text-gray-400 font-mono">Build: {version}{BUILD_CODE && ` · ${BUILD_CODE}`}</p>
     </div>
   );
 }
