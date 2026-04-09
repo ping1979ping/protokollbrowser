@@ -10,14 +10,17 @@ Dateien.
 ## Signatur
 
 ```
-INT PINGProtGrpImportBatch_Hub( HDIALOG Dialog, DBOBJECT &Object )
+INT PINGProtGrpImportBatch_Hub( BOOL Manual )
 ```
 
 | Parameter | Typ | Beschreibung |
 |-----------|-----|-------------|
-| `Dialog` | `HDIALOG` | Standard-Dialog-Handle (ungenutzt) |
-| `Object` | `DBOBJECT &` | Standard-Kontext (ungenutzt) |
+| `Manual` | `BOOL` | `TRUE` = manueller Aufruf (Summary-MessageBox wird angezeigt); `FALSE` = Scheduler (keine UI) |
 | Return | `INT` | `0` = Erfolg, sonst Fehler-Code |
+
+## Aenderungs-Historie
+
+- **08.04.2026** — Signatur auf `BOOL Manual` reduziert (vorher `HDIALOG, DBOBJECT &` — beide ungenutzt). `EditFormatDateTime(tNow)` war falsch (globale Funktion existiert nicht) → `tNow.FormatDateTime()` (Instanzmethode).
 
 ## Ablauf
 
