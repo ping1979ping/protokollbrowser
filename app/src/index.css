@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Date-Picker: Kalender-Icon sichtbar machen, min-height fuer Firefox Desktop */
+input[type="date"] {
+  min-height: 2rem;
+}
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+}
+
 @theme {
   --color-ping-blue: #004899;
   --color-ping-blue-light: #E6EEF7;

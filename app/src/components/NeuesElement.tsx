@@ -356,7 +356,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
           <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300 overflow-hidden">
             <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
             <input type="date" value={termin} onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
-              className={`w-full max-w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
+              className={`w-full max-w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
           </div>
           <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
             <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>

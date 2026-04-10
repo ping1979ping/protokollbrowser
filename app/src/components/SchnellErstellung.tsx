@@ -300,9 +300,9 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
               </div>
             </div>
             <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-              <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
+              <label className="text-xs text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
               <input type="date" value={termin} onChange={(e) => setTermin(e.target.value)}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue" />
             </div>
           </div>
 

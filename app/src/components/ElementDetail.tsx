@@ -319,7 +319,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             {istNeu ? (
               <input type="date" value={elem.termin ? elem.termin.slice(0, 10) : ''}
                 onChange={(e) => update({ termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue" />
             ) : (
               <p className={`text-xs ${terminUeberfaellig ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>{elem.termin ? new Date(elem.termin).toLocaleDateString('de-DE') : '—'}</p>
             )}
