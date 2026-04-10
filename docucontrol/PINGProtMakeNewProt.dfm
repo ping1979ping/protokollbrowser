@@ -7,6 +7,7 @@ INT PINGProtMakeNewProt( _PINGProtokollgruppe &Object, _PINGProtokoll &NeuesProt
   _PINGProtokollSet ProtokolleSet, AnhangSet;
   _PINGProtokollelement Element;
   BOOL gefunden = FALSE;
+  INT rc = 0;
   TIME T;
   INT nProtokolle, maxProtokolle;
   INT Position, PositionNP, nAnhang, maxAnhang;
@@ -119,10 +120,9 @@ INT PINGProtMakeNewProt( _PINGProtokollgruppe &Object, _PINGProtokoll &NeuesProt
       Object.Store();
     ENDEACH
     Object.StoreUnlock();
+    NeuesProtokoll.Store();
   ELSE
-    RETURN( 1 );
+    rc = 1;
   ENDIF
 
-  NeuesProtokoll.Store();
-
-RETURN( 0 );
+RETURN( rc );
