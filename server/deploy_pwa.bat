@@ -19,6 +19,9 @@ if exist "%~dp0pwa" rmdir /s /q "%~dp0pwa"
 echo [3/3] dist/ nach server/pwa/ kopieren...
 xcopy /s /e /i /q "dist" "%~dp0pwa"
 
+echo [4/4] version.txt schreiben...
+echo %date% %time% > "%~dp0pwa\version.txt"
+
 echo.
 echo === Fertig! PWA liegt in server/pwa/ ===
 echo Server starten mit: start-local.bat

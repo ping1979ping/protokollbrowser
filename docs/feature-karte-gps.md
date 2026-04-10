@@ -338,6 +338,8 @@ Bedingte Darstellung:
 | Xiaomi Tablet | Chrome | Ja | Ja | Ja | Standard Android-Verhalten |
 | Windows Laptop | Chrome/Edge | Maus | Bedingt | Nein | GPS nur mit WLAN-Ortung, kein Kompass |
 
+**HTTPS-Voraussetzung:** Die Geolocation-API erfordert einen Secure Context (HTTPS oder localhost). Bei Zugriff ueber HTTP (z.B. VPN-IP-Adresse) wird GPS vom Browser blockiert. Der Exchange Server unterstuetzt selbstsignierte SSL-Zertifikate — siehe SYNC-PROZESS.md Abschnitt "SSL/HTTPS". Die App zeigt bei fehlendem Secure Context eine klare Fehlermeldung statt des generischen Browser-Fehlers.
+
 **Anpassungen:**
 - Vollbild-Modal nutzt `100dvh` (dynamic viewport height) fuer mobile Browser mit Adressleiste
 - Buttons mindestens 44x44px (Apple Touch-Target-Richtlinie)
@@ -397,10 +399,12 @@ Bedingte Darstellung:
 4. TileCacheManager: Projektgebiet gezielt offline cachen (Viewport oder Punkt+Radius)
 5. Zoom bis Level 20, Zoom-Anzeige auf Karte
 6. Erweitertes Marker-Popup: Status-Badge, Firma, Termin, "Details"-Button
-7. Karte-Button im Header neben Export
+7. Karte nur ueber Tab erreichbar (kein separater Header-Button)
 8. Gefilterte Prev/Next-Navigation im ElementDetail
 9. Thema-Vorschlaege via HTML5 `<datalist>` aus Projektthemen
 10. Verantwortliche aus IndexedDB (DB_VERSION 3)
+11. Aktueller Standort als blauer Punkt wenn keine Elemente verortet
+12. Invertierte Tab-Darstellung (aktiv: gold-dunkel / blau mit weisser Schrift)
 
 ### Phase 4: DXF-Planoverlay (spaeter)
 1. DXF-Parser und Georeferenzierung

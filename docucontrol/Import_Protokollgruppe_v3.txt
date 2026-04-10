@@ -1,0 +1,477 @@
+  // ============================================================================
+  // DOCUcontrol-Makro: Import Protokoll-Aenderungen aus mobiler App
+  // Version 2.1 — ueberarbeitet gegen DOCUcontrol-Skill-Referenz
+  // ============================================================================
+  // PING, 25.03.2026, CP (ClaudeCode) — Systematische Korrektur:
+  //   - INTEGER → INT (korrekte DOCUcontrol-Syntax)
+  //   - RETURN innerhalb IF entfernt (nicht erlaubt)
+  //   - CONTINUE entfernt (nicht in DOCUcontrol)
+  //   - .Load() → .FromOID() (korrekte Methode)
+  //   - .Save() → .Store() (korrekte Methode)
+  //   - Variablen-Deklarationen an den Anfang verschoben
+  //   - Lock-Pattern fuer UPDATE-Block ergaenzt
+  // ============================================================================
+  //
+  // Ausfuehrung: Makro auf einer _PINGProtokollgruppe ausfuehren.
+  // Liest alle changes_*.json aus dem Exchange-Server ready/-Verzeichnis
+  // und schreibt Aenderungen zurueck in DOCUframe.
+  //
+  // Drei Verarbeitungsbloecke:
+  //   1. AKTUALISIERUNG — bestehende Elemente updaten (Status, GPS, Fotos)
+  //   2. NEUANLAGE      — neues Folgeprotokoll mit neuen Elementen
+  //   3. ANHANG         — neue Elemente in bestehendem Anhangprotokoll
+  //
+  // JSON-Struktur (Array von Paketen):
+  //   [{
+  //     "ProtokollgruppeId": "<OID>",
+  //     "ProtokollIdAlt": "<OID>",
+  //     "AktionProtokoll": "CREATE" | "APPEND",
+  //     "ProtokollMeta": { Name, Datum, Ort, Autor, Vorbemerkung, ... },
+  //     "Elemente": [{
+  //       "Aktion": "UPDATE" | "CREATE",
+  //       "DfElementId": "<OID>" | null,
+  //       ... weitere Felder ...
+  //     }]
+  //   }]
+  // ============================================================================
+
+  // === VARIABLEN (alle am Anfang, keine Deklarationen im Code!) ===
+
+  HJSON JSon;
+  HJSON IndexJSon;
+  HJSON FileListArray;
+  HJSON PaketJSon;
+  HJSON ElemArray;
+  HJSON ElemJSon;
+  HJSON MetaJSon;
+  HJSON MobileJSon;
+  HFILE File;
+  HFILE LogFile;
+  STRING Txt;
+  STRING LogTxt;
+  STRING LogPath;
+  STRING BasePath;
+  STRING ReadyPath;
+  STRING DonePath;
+  STRING IndexPath;
+  STRING FilePath;
+  STRING FileName;
+  STRING Aktion;
+  STRING AktionProtokoll;
+  STRING ElemOid;
+  STRING ProtAltOid;
+  STRING GruppeOid;
+  STRING VerantwOid;
+  STRING FotoPfad;
+  STRING ReadyFile;
+  STRING DoneFile;
+  STRING strace = "#### JSON-Import v2: ";
+
+  INT i = 0;
+  INT j = 0;
+  INT f = 0;
+  INT AnzDateien = 0;
+  INT AnzPakete = 0;
+  INT AnzElemente = 0;
+  INT nUpdate = 0;
+  INT nCreate = 0;
+  INT nAnhang = 0;
+  INT nWarning = 0;
+  INT nDateien = 0;
+  BOOL IstAnhang = FALSE;
+  BOOL bAbort = FALSE;
+
+  _PINGProtokollgruppe ProtGrp;
+  _PINGProtokoll ProtZiel;
+  _PINGProtokoll ProtAlt;
+  _PINGProtokollelement Elem;
+  _PINGProtokollelement ElemNeu;
+  Adresse Verantw;
+  AnsprechpartnerSet TeilnSetAlt;
+  Ansprechpartner TeilnAlt;
+
+  // === PFADE INITIALISIEREN ===
+
+  ProtGrp = Object;
+  GruppeOid = ProtGrp.GetOID();
+  Trace( strace + "Starte Import fuer Gruppe: %1", ProtGrp._Name );
+
+  // Exchange-Server Importpfad
+  BasePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\import\\" + GruppeOid;
+  ReadyPath = BasePath + "\\ready";
+  DonePath = BasePath + "\\done";
+  IndexPath = ReadyPath + "\\index.json";
+  LogPath = BasePath + "\\import.log";
+
+  // done/-Verzeichnis anlegen
+  FileCreatePath( DonePath );
+
+  // ============================================================================
+  // LOG-DATEI OEFFNEN
+  // ============================================================================
+
+  LogTxt = "=== Import " + TimeGetCurrTime().FormatDateTime() + " ===\r\n";
+  LogTxt = LogTxt + "Protokollgruppe: " + ProtGrp._Name + " (" + GruppeOid + ")\r\n";
+
+  // ============================================================================
+  // DATEILISTE LESEN (index.json)
+  // ============================================================================
+  //
+  // Der Exchange-Server schreibt nach jedem ZIP-Upload eine index.json
+  // mit der Liste aller ausstehenden changes_*.json Dateien.
+  // Fallback: Einzelne Datei protocol_export.json versuchen.
+
+  IndexJSon.Construct();
+
+  File.Open( IndexPath, FILE_MODE_READ );
+  IF( File.Valid() )
+    Txt = File.ReadAll();
+    File.Close();
+    IndexJSon.Parse( Txt );
+    FileListArray = IndexJSon.GetMember( "files", FALSE );
+    IF( FileListArray.IsValid() )
+      AnzDateien = FileListArray.GetCount();
+    ENDIF
+  ELSE
+    // Kein index.json vorhanden — Fallback auf einzelne Datei
+    Trace( strace + "Kein index.json gefunden, versuche protocol_export.json" );
+    AnzDateien = 0;
+  ENDIF
+
+  // Wenn keine Dateien in index.json → Fallback
+  IF( AnzDateien == 0 )
+    FilePath = ReadyPath + "\\protocol_export.json";
+    File.Open( FilePath, FILE_MODE_READ );
+    IF( File.Valid() )
+      Txt = File.ReadAll();
+      File.Close();
+      AnzDateien = 1;
+      // Direkt verarbeiten (FileName fuer Cleanup merken)
+      FileName = "protocol_export.json";
+      Trace( strace + "Fallback: Lese %1", FilePath );
+    ELSE
+      // Keine Dateien gefunden — kein RETURN hier (nicht erlaubt in IF)!
+      MessageBox( "Keine Import-Dateien gefunden.\n\nPfad: " + ReadyPath, MB_OK | MB_ICONINFORMATION );
+      IndexJSon.Destruct();
+      bAbort = TRUE;
+    ENDIF
+  ENDIF
+
+  // ============================================================================
+  // HAUPTVERARBEITUNG (nur wenn nicht abgebrochen)
+  // ============================================================================
+
+  IF( !bAbort )
+
+  LogTxt = LogTxt + "Dateien gefunden: " + AnzDateien.ToStr() + "\r\n";
+  Trace( strace + "Anzahl Dateien: %1", AnzDateien.ToStr() );
+
+  // ============================================================================
+  // HAUPTSCHLEIFE: JEDE DATEI VERARBEITEN
+  // ============================================================================
+
+  f = 0;
+  WHILE( f < AnzDateien )
+
+    // --- Datei oeffnen ---
+    IF( AnzDateien > 1 )
+      // Aus index.json lesen
+      FileName = FileListArray.GetElement( f ).GetString();
+      FilePath = ReadyPath + "\\" + FileName;
+      File.Open( FilePath, FILE_MODE_READ );
+      IF( !File.Valid() )
+        LogTxt = LogTxt + "WARNUNG: Datei nicht lesbar: " + FileName + "\r\n";
+        nWarning = nWarning + 1;
+        f = f + 1;
+        // kein CONTINUE — stattdessen IF-Block um restlichen Schleifenkoerper
+      ELSE
+        Txt = File.ReadAll();
+        File.Close();
+      ENDIF
+    ENDIF
+
+    // Nur verarbeiten wenn File gueltig war (oder Fallback-Fall)
+    IF( AnzDateien == 1 || File.Valid() )
+
+    Trace( strace + "Verarbeite: %1", FileName );
+    LogTxt = LogTxt + "\r\n--- " + FileName + " ---\r\n";
+
+    // --- JSON parsen ---
+    JSon.Construct();
+    JSon.Parse( Txt );
+    AnzPakete = JSon.GetCount();
+    Trace( strace + "Pakete: %1", AnzPakete.ToStr() );
+
+    // --- Pakete durchlaufen ---
+    i = 0;
+    WHILE( i < AnzPakete )
+      PaketJSon = JSon.GetElement( i );
+      AktionProtokoll = PaketJSon.GetMember( "AktionProtokoll", FALSE ).GetString();
+      ProtAltOid = PaketJSon.GetMember( "ProtokollIdAlt", FALSE ).GetString();
+
+      // Vorgaengerprotokoll laden (fuer Referenz)
+      ProtAlt.FromOID( ProtAltOid );
+
+      // ====================================================================
+      // DISPATCH: Welcher Block wird ausgefuehrt?
+      // ====================================================================
+
+      IstAnhang = FALSE;
+
+      IF( AktionProtokoll == "APPEND" )
+        // ================================================================
+        // BLOCK 3: ERGAENZUNG ANHANGPROTOKOLLE
+        // ================================================================
+
+        IF( ProtAlt.IsValid() )
+          ProtZiel = ProtAlt;
+          IstAnhang = TRUE;
+          Trace( strace + "ANHANG: Elemente an Protokoll '%1' anfuegen", ProtAlt._Name );
+          LogTxt = LogTxt + "Anhangprotokoll: " + ProtAlt._Name + "\r\n";
+        ELSE
+          LogTxt = LogTxt + "WARNUNG: Anhangprotokoll nicht gefunden: " + ProtAltOid + "\r\n";
+          nWarning = nWarning + 1;
+        ENDIF
+
+      ELSEIF( AktionProtokoll == "CREATE" )
+        // ================================================================
+        // BLOCK 2: NEUANLAGE PROTOKOLL MIT PUNKTEN
+        // ================================================================
+
+        MetaJSon = PaketJSon.GetMember( "ProtokollMeta", FALSE );
+        IF( MetaJSon.IsValid() )
+
+          // --- Neues Protokoll anlegen ---
+          ProtZiel = ProtGrp._Protokolle.Add();
+          ProtZiel._Name = MetaJSon.GetMember( "Name", FALSE ).GetString();
+          ProtZiel._Datum.SetDateTime( MetaJSon.GetMember( "Datum", FALSE ).GetString() );
+          ProtZiel._Ort = MetaJSon.GetMember( "Ort", FALSE ).GetString();
+          ProtZiel._Autor = MetaJSon.GetMember( "Autor", FALSE ).GetString();
+          ProtZiel._Vorbemerkung = MetaJSon.GetMember( "Vorbemerkung", FALSE ).GetString();
+          ProtZiel._Nachbemerkung = MetaJSon.GetMember( "Nachbemerkung", FALSE ).GetString();
+
+          // --- Teilnehmer vom Vorgaenger kopieren ---
+          IF( ProtAlt.IsValid() )
+            TeilnSetAlt = ProtAlt._Teilnehmer;
+            IF( TeilnSetAlt.Get( TeilnAlt, 1, START ) )
+              REPEAT
+                ProtZiel._Teilnehmer.Add( TeilnAlt );
+              UNTIL( !TeilnSetAlt.Get( TeilnAlt, 1, CURRENT ) )
+            ENDIF
+
+            // --- Verteiler vom Vorgaenger kopieren ---
+            TeilnSetAlt = ProtAlt._Verteiler;
+            IF( TeilnSetAlt.Get( TeilnAlt, 1, START ) )
+              REPEAT
+                ProtZiel._Verteiler.Add( TeilnAlt );
+              UNTIL( !TeilnSetAlt.Get( TeilnAlt, 1, CURRENT ) )
+            ENDIF
+          ENDIF
+
+          ProtZiel.Store();
+          Trace( strace + "NEUANLAGE: Protokoll '%1' angelegt", ProtZiel._Name );
+          LogTxt = LogTxt + "Neues Protokoll: " + ProtZiel._Name + "\r\n";
+
+        ELSE
+          LogTxt = LogTxt + "WARNUNG: ProtokollMeta fehlt im Paket\r\n";
+          nWarning = nWarning + 1;
+        ENDIF
+
+      ELSE
+        // Unbekannte Aktion — ueberspringen
+        LogTxt = LogTxt + "WARNUNG: Unbekannte AktionProtokoll: " + AktionProtokoll + "\r\n";
+        nWarning = nWarning + 1;
+      ENDIF
+
+      // ====================================================================
+      // ELEMENTE VERARBEITEN (gilt fuer alle Bloecke)
+      // ====================================================================
+      // Nur verarbeiten wenn ProtZiel gueltig (APPEND/CREATE erfolgreich)
+
+      ElemArray = PaketJSon.GetMember( "Elemente", FALSE );
+      IF( ElemArray.IsValid() && ProtZiel.IsValid() )
+
+      j = 0;
+      AnzElemente = ElemArray.GetCount();
+      Trace( strace + "Elemente: %1", AnzElemente.ToStr() );
+
+      WHILE( j < AnzElemente )
+        ElemJSon = ElemArray.GetElement( j );
+        Aktion = ElemJSon.GetMember( "Aktion", FALSE ).GetString();
+        MobileJSon = ElemJSon.GetMember( "MobileDaten", FALSE );
+
+        IF( Aktion == "UPDATE" )
+          // ==============================================================
+          // BLOCK 1: AKTUALISIERUNG BESTANDSDATEN
+          // ==============================================================
+
+          ElemOid = ElemJSon.GetMember( "DfElementId", FALSE ).GetString();
+          Elem.FromOID( ElemOid );
+
+          IF( Elem.IsValid() )
+            // Lock vor Aenderungen
+            Elem.LockRefresh( WRITE_NOWRITE, FLAT );
+
+            // Kernfelder aktualisieren
+            Elem._Status = ElemJSon.GetMember( "StatusNeu", FALSE ).GetNumber().ToInt();
+            Elem._Termin.SetDateTime( ElemJSon.GetMember( "TerminNeu", FALSE ).GetString() );
+            Elem._Bemerkung = ElemJSon.GetMember( "BemerkungNeu", FALSE ).GetString();
+
+            // Verantwortlicher (Firma) setzen
+            VerantwOid = ElemJSon.GetMember( "VerantwortlicherFirmaOidNeu", FALSE ).GetString();
+            IF( VerantwOid != "" )
+              Verantw.FromOID( VerantwOid );
+              IF( Verantw.IsValid() )
+                Elem._Verantwortlicher = Verantw;
+              ENDIF
+            ENDIF
+
+            // GPS- und Mobile-Daten aktualisieren
+            IF( MobileJSon.IsValid() )
+              Elem._PINGGeoLat = MobileJSon.GetMember( "GeoLat", FALSE ).GetNumber();
+              Elem._PINGGeoLon = MobileJSon.GetMember( "GeoLon", FALSE ).GetNumber();
+              Elem._PINGGeoAccuracy = MobileJSon.GetMember( "GeoAccuracy", FALSE ).GetNumber();
+              Elem._PINGGeoHeading = MobileJSon.GetMember( "GeoHeading", FALSE ).GetNumber();
+              Elem._PINGGeoText = MobileJSon.GetMember( "GeoText", FALSE ).GetString();
+              Elem._PINGGeoAltitude = MobileJSon.GetMember( "GeoAltitude", FALSE ).GetNumber();
+
+              // Foto-Infos (Pfad wird vom Exchange-Server gesetzt)
+              Elem._PINGFotoAnzahl = MobileJSon.GetMember( "FotoAnzahl", FALSE ).GetNumber().ToInt();
+              FotoPfad = MobileJSon.GetMember( "FotoPfadServer", FALSE ).GetString();
+              IF( FotoPfad != "" )
+                Elem._PINGFotoPfad = FotoPfad;
+              ENDIF
+
+              // Mobile-Erfassungs-Infos
+              Elem._PINGMobilErfasst = MobileJSon.GetMember( "MobilErfasst", FALSE ).GetBool();
+              Elem._PINGMobilDatum.SetDateTime( MobileJSon.GetMember( "MobilDatum", FALSE ).GetString() );
+              Elem._PINGMobilUser = MobileJSon.GetMember( "MobilUser", FALSE ).GetString();
+              Elem._PINGNotiz = MobileJSon.GetMember( "Notiz", FALSE ).GetString();
+              Elem._PINGInfo = MobileJSon.GetMember( "Info", FALSE ).GetString();
+            ENDIF
+
+            // Speichern und Lock freigeben
+            Elem.StoreUnlock( WRITE_NOWRITE, FLAT );
+            nUpdate = nUpdate + 1;
+            Trace( strace + "UPDATE: %1", ElemOid );
+
+          ELSE
+            // Element nicht gefunden — Warnung loggen, weiter
+            LogTxt = LogTxt + "WARNUNG: Element nicht gefunden: " + ElemOid + "\r\n";
+            nWarning = nWarning + 1;
+            Trace( strace + "WARNUNG: Element nicht gefunden: %1", ElemOid );
+          ENDIF
+
+        ELSEIF( Aktion == "CREATE" )
+          // ==============================================================
+          // NEUES ELEMENT ANLEGEN (Block 2 oder Block 3)
+          // ==============================================================
+
+          ElemNeu = ProtZiel._Protokollelemente.Add();
+
+          // Pflichtfelder
+          ElemNeu._Position = ElemJSon.GetMember( "Position", FALSE ).GetString();
+          ElemNeu._Positionstitel = ElemJSon.GetMember( "Positionstitel", FALSE ).GetString();
+          ElemNeu._Positionstext = ElemJSon.GetMember( "Positionstext", FALSE ).GetString();
+          ElemNeu._Thema = ElemJSon.GetMember( "Thema", FALSE ).GetString();
+          ElemNeu._Status = ElemJSon.GetMember( "Status", FALSE ).GetNumber().ToInt();
+          ElemNeu._Termin.SetDateTime( ElemJSon.GetMember( "Termin", FALSE ).GetString() );
+          ElemNeu._Bemerkung = ElemJSon.GetMember( "BemerkungNeu", FALSE ).GetString();
+
+          // Verantwortlicher (Firma)
+          VerantwOid = ElemJSon.GetMember( "VerantwortlicherFirmaOidNeu", FALSE ).GetString();
+          IF( VerantwOid != "" )
+            Verantw.FromOID( VerantwOid );
+            IF( Verantw.IsValid() )
+              ElemNeu._Verantwortlicher = Verantw;
+            ENDIF
+          ENDIF
+
+          // GPS- und Mobile-Daten
+          IF( MobileJSon.IsValid() )
+            ElemNeu._PINGGeoLat = MobileJSon.GetMember( "GeoLat", FALSE ).GetNumber();
+            ElemNeu._PINGGeoLon = MobileJSon.GetMember( "GeoLon", FALSE ).GetNumber();
+            ElemNeu._PINGGeoAccuracy = MobileJSon.GetMember( "GeoAccuracy", FALSE ).GetNumber();
+            ElemNeu._PINGGeoHeading = MobileJSon.GetMember( "GeoHeading", FALSE ).GetNumber();
+            ElemNeu._PINGGeoText = MobileJSon.GetMember( "GeoText", FALSE ).GetString();
+            ElemNeu._PINGGeoAltitude = MobileJSon.GetMember( "GeoAltitude", FALSE ).GetNumber();
+
+            ElemNeu._PINGFotoAnzahl = MobileJSon.GetMember( "FotoAnzahl", FALSE ).GetNumber().ToInt();
+            FotoPfad = MobileJSon.GetMember( "FotoPfadServer", FALSE ).GetString();
+            IF( FotoPfad != "" )
+              ElemNeu._PINGFotoPfad = FotoPfad;
+            ENDIF
+
+            ElemNeu._PINGMobilErfasst = MobileJSon.GetMember( "MobilErfasst", FALSE ).GetBool();
+            ElemNeu._PINGMobilDatum.SetDateTime( MobileJSon.GetMember( "MobilDatum", FALSE ).GetString() );
+            ElemNeu._PINGMobilUser = MobileJSon.GetMember( "MobilUser", FALSE ).GetString();
+            ElemNeu._PINGNotiz = MobileJSon.GetMember( "Notiz", FALSE ).GetString();
+            ElemNeu._PINGInfo = MobileJSon.GetMember( "Info", FALSE ).GetString();
+          ENDIF
+
+          ElemNeu.Store();
+
+          IF( IstAnhang )
+            nAnhang = nAnhang + 1;
+            Trace( strace + "ANHANG-CREATE: Pos %1", ElemNeu._Position );
+          ELSE
+            nCreate = nCreate + 1;
+            Trace( strace + "CREATE: Pos %1", ElemNeu._Position );
+          ENDIF
+
+        ENDIF
+        // Unbekannte Aktion wird stillschweigend uebersprungen
+
+        j = j + 1;
+      ENDWHILE
+
+      ENDIF  // ElemArray.IsValid() && ProtZiel.IsValid()
+
+      i = i + 1;
+    ENDWHILE
+
+    JSon.Destruct();
+
+    // ====================================================================
+    // CLEANUP: Verarbeitete Datei nach done/ verschieben
+    // ====================================================================
+
+    ReadyFile = ReadyPath + "\\" + FileName;
+    DoneFile = DonePath + "\\" + FileName;
+    FileRename( ReadyFile, DoneFile );
+
+    LogTxt = LogTxt + "Verschoben nach done/\r\n";
+    nDateien = nDateien + 1;
+
+    ENDIF  // File.Valid() || AnzDateien == 1
+
+    f = f + 1;
+  ENDWHILE
+
+  IndexJSon.Destruct();
+
+  // ============================================================================
+  // LOG-DATEI SCHREIBEN
+  // ============================================================================
+
+  LogTxt = LogTxt + "\r\n--- Zusammenfassung ---\r\n";
+  LogTxt = LogTxt + "Dateien verarbeitet: " + nDateien.ToStr() + "\r\n";
+  LogTxt = LogTxt + "Aktualisierungen:    " + nUpdate.ToStr() + "\r\n";
+  LogTxt = LogTxt + "Neue Elemente:       " + nCreate.ToStr() + "\r\n";
+  LogTxt = LogTxt + "Anhang-Elemente:     " + nAnhang.ToStr() + "\r\n";
+  LogTxt = LogTxt + "Warnungen:           " + nWarning.ToStr() + "\r\n";
+  LogTxt = LogTxt + "=== Ende ===\r\n\r\n";
+
+  LogFile.Open( LogPath, FILE_MODE_CREATE | FILE_MODE_WRITE );
+  LogFile.WriteString( LogTxt );
+  LogFile.Close();
+
+  Trace( strace + "Import abgeschlossen: %1 Updates, %2 neue, %3 Anhang", nUpdate.ToStr(), nCreate.ToStr(), nAnhang.ToStr() );
+
+  // ============================================================================
+  // ERGEBNIS ANZEIGEN
+  // ============================================================================
+
+  MessageBox( "Import abgeschlossen.\n\n" + "Dateien: " + nDateien.ToStr() + "\n" + "Aktualisierungen: " + nUpdate.ToStr() + "\n" + "Neue Elemente: " + nCreate.ToStr() + "\n" + "Anhang-Elemente: " + nAnhang.ToStr() + "\n" + "Warnungen: " + nWarning.ToStr() + "\n\nLog: " + LogPath, MB_OK | MB_ICONINFORMATION );
+
+  ENDIF  // !bAbort

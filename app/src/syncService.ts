@@ -2,8 +2,9 @@
  * Sync-Service: PWA ↔ Exchange Server
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste } from './db';
 import { parseDfJson } from './dfimport';
+import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { getDeviceId, getDeviceName, getUserName } from './deviceIdentity';
 
 const TIMEOUT_MS = 5000;
@@ -59,22 +60,27 @@ export async function checkConnectivity(): Promise<boolean> {
   }
 }
 
-/** Verfügbare Projekte vom Server */
+/** Verfuegbare Projekte vom Server (Hub-Envelope) */
 export async function listRemoteProjects(): Promise<{
   id: string;
   projektName?: string;
   gruppeName?: string;
+  projektNummer?: string;
   timestamp?: string;
   hasExport: boolean;
   pendingChanges: number;
 }[]> {
   const resp = await fetchApi('/api/projects');
-  return resp.json();
+  const json = await resp.json();
+  // Hub-Envelope: { data: [...], meta: {...}, errors: [] }
+  // Fallback: direktes Array (alter Server ohne Envelope)
+  const list = Array.isArray(json) ? json : (Array.isArray(json.data) ? json.data : []);
+  return list;
 }
 
 /** Projekt vom Server herunterladen und in IndexedDB importieren */
 export async function downloadProject(projectId: string): Promise<void> {
-  const resp = await fetchApi(`/api/projects/${projectId}/export`);
+  const resp = await fetchApi(`/api/projects/${projectId}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
   const { pakete, verantwortliche } = parseDfJson(raw);
   if (pakete.length === 0) throw new Error('Keine Protokolle in den Server-Daten');
@@ -83,7 +89,7 @@ export async function downloadProject(projectId: string): Promise<void> {
   if (verantwortliche.length > 0) await importVerantwortliche(verantwortliche);
 
   // Alte PendingExports dieser Gruppe aufräumen (Daten sind jetzt im Server)
-  const gruppeId = pakete[0].Protokollgruppe.Id;
+  const gruppeId = pakete[0].protokollgruppe.id;
   try {
     const pending = await getPendingExports();
     for (const exp of pending) {
@@ -103,7 +109,7 @@ export async function downloadProject(projectId: string): Promise<void> {
 /** Geänderte/neue Elemente hochladen */
 export async function uploadChanges(gruppeId: string): Promise<number> {
   const alle = await getAllElemente();
-  const geaendert = alle.filter(e => e._geaendert || e._neu);
+  const geaendert = alle.filter(e => e.is_modified || e.is_new);
 
   if (geaendert.length === 0) return 0;
 
@@ -124,14 +130,15 @@ export async function uploadChanges(gruppeId: string): Promise<number> {
   return geaendert.length;
 }
 
-/** Sync-Status eines Projekts vom Server abfragen */
+/** Sync-Status eines Projekts vom Server abfragen (Hub-Envelope) */
 export async function getRemoteStatus(projectId: string): Promise<{
   lastExport?: string;
   pendingChanges: number;
   lastUpload?: string;
 }> {
   const resp = await fetchApi(`/api/projects/${projectId}/status`);
-  return resp.json();
+  const json = await resp.json();
+  return json.data ?? json;
 }
 
 /** ZIP-Datei (JSON + Fotos) an den Server hochladen */
@@ -187,4 +194,32 @@ export async function syncProject(gruppeId: string): Promise<{ downloaded: boole
   });
 
   return { downloaded };
+}
+
+/** Projekt-Katalog vom Server laden, filtern und in IndexedDB importieren */
+export async function downloadProjectCatalog(): Promise<{ total: number; imported: number }> {
+  const resp = await fetchApi('/api/projects-catalog', { timeoutMs: UPLOAD_TIMEOUT_MS });
+  const raw = await resp.json();
+
+  if (!Array.isArray(raw)) {
+    throw new Error('Projekt-Katalog: Ungueltiges Format (kein Array)');
+  }
+
+  const { projekte, wertelisten } = parseProjekteJson(raw);
+
+  // Wertelisten zuerst importieren (wird fuer Filter benoetigt)
+  if (wertelisten.length > 0) {
+    await importWertelisten(wertelisten);
+  }
+
+  // Status-Filter: nur "in Arbeit" + "Gewaehrleistung"
+  const statusWerteliste = await getWerteliste('Projekt', '_IMSStatus');
+  const filtered = filterProjekteByStatus(
+    projekte,
+    ['in Arbeit', 'Gewährleistung'],
+    statusWerteliste,
+  );
+
+  await importProjekte(filtered);
+  return { total: projekte.length, imported: filtered.length };
 }

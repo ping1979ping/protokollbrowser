@@ -1,0 +1,152 @@
+VOID Click( HDIALOG Dialog, Projekt &Object )
+  // ============================================================================
+  // DOCUcontrol: Projektpfad auf dem Fileserver ermitteln
+  // ============================================================================
+  //
+  // Objekttyp: Vorgang (= Projekt)
+  // Ausfuehrung: Button in Projekt-Dialog
+  //
+  // Suchstrategie:
+  //   1. DOCUframe-Feld _PINGPfadProjektDokumenteExtern
+  //   2. FileGetSubDirs fuer AG-Gruppen (1. Ebene, schnell)
+  //      + HFILEFIND mit Wildcard fuer Projektordner (gezielt, schnell)
+  //
+  // Ergebnis steht in Variable "ProjektPfad".
+  // ============================================================================
+
+  STRING ProjektPfad = "";
+  STRING ProjektNummer = "";
+  STRING ProjektName = "";
+  STRING Kandidat = "";
+  STRING AgPfad = "";
+  STRING AgName = "";
+  STRING SuchMaske = "";
+  STRING strace = "#### Projektpfad: ";
+  STRING BasisPfad = "K:\\projekte"; // Produktiv: "K:\\projekte"  Test: "T:\\_Temp\\CP\\DOCUcontrol\\tmp\\Projekte"
+  BOOL Gefunden = FALSE;
+  DBSTRINGSET AgListe;
+
+  HFILEFIND PrjFinder;
+  HFILESTATUS PrjStatus;
+
+  INT AnzAg = 0;
+  INT iAg = 0;
+  STRING ErgebnisMsg = "";
+  INT ErgebnisIcon = MB_OK | MB_ICONERROR;
+  BOOL Gespeichert = FALSE;
+
+  // === Projekt-Stammdaten auslesen ===
+
+  ProjektNummer = Object.Nummer;
+  ProjektName = Object.Name;
+
+  Trace( strace + "Projekt: %1 — %2", ProjektNummer, ProjektName );
+
+  // ====================================================================
+  // STRATEGIE 1: _PINGPfadProjektDokumenteExtern
+  // ====================================================================
+
+  Kandidat = Object._PINGPfadProjektDokumenteExtern;
+
+  IF( Kandidat != "" )
+    IF( FileIsDir( Kandidat ) )
+      ProjektPfad = Kandidat;
+      Gefunden = TRUE;
+      Trace( strace + "Gefunden via _PINGPfadProjektDokumenteExtern: %1", ProjektPfad );
+    ELSE
+      Trace( strace + "WARNUNG: Pfad existiert nicht: %1", Kandidat );
+    ENDIF
+  ENDIF
+
+  // ====================================================================
+  // STRATEGIE 2: Filesystem-Suche
+  // ====================================================================
+  // FileGetSubDirs auf K:\projekte liefert nur AG-Gruppen (1. Ebene).
+  // Pro AG-Gruppe: HFILEFIND mit Wildcard ProjektNummer* (gezielt).
+  // So wird kein kompletter Verzeichnisbaum gescannt.
+
+  IF( !Gefunden )
+    Trace( strace + "Starte Suche in %1", BasisPfad );
+
+    // AG-Gruppen auflisten (nur 1. Ebene)
+    FileGetSubDirs( BasisPfad, AgListe );
+    AnzAg = AgListe.GetCount();
+    Trace( strace + "AG-Gruppen: %1", AnzAg.ToStr() );
+
+    // Fortschrittsbalken initialisieren
+    Dialog.SetFieldRange( "Fortschritt", 0, AnzAg );
+    Dialog.SetFieldPos( "Fortschritt", 0 );
+
+    // Pro AG-Gruppe gezielt nach Projektnummer suchen
+    iAg = 0;
+    WHILE( iAg < AnzAg && !Gefunden )
+
+      AgPfad = AgListe.Get( iAg );
+      AgName = FileGetFileName( AgPfad, FALSE );
+
+      // Fortschritt aktualisieren
+      Dialog.SetFieldPos( "Fortschritt", iAg + 1 );
+      Trace( strace + "[%1/%2] %3", (iAg + 1).ToStr(), AnzAg.ToStr(), AgName );
+
+      // Gezielt nach Projektnummer suchen (Wildcard!)
+      SuchMaske = AgPfad + "\\" + ProjektNummer + "*";
+      PrjFinder.Construct();
+      PrjFinder.Start( SuchMaske );
+
+      PrjStatus.Construct();
+      WHILE( PrjFinder.GetNext( PrjStatus ) && !Gefunden )
+        Kandidat = PrjStatus.GetFullName();
+        IF( FileIsDir( Kandidat ) )
+          ProjektPfad = Kandidat;
+          Gefunden = TRUE;
+          Trace( strace + "TREFFER: %1", ProjektPfad );
+        ENDIF
+      ENDWHILE
+      PrjStatus.Destruct();
+
+      PrjFinder.Stop();
+      PrjFinder.Destruct();
+
+      iAg = iAg + 1;
+    ENDWHILE
+  ENDIF
+
+  // ====================================================================
+  // ERGEBNIS ANZEIGEN
+  // ====================================================================
+
+  IF( Gefunden )
+    Trace( strace + "Ergebnis: %1", ProjektPfad );
+    ErgebnisIcon = MB_OK | MB_ICONINFORMATION;
+
+    // Pfad am Projekt speichern (nur wenn per Suche gefunden, nicht wenn schon gesetzt)
+    IF( Object._PINGPfadProjektDokumenteExtern != ProjektPfad )
+      IF( Object.LockRefresh( WRITE_NOWRITE, FLAT ) )
+        Object._PINGPfadProjektDokumenteExtern = ProjektPfad;
+        Object.StoreUnlock( WRITE_NOWRITE, FLAT );
+        Gespeichert = TRUE;
+        Trace( strace + "_PINGPfadProjektDokumenteExtern gesetzt: %1", ProjektPfad );
+      ELSE
+        Trace( strace + "WARNUNG: Objekt konnte nicht gesperrt werden" );
+        ErgebnisIcon = MB_OK | MB_ICONEXCLAMATION;
+      ENDIF
+    ENDIF
+
+    ErgebnisMsg = "Projektpfad gefunden:\n\n" + ProjektPfad + "\n\nProjekt: " + ProjektNummer + " — " + ProjektName;
+    IF( Gespeichert )
+      ErgebnisMsg = ErgebnisMsg + "\n\n(Feld _PINGPfadProjektDokumenteExtern aktualisiert)";
+    ENDIF
+    IF( !Gespeichert && Object._PINGPfadProjektDokumenteExtern == ProjektPfad )
+      ErgebnisMsg = ErgebnisMsg + "\n\n(Feld war bereits korrekt gesetzt)";
+    ENDIF
+    IF( !Gespeichert && Object._PINGPfadProjektDokumenteExtern != ProjektPfad )
+      ErgebnisMsg = ErgebnisMsg + "\n\n(Konnte nicht gespeichert werden — Objekt ist gesperrt)";
+    ENDIF
+  ELSE
+    Trace( strace + "KEIN TREFFER fuer Projekt %1", ProjektNummer );
+    ErgebnisMsg = "Projektpfad NICHT gefunden!\n\nProjekt: " + ProjektNummer + " — " + ProjektName + "\n\nGesucht in: " + BasisPfad + "\\*\\" + ProjektNummer + "*\n\nBitte _PINGPfadProjektDokumenteExtern am Projekt pflegen.";
+  ENDIF
+
+  MessageBox( ErgebnisMsg, ErgebnisIcon, 0, "Projektpfad" );
+
+RETURN();

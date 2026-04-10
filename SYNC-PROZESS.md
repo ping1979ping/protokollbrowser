@@ -28,7 +28,9 @@ Der Datenaustausch zwischen DOCUframe und der mobilen Protokoll-App läuft über
 
 ### Ersteinrichtung (einmalig)
 
-1. **App öffnen** im Browser: `http://svdocu:8080` (oder IP-Adresse im WLAN)
+1. **App öffnen** im Browser: `https://svdocu:8080` (oder IP-Adresse über VPN)
+   - Beim ersten Zugriff: Zertifikatswarnung akzeptieren ("Erweitert" -> "Trotzdem fortfahren")
+   - HTTPS ist notwendig, damit GPS auf dem Handy funktioniert (Browser-Sicherheitsanforderung)
 2. **Einstellungen** aufrufen:
    - Benutzer-Kürzel eintragen (z.B. `WEBE`)
    - Gerätename eintragen (z.B. `Peters iPhone`)
@@ -153,6 +155,10 @@ App (PWA)
 
 **Der User muss also nur 1x auf "Exportieren" klicken — den Upload erledigt die App automatisch.**
 
+**Lokale Sicherungskopie:** In den Sync-Einstellungen konfigurierbar (Standard: an). Wenn aktiviert, wird die ZIP-Datei zusaetzlich als Browser-Download gespeichert. Kann deaktiviert werden wenn nur Server-Upload gewuenscht.
+
+**Automatische Bereinigung:** Bei erneutem Laden eines Projekts vom Server (`downloadProject`) werden alte PendingExports dieser Gruppe automatisch aus IndexedDB geloescht — die Daten sind dann bereits im Server.
+
 **Der Exchange Server macht dabei:**
 
 ```
@@ -209,6 +215,10 @@ DOCUframe Import-Makro
 K:\Sonstige\Docuframe-Exchange\
 │
 ├── protokoll-exchange.exe              Server-Programm
+├── generate-cert.exe                   SSL-Zertifikat erzeugen (einmalig)
+├── generate-cert.bat                   Wrapper fuer generate-cert.exe
+├── cert.pem                            SSL-Zertifikat (erzeugt von generate-cert)
+├── key.pem                             SSL-Schluessel (erzeugt von generate-cert)
 │
 ├── pwa/                                PWA-Dateien (vom Server ausgeliefert)
 │   ├── index.html
@@ -296,7 +306,28 @@ Wenn zwei User dasselbe Element bearbeiten, gewinnt die letzte Änderung (chrono
 | Variable | Beschreibung | Standard |
 |----------|--------------|----------|
 | `EXCHANGE_DATA_DIR` | Pfad zum data/-Verzeichnis | `data/` neben exe |
-| `EXCHANGE_PORT` | HTTP-Port | `8080` |
+| `EXCHANGE_PORT` | HTTP/HTTPS-Port | `8080` |
+
+### SSL/HTTPS (fuer GPS-Zugriff)
+
+Der Browser erfordert eine HTTPS-Verbindung (Secure Context), damit die Geolocation-API auf dem Handy funktioniert. Ohne HTTPS wird GPS blockiert mit der Meldung "Origin does not have permission to use Geolocation service".
+
+**Einrichtung (einmalig auf dem Server):**
+
+1. `generate-cert.bat` ausfuehren (oder `generate-cert.exe` direkt starten)
+   - Erzeugt `cert.pem` und `key.pem` neben der EXE
+   - Zertifikat ist 10 Jahre gueltig
+   - Enthaelt Hostname und IP-Adressen des Servers als SAN
+2. `start-server.bat` als Administrator starten
+   - Server erkennt automatisch ob cert.pem vorhanden ist
+   - Mit Zertifikat: HTTPS-Modus (GPS funktioniert)
+   - Ohne Zertifikat: HTTP-Modus (GPS blockiert, aber Sync funktioniert)
+3. Im Browser beim ersten Zugriff die Zertifikatswarnung akzeptieren
+
+**Hinweise:**
+- `start-server.bat` muss als **Administrator** gestartet werden (wegen Firewall-Regel)
+- Auf dem Server ist kein Python noetig — alles laeuft als EXE
+- Zertifikat erneuern: `generate-cert.exe --force`
 
 ### DOCUframe Export-Makro
 

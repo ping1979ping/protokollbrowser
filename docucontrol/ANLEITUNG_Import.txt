@@ -1,0 +1,146 @@
+DOCUcontrol-Makro: Import Protokoll-Aenderungen aus App
+=======================================================
+Version 3 — Stand 07.04.2026 (dfimport/dfexport-Umstrukturierung)
+
+
+1. Was macht das Makro?
+-----------------------
+
+Das Makro liest die von der mobilen Protokoll-App exportierten Aenderungen
+und schreibt sie in DOCUframe zurueck. Es verarbeitet drei Arten von Daten:
+
+  a) AKTUALISIERUNGEN — bestehende Punkte werden aktualisiert:
+     Status, Termin, Bemerkung, Verantwortlicher, GPS-Daten, Fotos
+
+  b) NEUE PROTOKOLLE — ein Folgeprotokoll wird angelegt:
+     Metadaten (Name, Datum, Ort, Autor), Teilnehmer und Verteiler
+     werden vom Vorgaengerprotokoll uebernommen, neue Punkte darunter
+
+  c) ANHANGPROTOKOLLE — neue Punkte in bestehenden Anhangprotokollen:
+     z.B. Bautagebuch, Mehrkosten (Protokolle mit negativer Nummer)
+
+
+2. Makro-Architektur (Hub)
+---------------------------
+
+  Hub-Variante besteht aus ZWEI Makros, die zusammen arbeiten:
+
+  a) PINGProtGrpImpJSON_Hub           — Worker
+     Nimmt JSON-Text als STRING-Parameter entgegen und importiert
+     GENAU EINE Protokollgruppe in DOCUframe.
+     Signatur: INT PINGProtGrpImpJSON( STRING JsonText, STRING &ErrorMsg )
+
+  b) PINGProtGrpImportBatch_Hub       — Wrapper / Scheduler-Entry
+     Scannt den Ordner dfimport\ nach progrp*.json, liest jede Datei,
+     ruft PINGProtGrpImpJSON auf und verschiebt erfolgreich verarbeitete
+     Dateien nach dfimport\done\.
+
+
+3. Einrichtung in DOCUframe
+---------------------------
+
+  1. DOCUcontrol oeffnen
+  2. Worker-Makro anlegen:
+     - Objekttyp: "_PINGProtokollgruppe"
+     - Name: "PINGProtGrpImpJSON_Hub"
+     - Inhalt aus PINGProtGrpImpJSON_Hub.dfm uebernehmen
+  3. Batch-Wrapper anlegen:
+     - Name: "PINGProtGrpImportBatch_Hub"
+     - Inhalt aus PINGProtGrpImportBatch_Hub.dfm uebernehmen
+  4. Beide speichern
+
+  Pfad im Batch-Wrapper pruefen:
+    BasePath = "K:\\Sonstige\\Docuframe-Exchange\\data\\dfimport";
+
+  Dieser Pfad muss mit dem Exchange-Server-Datenverzeichnis uebereinstimmen.
+
+
+4. Ausfuehrung
+--------------
+
+  Manuell:
+    Makro "PINGProtGrpImportBatch_Hub" ausfuehren. Der Wrapper scannt
+    dfimport\progrp*.json und importiert jede Datei reihum. Am Ende
+    erscheint eine Zusammenfassung.
+
+  Automatisch (Scheduler):
+    In DOCUframe einen Zeitplan-Job einrichten, der den Wrapper
+    periodisch aufruft (z.B. alle 10 Minuten).
+
+
+5. Dateistruktur auf dem Server
+-------------------------------
+
+  K:\Sonstige\Docuframe-Exchange\data\
+  |
+  +-- dfexport\                          DOCUframe -> App
+  |   +-- projekte.json                    Projekt-Katalog (Hub)
+  |   +-- {ProjektId}\
+  |       +-- protokolle.json              Export einer Gruppe
+  |       +-- manifest.json
+  |
+  +-- dfimport\                          App -> DOCUframe (flach!)
+      +-- progrp{OID}_{UUID}.json          eine Datei je App-Upload
+      +-- done\                            von DOCUframe verarbeitet
+      |   +-- progrp{OID}_{UUID}.json
+      +-- archive\                         ZIP-Archive der Uploads
+      +-- photos\                          Notfall-Puffer fuer Fotos
+      +-- import.log                       Import-Protokoll
+
+
+6. Foto-Ablage
+--------------
+
+  Fotos werden vom Exchange-Server automatisch in die Projektstruktur kopiert:
+
+  K:\projekte\{AG-Gruppe}\{Projekt}\
+    Fotos\
+      {Protokollgruppen-Name}\
+        Protokoll {Nr}\
+          6_Neubau_Pos1_Bild_1.jpg
+          6_Neubau_Pos2_Bild_1.jpg
+
+  Der Foto-Pfad wird vom Server berechnet und im JSON als "FotoPfadServer"
+  eingetragen. Das Makro schreibt diesen Pfad in das DOCUframe-Feld
+  _PINGFotoPfad.
+
+
+7. Zusammenspiel mit dem Export-Makro
+--------------------------------------
+
+  Typischer Ablauf (woechentlich):
+
+  1. Export-Makro ausfuehren → Daten fuer die App bereitstellen (dfexport\)
+  2. Bauleiter arbeiten mobil → Aenderungen, neue Punkte, Fotos
+  3. Bauleiter klicken "Exportieren" in der App → Server legt in dfimport\
+  4. Batch-Wrapper ausfuehren (oder Scheduler) → Aenderungen in DOCUframe
+  5. Wieder bei 1. → naechster Zyklus
+
+
+8. Fehlerbehebung
+-----------------
+
+  "Keine Import-Dateien gefunden"
+    → Es liegen keine progrp*.json in dfimport\
+    → Pruefen ob die App den Export durchgefuehrt hat
+
+  "WARNUNG: Element nicht gefunden: <OID>"
+    → Ein Element wurde in DOCUframe geloescht, ist aber noch in der App
+    → Kann ignoriert werden, wird im Log dokumentiert
+
+  Log pruefen:
+    K:\Sonstige\Docuframe-Exchange\data\dfimport\import.log
+
+
+9. Laufwerkszugriff (K:) und Projektpfad-Suche
+-------------------------------------------------
+
+  WICHTIG: Die Makros greifen auf Netzlaufwerke zu:
+    - Import/Export: K:\Sonstige\Docuframe-Exchange\data\
+    - Projektpfad-Suche: K:\projekte\
+
+  Das funktioniert nur, wenn der DOCUframe-Client (oder -Server) das
+  Laufwerk K: gemappt hat.
+
+  HFILEFIND wird fuer die Dateisuche verwendet (schnell, nicht rekursiv).
+  FileGetSubDirs ist fuer Netzlaufwerke zu langsam.

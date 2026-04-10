@@ -71,7 +71,7 @@ export default function App() {
           onSelectElement={(elem, prot, grp, filteredIds) => setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: grp, filteredIds })}
           onNeuesElement={(prot, grp) => setScreen({ name: 'neu', protokoll: prot, gruppe: grp })}
           onBautagebuch={async (grp) => {
-            const btProt = await findBautagebuchProtokoll(grp.Id);
+            const btProt = await findBautagebuchProtokoll(grp.id);
             if (!btProt) {
               alert('Kein Bautagebuch-Protokoll in diesem Projekt gefunden.');
               return;
@@ -86,34 +86,34 @@ export default function App() {
     case 'detail':
       return (
         <ElementDetail
-          key={screen.element.Id}
+          key={screen.element.id}
           element={screen.element}
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
           filteredIds={screen.filteredIds}
-          onBack={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
+          onBack={() => { refresh(); goUebersicht(screen.gruppe.id); }}
           onNachfolger={async (vorgaenger) => {
-            const prot = screen.protokoll.Nummer < 0 ? screen.protokoll : await getOrCreateDraftProtokoll(screen.gruppe.Id, {
-              Name: screen.protokoll.Name,
-              Ort: screen.protokoll.Ort,
-              Autor: screen.protokoll.Autor,
+            const prot = screen.protokoll.nummer < 0 ? screen.protokoll : await getOrCreateDraftProtokoll(screen.gruppe.id, {
+              name: screen.protokoll.name,
+              ort: screen.protokoll.ort,
+              autor: screen.protokoll.autor,
             });
             setScreen({ name: 'neu', protokoll: prot, gruppe: screen.gruppe, vorgaenger });
           }}
           onNavigate={async (elem) => {
             let prot = screen.protokoll;
-            if (elem.ProtokollId !== screen.protokoll.Id) {
-              const prots = await getProtokolleByGruppe(screen.gruppe.Id);
-              const found = prots.find(p => p.Id === elem.ProtokollId);
+            if (elem.protokoll_id !== screen.protokoll.id) {
+              const prots = await getProtokolleByGruppe(screen.gruppe.id);
+              const found = prots.find(p => p.id === elem.protokoll_id);
               if (found) prot = found;
             }
             setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: screen.gruppe, filteredIds: screen.filteredIds });
           }}
           onClone={async (clone) => {
-            const prot = screen.protokoll.Nummer < 0 ? screen.protokoll : await getOrCreateDraftProtokoll(screen.gruppe.Id, {
-              Name: screen.protokoll.Name,
-              Ort: screen.protokoll.Ort,
-              Autor: screen.protokoll.Autor,
+            const prot = screen.protokoll.nummer < 0 ? screen.protokoll : await getOrCreateDraftProtokoll(screen.gruppe.id, {
+              name: screen.protokoll.name,
+              ort: screen.protokoll.ort,
+              autor: screen.protokoll.autor,
             });
             setScreen({ name: 'neu', protokoll: prot, gruppe: screen.gruppe, clone });
           }}
@@ -128,8 +128,8 @@ export default function App() {
           vorgaenger={screen.vorgaenger}
           clone={screen.clone}
           isBautagebuch={screen.isBautagebuch}
-          onBack={() => goUebersicht(screen.gruppe.Id)}
-          onSaved={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
+          onBack={() => goUebersicht(screen.gruppe.id)}
+          onSaved={() => { refresh(); goUebersicht(screen.gruppe.id); }}
           onSavedAndNew={() => { refresh(); setScreen({ name: 'neu', protokoll: screen.protokoll, gruppe: screen.gruppe }); }}
           onSavedAndClone={(clone) => { refresh(); setScreen({ name: 'neu', protokoll: screen.protokoll, gruppe: screen.gruppe, clone }); }}
         />
@@ -139,7 +139,7 @@ export default function App() {
         <ExportScreen
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
-          onBack={() => goUebersicht(screen.gruppe.Id)}
+          onBack={() => goUebersicht(screen.gruppe.id)}
         />
       );
     case 'schnell':
@@ -147,8 +147,8 @@ export default function App() {
         <SchnellErstellung
           protokoll={screen.protokoll}
           gruppe={screen.gruppe}
-          onBack={() => goUebersicht(screen.gruppe.Id)}
-          onDone={() => { refresh(); goUebersicht(screen.gruppe.Id); }}
+          onBack={() => goUebersicht(screen.gruppe.id)}
+          onDone={() => { refresh(); goUebersicht(screen.gruppe.id); }}
         />
       );
   }

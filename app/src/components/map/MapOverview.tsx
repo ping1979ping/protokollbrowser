@@ -49,20 +49,27 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
     }
   }, []);
 
-  const mitGps = useMemo(() => elementeWithGps(elemente), [elemente]);
-  const ohneGps = useMemo(() => elemente.filter(e => e.MobileErfassung.GeoLat == null || e.MobileErfassung.GeoLon == null), [elemente]);
+  const mitGpsRaw = useMemo(() => elementeWithGps(elemente), [elemente]);
+  const mitGps = useMemo(() => mitGpsRaw.filter(e =>
+    !(e.mobile_erfassung.geo_lat === 0 && e.mobile_erfassung.geo_lon === 0)
+  ), [mitGpsRaw]);
+  const aufUrsprung = useMemo(() => mitGpsRaw.filter(e =>
+    e.mobile_erfassung.geo_lat === 0 && e.mobile_erfassung.geo_lon === 0
+  ), [mitGpsRaw]);
+  const ohneGps = useMemo(() => elemente.filter(e => e.mobile_erfassung.geo_lat == null || e.mobile_erfassung.geo_lon == null), [elemente]);
   const [showOhneGps, setShowOhneGps] = useState(false);
+  const [showUrsprungListe, setShowUrsprungListe] = useState(false);
 
   const bounds = useMemo(() => {
     if (mitGps.length === 0) return null;
-    const latlngs = mitGps.map(e => [e.MobileErfassung.GeoLat!, e.MobileErfassung.GeoLon!] as [number, number]);
+    const latlngs = mitGps.map(e => [e.mobile_erfassung.geo_lat!, e.mobile_erfassung.geo_lon!] as [number, number]);
     return L.latLngBounds(latlngs);
   }, [mitGps]);
 
   function getPos(elem: Protokollelement): [number, number] {
-    const change = changes.get(elem.Id);
+    const change = changes.get(elem.id);
     if (change) return [change.lat, change.lon];
-    return [elem.MobileErfassung.GeoLat!, elem.MobileErfassung.GeoLon!];
+    return [elem.mobile_erfassung.geo_lat!, elem.mobile_erfassung.geo_lon!];
   }
 
   function handleDrag(elemId: string, lat: number, lon: number) {
@@ -76,21 +83,21 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
   async function speichern() {
     setSaving(true);
     for (const [id, { lat, lon }] of changes) {
-      const elem = elemente.find(e => e.Id === id);
+      const elem = elemente.find(e => e.id === id);
       if (!elem) continue;
-      const acc = elem.MobileErfassung.GeoAccuracy;
-      const heading = elem.MobileErfassung.GeoHeading;
+      const acc = elem.mobile_erfassung.geo_accuracy;
+      const heading = elem.mobile_erfassung.geo_heading;
       let geoText = `${lat.toFixed(7)}, ${lon.toFixed(7)}`;
       if (acc != null) geoText += ` (${acc} m)`;
       if (heading != null) geoText += ` ${Math.round(heading)}°`;
       await updateElement({
         ...elem,
-        _geaendert: true,
-        MobileErfassung: {
-          ...elem.MobileErfassung,
-          GeoLat: lat,
-          GeoLon: lon,
-          GeoText: geoText,
+        is_modified: true,
+        mobile_erfassung: {
+          ...elem.mobile_erfassung,
+          geo_lat: lat,
+          geo_lon: lon,
+          geo_text: geoText,
         },
       });
     }
@@ -147,23 +154,48 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
               const [lat, lon] = getPos(elem);
               return (
                 <DirectionMarker
-                  key={elem.Id}
+                  key={elem.id}
                   lat={lat}
                   lon={lon}
-                  heading={elem.MobileErfassung.GeoHeading}
-                  position={elem.Position}
-                  status={elem.Status}
-                  label={elem.Positionstext?.slice(0, 80)}
-                  firma={elem.VerantwortlicherFirmaName}
-                  termin={elem.Termin}
+                  heading={elem.mobile_erfassung.geo_heading}
+                  position={elem.position}
+                  status={elem.status}
+                  label={elem.positionstext?.slice(0, 80)}
+                  firma={elem.verantwortlicher_name}
+                  termin={elem.termin}
                   draggable={editMode}
-                  onDragEnd={(newLat, newLon) => handleDrag(elem.Id, newLat, newLon)}
+                  onDragEnd={(newLat, newLon) => handleDrag(elem.id, newLat, newLon)}
                   onClick={editMode ? undefined : undefined}
                   onDetail={editMode ? undefined : () => onElementClick(elem)}
                 />
               );
             })}
           </MapContainer>
+        )}
+        {aufUrsprung.length > 0 && (
+          <div className="absolute top-2 right-2 z-[1000]">
+            <button onClick={() => setShowUrsprungListe(!showUrsprungListe)}
+              className="bg-amber-500 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shadow-lg"
+              title={`${aufUrsprung.length} Punkt(e) ohne GPS`}>
+              !
+            </button>
+            {showUrsprungListe && (
+              <div className="absolute top-10 right-0 bg-white rounded-lg shadow-xl border border-gray-200 p-3 w-64 max-h-60 overflow-auto">
+                <h4 className="text-xs font-bold text-gray-700 mb-2">
+                  {aufUrsprung.length} Punkt(e) auf Ursprung (0,0)
+                </h4>
+                <div className="space-y-1">
+                  {aufUrsprung.map(elem => (
+                    <button key={elem.id} onClick={() => { onElementClick(elem); setShowUrsprungListe(false); }}
+                      className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-gray-100 transition">
+                      <span className="font-mono font-medium">Pos. {elem.position}</span>
+                      <span className="text-gray-500 ml-1">{elem.positionstext.slice(0, 40)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -216,13 +248,13 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
               <div className="mt-1 space-y-0.5 max-h-24 overflow-auto">
                 {ohneGps.map(e => (
                   <button
-                    key={e.Id}
+                    key={e.id}
                     onClick={() => onElementClick(e)}
                     className="block w-full text-left text-[10px] text-gray-500 hover:text-ping-blue px-1 py-0.5 rounded hover:bg-ping-blue-light"
                   >
-                    <span className="font-mono text-gray-400">Pos. {e.Position}</span>{' '}
-                    <span className={STATUS_MAP[e.Status]?.css + ' px-1 rounded text-[9px]'}>{STATUS_MAP[e.Status]?.label}</span>{' '}
-                    {e.Positionstext?.slice(0, 40)}
+                    <span className="font-mono text-gray-400">Pos. {e.position}</span>{' '}
+                    <span className={STATUS_MAP[e.status]?.css + ' px-1 rounded text-[9px]'}>{STATUS_MAP[e.status]?.label}</span>{' '}
+                    {e.positionstext?.slice(0, 40)}
                   </button>
                 ))}
               </div>
