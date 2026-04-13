@@ -152,6 +152,42 @@ export interface Projekt extends HubEntity {
   raw_data: Record<string, unknown>;
 }
 
+// --- Adresse (Nachschlage-Tabelle aus DOCUframe) ---
+
+export interface Adresse extends HubEntity {
+  object_type: 'adresse';
+  legacy_id: string;          // _oid aus DOCUframe
+  klasse: string;             // Tatsaechliche Unterklasse: "Kunde", "Lieferant" etc.
+  name1: string;              // Firma / Nachname
+  name2: string;              // Vorname / Zusatz
+  kuerzel: string;            // Kurzzeichen
+  nummer: string;             // Adressnummer
+  strasse: string;
+  hausnummer: string;
+  plz: string;
+  ort: string;
+  telefon: string;
+  email: string;
+  raw_data: Record<string, unknown>;
+}
+
+// --- Ansprechpartner (Nachschlage-Tabelle aus DOCUframe) ---
+
+export interface Ansprechpartner extends HubEntity {
+  object_type: 'ansprechpartner';
+  legacy_id: string;          // _oid aus DOCUframe
+  parent_oid: string;         // OID der zugehoerigen Adresse
+  parent_name: string;        // Name1 der Adresse
+  name1: string;              // Nachname
+  name2: string;              // Vorname
+  kuerzel: string;            // Kurzzeichen
+  nummer: string;             // Ansprechpartnernummer
+  telefon: string;
+  email: string;
+  funktion: string;           // z.B. "Geschaeftsfuehrer", "Bauleiter"
+  raw_data: Record<string, unknown>;
+}
+
 // --- Werteliste (DOCUframe Wertefeld-Aufloesung) ---
 
 export interface WertelistenEintrag {

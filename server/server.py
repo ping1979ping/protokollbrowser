@@ -390,6 +390,21 @@ def get_projects_catalog():
     return data
 
 
+@app.get("/api/addresses-catalog")
+def get_addresses_catalog():
+    """Adressen-Katalog aus DOCUframe-Export (adressen.json)."""
+    adressen_path = DFEXPORT_DIR / "adressen.json"
+    if not adressen_path.exists():
+        raise HTTPException(404, "Kein Adressen-Katalog vorhanden (adressen.json)")
+
+    try:
+        data = read_json_auto_encoding(adressen_path)
+    except (json.JSONDecodeError, ValueError, OSError) as e:
+        raise HTTPException(500, f"Fehler beim Lesen: {e}")
+
+    return data
+
+
 @app.get("/api/projects/{project_id}/status")
 def get_status(project_id: str):
     """Sync-Status: wann zuletzt exportiert, pending changes. Hub-Envelope."""

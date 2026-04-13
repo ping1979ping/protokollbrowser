@@ -1,9 +1,9 @@
 import { openDB } from 'idb';
 import type { IDBPDatabase } from 'idb';
-import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste } from './types';
+import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste, Adresse, Ansprechpartner } from './types';
 
 const DB_NAME = 'protokoll-app';
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 export interface ProtokollMitGruppe extends Protokoll {
   gruppe_id: string;
@@ -60,6 +60,22 @@ async function getDb(): Promise<IDBPDatabase> {
         if (!db.objectStoreNames.contains('wertelisten')) {
           const wlStore = db.createObjectStore('wertelisten', { keyPath: 'id' });
           wlStore.createIndex('byKlasseFeld', ['klasse', 'feld']);
+        }
+      }
+      // v9: Adressen + Ansprechpartner Stores
+      if (oldVersion < 9) {
+        if (!db.objectStoreNames.contains('adressen')) {
+          const adrStore = db.createObjectStore('adressen', { keyPath: 'id' });
+          adrStore.createIndex('byLegacyId', 'legacy_id');
+          adrStore.createIndex('byKuerzel', 'kuerzel');
+          adrStore.createIndex('byName1', 'name1');
+          adrStore.createIndex('byKlasse', 'klasse');
+        }
+        if (!db.objectStoreNames.contains('ansprechpartner')) {
+          const aspStore = db.createObjectStore('ansprechpartner', { keyPath: 'id' });
+          aspStore.createIndex('byLegacyId', 'legacy_id');
+          aspStore.createIndex('byParentOid', 'parent_oid');
+          aspStore.createIndex('byKuerzel', 'kuerzel');
         }
       }
       if (!db.objectStoreNames.contains('syncMeta')) {
@@ -266,6 +282,8 @@ export async function clearAll(): Promise<void> {
   const storeNames: string[] = ['protokollgruppen', 'protokolle', 'elemente', 'fotos', 'verantwortliche', 'syncMeta'];
   if (db.objectStoreNames.contains('projekte')) storeNames.push('projekte');
   if (db.objectStoreNames.contains('wertelisten')) storeNames.push('wertelisten');
+  if (db.objectStoreNames.contains('adressen')) storeNames.push('adressen');
+  if (db.objectStoreNames.contains('ansprechpartner')) storeNames.push('ansprechpartner');
   const tx = db.transaction(storeNames, 'readwrite');
   await tx.objectStore('protokollgruppen').clear();
   await tx.objectStore('protokolle').clear();
@@ -275,6 +293,8 @@ export async function clearAll(): Promise<void> {
   await tx.objectStore('syncMeta').clear();
   if (db.objectStoreNames.contains('projekte')) await tx.objectStore('projekte').clear();
   if (db.objectStoreNames.contains('wertelisten')) await tx.objectStore('wertelisten').clear();
+  if (db.objectStoreNames.contains('adressen')) await tx.objectStore('adressen').clear();
+  if (db.objectStoreNames.contains('ansprechpartner')) await tx.objectStore('ansprechpartner').clear();
   await tx.done;
 }
 
@@ -438,4 +458,70 @@ export async function getWerteliste(klasse: string, feld: string): Promise<Werte
 export async function getAllWertelisten(): Promise<Werteliste[]> {
   const db = await getDb();
   return db.getAll('wertelisten');
+}
+
+// --- Adressen (Nachschlage-Tabelle) ---
+
+export async function importAdressen(adressen: Adresse[]): Promise<void> {
+  const db = await getDb();
+  const existingMap = await buildLegacyIdMap(db, 'adressen');
+  const tx = db.transaction('adressen', 'readwrite');
+  for (const a of adressen) {
+    const existingId = existingMap.get(a.legacy_id);
+    if (existingId) a.id = existingId;
+    await tx.objectStore('adressen').put(a);
+  }
+  await tx.done;
+}
+
+export async function getAllAdressen(): Promise<Adresse[]> {
+  const db = await getDb();
+  return db.getAll('adressen');
+}
+
+export async function getAdresseByOid(oid: string): Promise<Adresse | undefined> {
+  const db = await getDb();
+  const results = await db.getAllFromIndex('adressen', 'byLegacyId', oid);
+  return results[0];
+}
+
+export async function getAdressenByKlasse(klasse: string): Promise<Adresse[]> {
+  const db = await getDb();
+  return db.getAllFromIndex('adressen', 'byKlasse', klasse);
+}
+
+export async function searchAdressen(query: string): Promise<Adresse[]> {
+  const db = await getDb();
+  const all = await db.getAll('adressen');
+  const q = query.toLowerCase();
+  return all.filter((a: Adresse) =>
+    a.name1.toLowerCase().includes(q) ||
+    a.kuerzel.toLowerCase().includes(q) ||
+    a.ort.toLowerCase().includes(q) ||
+    a.nummer.toLowerCase().includes(q)
+  );
+}
+
+// --- Ansprechpartner (Nachschlage-Tabelle) ---
+
+export async function importAnsprechpartner(aps: Ansprechpartner[]): Promise<void> {
+  const db = await getDb();
+  const existingMap = await buildLegacyIdMap(db, 'ansprechpartner');
+  const tx = db.transaction('ansprechpartner', 'readwrite');
+  for (const ap of aps) {
+    const existingId = existingMap.get(ap.legacy_id);
+    if (existingId) ap.id = existingId;
+    await tx.objectStore('ansprechpartner').put(ap);
+  }
+  await tx.done;
+}
+
+export async function getAllAnsprechpartner(): Promise<Ansprechpartner[]> {
+  const db = await getDb();
+  return db.getAll('ansprechpartner');
+}
+
+export async function getAnsprechpartnerByAdresse(adressOid: string): Promise<Ansprechpartner[]> {
+  const db = await getDb();
+  return db.getAllFromIndex('ansprechpartner', 'byParentOid', adressOid);
 }

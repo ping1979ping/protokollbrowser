@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { getServerUrl, listRemoteProjects, downloadProject, checkConnectivity, getSubscriptions, saveSubscriptions } from '../syncService';
+import { getServerUrl, listRemoteProjects, downloadProject, checkConnectivity, getSubscriptions, saveSubscriptions, downloadAddressCatalog } from '../syncService';
 
 interface RemoteProject {
   id: string;
@@ -117,6 +117,16 @@ export default function ServerImportScreen({ onImported, onZurueck, onSettings }
         setProgress(`Lade ${p?.projektName || ids[i]} (${i + 1}/${ids.length})...`);
         await downloadProject(ids[i]);
       }
+
+      // Adressen-Katalog laden (optional — Fehler nicht blockierend)
+      try {
+        setProgress('Lade Adressen-Katalog...');
+        const result = await downloadAddressCatalog();
+        console.log(`[ServerImport] ${result.adressen} Adressen, ${result.ansprechpartner} Ansprechpartner geladen`);
+      } catch (err) {
+        console.warn('[ServerImport] Adressen-Katalog nicht verfuegbar:', (err as Error).message);
+      }
+
       onImported();
     } catch (err) {
       alert('Fehler beim Laden: ' + (err as Error).message);

@@ -2,9 +2,10 @@
  * Sync-Service: PWA ↔ Exchange Server
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner } from './db';
 import { parseDfJson } from './dfimport';
 import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
+import { parseAdressenJson } from './adressenimport';
 import { getDeviceId, getDeviceName, getUserName } from './deviceIdentity';
 
 const TIMEOUT_MS = 5000;
@@ -222,4 +223,24 @@ export async function downloadProjectCatalog(): Promise<{ total: number; importe
 
   await importProjekte(filtered);
   return { total: projekte.length, imported: filtered.length };
+}
+
+/** Adressen-Katalog vom Server laden und in IndexedDB importieren */
+export async function downloadAddressCatalog(): Promise<{ adressen: number; ansprechpartner: number }> {
+  const resp = await fetchApi('/api/addresses-catalog', { timeoutMs: UPLOAD_TIMEOUT_MS });
+  const raw = await resp.json();
+
+  if (!Array.isArray(raw)) {
+    throw new Error('Adressen-Katalog: Ungueltiges Format (kein Array)');
+  }
+
+  const { adressen, ansprechpartner, wertelisten } = parseAdressenJson(raw);
+
+  if (wertelisten.length > 0) {
+    await importWertelisten(wertelisten);
+  }
+
+  await importAdressen(adressen);
+  await importAnsprechpartner(ansprechpartner);
+  return { adressen: adressen.length, ansprechpartner: ansprechpartner.length };
 }
