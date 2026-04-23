@@ -38,16 +38,25 @@ def generate_with_openssl(cert_path: Path, key_path: Path):
     san_entries.extend(f"IP:{ip}" for ip in ips)
     san = ",".join(san_entries)
 
+    # iOS-Anforderungen (iOS 13+): max. 825 Tage Gueltigkeit,
+    # extendedKeyUsage=serverAuth + basicConstraints sind Pflicht,
+    # sonst gibt es keinen "Trotzdem besuchen"-Button in Safari.
     cmd = [
         "openssl", "req",
         "-x509",
         "-newkey", "rsa:2048",
+        "-sha256",
         "-keyout", str(key_path),
         "-out", str(cert_path),
-        "-days", "3650",
+        "-days", "820",
         "-nodes",
         "-subj", f"/CN={hostname}",
         "-addext", f"subjectAltName={san}",
+        # CA:TRUE noetig, damit iOS den Trust-Schalter unter
+        # "Zertifikatsvertrauenseinstellungen" anbietet (selbstsigniert).
+        "-addext", "basicConstraints=critical,CA:TRUE",
+        "-addext", "keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign",
+        "-addext", "extendedKeyUsage=serverAuth",
     ]
 
     subprocess.run(cmd, check=True)
@@ -75,6 +84,7 @@ def generate_with_cryptography(cert_path: Path, key_path: Path):
     for ip in ips:
         san_names.append(x509.IPAddress(ipaddress.ip_address(ip)))
 
+    # iOS 13+ verlangt: max 825 Tage, EKU=serverAuth, basicConstraints, keyUsage.
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -82,8 +92,23 @@ def generate_with_cryptography(cert_path: Path, key_path: Path):
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.datetime.utcnow())
-        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=3650))
+        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=820))
         .add_extension(x509.SubjectAlternativeName(san_names), critical=False)
+        # CA:TRUE noetig, damit iOS den Trust-Schalter anbietet (selbstsigniert).
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True, content_commitment=False,
+                key_encipherment=True, data_encipherment=False,
+                key_agreement=False, key_cert_sign=True, crl_sign=False,
+                encipher_only=False, decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]),
+            critical=False,
+        )
         .sign(key, hashes.SHA256())
     )
 
