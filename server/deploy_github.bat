@@ -5,8 +5,8 @@ echo.
 cd /d "%~dp0..\app"
 
 echo [1/3] PWA bauen (GitHub Pages mit base=/protokollbrowser/)...
-REM Kein VITE_BASE gesetzt = Standard = /protokollbrowser/
-set VITE_BASE=
+REM VITE_BASE=pages noetig (Standard ist jetzt Server-Build './')
+set VITE_BASE=pages
 call npm run build
 if errorlevel 1 (
     echo FEHLER beim Build!

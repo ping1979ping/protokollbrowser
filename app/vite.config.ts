@@ -15,8 +15,11 @@ const _t = _now.getTime()
 const BUILD_CODE = `${_tiere[Math.floor(_t / 60000) % _tiere.length]}-${_materialien[Math.floor(_t / 600000) % _materialien.length]}`
 
 export default defineConfig({
-  // './' fuer Exchange-Server, '/protokollbrowser/bf/' fuer BF-Build, '/protokollbrowser/' fuer GitHub Pages
-  base: process.env.VITE_BASE === 'server' ? './' : process.env.VITE_BASE === 'bf' ? '/protokollbrowser/bf/' : '/protokollbrowser/',
+  // Default = Server-Build ('./'), damit ein versehentliches 'npm run build'
+  // nie wieder einen GitHub-Pages-Build ins server/pwa/-Deploy schreibt.
+  // VITE_BASE=pages -> '/protokollbrowser/' fuer GitHub Pages
+  // VITE_BASE=bf    -> '/protokollbrowser/bf/' fuer BF-Build
+  base: process.env.VITE_BASE === 'pages' ? '/protokollbrowser/' : process.env.VITE_BASE === 'bf' ? '/protokollbrowser/bf/' : './',
   define: {
     'import.meta.env.VITE_BUILD_TIME': JSON.stringify(BUILD_DATE),
     'import.meta.env.VITE_BUILD_CODE': JSON.stringify(BUILD_CODE),
