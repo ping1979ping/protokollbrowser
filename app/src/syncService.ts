@@ -1,5 +1,10 @@
 /**
- * Sync-Service: PWA ↔ Exchange Server
+ * Sync-Service: PWA <-> Hub (Paritaets-Layer /api/protokoll-sync/*)
+ *
+ * Basis-URL = Hub-Origin (getServerUrl). Alle Sync-Pfade liegen unter dem
+ * Prefix /api/protokoll-sync (D-10). Jeder Call ausser /health traegt einen
+ * Hub-JWT (Authorization: Bearer). Ein 401 wird mit genau EINEM Refresh + Retry
+ * abgefangen; bleibt es beim 401 -> sauberer Logout (T-06-06-02).
  */
 
 import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner } from './db';
@@ -7,9 +12,14 @@ import { parseDfJson } from './dfimport';
 import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { parseAdressenJson } from './adressenimport';
 import { getDeviceId, getDeviceName, getUserName } from './deviceIdentity';
+import { getAccessToken, refresh, logout } from './authService';
 
 const TIMEOUT_MS = 5000;
 const UPLOAD_TIMEOUT_MS = 30000;
+
+// Prefix des PWA-Paritaets-Layers im Hub (D-10). Die vier CRUD-Ressourcen der
+// PWA bleiben logisch dieselben, werden aber unter diesem Namespace bedient.
+const SYNC = '/api/protokoll-sync';
 
 // Server-URL aus localStorage
 const STORAGE_KEY = 'sync-server-url';
@@ -17,7 +27,7 @@ const STORAGE_KEY = 'sync-server-url';
 export function getServerUrl(): string {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored) return stored;
-  // Wenn vom Exchange-Server geladen (nicht GitHub Pages), eigene Origin als Server verwenden
+  // Wenn vom Hub ausgeliefert (nicht GitHub Pages), eigene Origin als Server verwenden.
   // GitHub Pages hat base='/protokollbrowser/', Server-Build hat base='./'
   if (!location.pathname.startsWith('/protokollbrowser')) {
     return location.origin;
@@ -29,7 +39,8 @@ export function setServerUrl(url: string) {
   localStorage.setItem(STORAGE_KEY, url.replace(/\/+$/, ''));
 }
 
-async function fetchApi(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<Response> {
+/** Ein einzelner Fetch-Versuch mit optionalem Bearer-Token + Timeout. */
+async function doFetch(path: string, options: (RequestInit & { timeoutMs?: number }) | undefined, token: string | null): Promise<Response> {
   const url = getServerUrl();
   if (!url) throw new Error('Kein Server konfiguriert');
 
@@ -37,23 +48,48 @@ async function fetchApi(path: string, options?: RequestInit & { timeoutMs?: numb
   const timeout = setTimeout(() => controller.abort(), options?.timeoutMs ?? TIMEOUT_MS);
 
   try {
-    const resp = await fetch(`${url}${path}`, {
+    const headers = new Headers(options?.headers);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    return await fetch(`${url}${path}`, {
       ...options,
+      headers,
       signal: controller.signal,
     });
-    if (!resp.ok) {
-      throw new Error(`Server-Fehler: ${resp.status} ${resp.statusText}`);
-    }
-    return resp;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-/** Verbindungstest */
+/**
+ * Fetch gegen den Hub mit Hub-JWT. /health bleibt offen (Konnektivitaet).
+ * 401 -> einmal refresh() -> Retry; zweiter 401 -> logout() + Fehler.
+ */
+async function fetchApi(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<Response> {
+  const skipAuth = path.includes('/health');
+
+  let resp = await doFetch(path, options, skipAuth ? null : getAccessToken());
+
+  if (!skipAuth && resp.status === 401) {
+    const refreshed = await refresh();
+    if (refreshed) {
+      resp = await doFetch(path, options, getAccessToken());
+    }
+    if (resp.status === 401) {
+      logout();
+      throw new Error('Nicht authentifiziert - bitte neu anmelden (401)');
+    }
+  }
+
+  if (!resp.ok) {
+    throw new Error(`Server-Fehler: ${resp.status} ${resp.statusText}`);
+  }
+  return resp;
+}
+
+/** Verbindungstest (ohne Auth) */
 export async function checkConnectivity(): Promise<boolean> {
   try {
-    const resp = await fetchApi('/api/health');
+    const resp = await fetchApi(`${SYNC}/health`);
     const data = await resp.json();
     return data.status === 'ok';
   } catch {
@@ -71,7 +107,7 @@ export async function listRemoteProjects(): Promise<{
   hasExport: boolean;
   pendingChanges: number;
 }[]> {
-  const resp = await fetchApi('/api/projects');
+  const resp = await fetchApi(`${SYNC}/projects`);
   const json = await resp.json();
   // Hub-Envelope: { data: [...], meta: {...}, errors: [] }
   // Fallback: direktes Array (alter Server ohne Envelope)
@@ -81,7 +117,7 @@ export async function listRemoteProjects(): Promise<{
 
 /** Projekt vom Server herunterladen und in IndexedDB importieren */
 export async function downloadProject(projectId: string): Promise<void> {
-  const resp = await fetchApi(`/api/projects/${projectId}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
+  const resp = await fetchApi(`${SYNC}/projects/${projectId}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
   const { pakete, verantwortliche } = parseDfJson(raw);
   if (pakete.length === 0) throw new Error('Keine Protokolle in den Server-Daten');
@@ -107,7 +143,12 @@ export async function downloadProject(projectId: string): Promise<void> {
   });
 }
 
-/** Geänderte/neue Elemente hochladen */
+/**
+ * Geänderte/neue Elemente hochladen.
+ * Hinweis: Der reale Hub-Upload laeuft ueber uploadZip (ZIP + Exactly-Once-Journal);
+ * dieser JSON-/sync-Pfad ist Altbestand (kein aktiver Aufrufer) und existiert
+ * Hub-seitig NICHT als Endpunkt — bleibt nur namespaced fuer Vollstaendigkeit.
+ */
 export async function uploadChanges(gruppeId: string): Promise<number> {
   const alle = await getAllElemente();
   const geaendert = alle.filter(e => e.is_modified || e.is_new);
@@ -122,7 +163,7 @@ export async function uploadChanges(gruppeId: string): Promise<number> {
     elemente: geaendert,
   };
 
-  await fetchApi(`/api/projects/${gruppeId}/sync`, {
+  await fetchApi(`${SYNC}/projects/${gruppeId}/sync`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(changes),
@@ -137,7 +178,7 @@ export async function getRemoteStatus(projectId: string): Promise<{
   pendingChanges: number;
   lastUpload?: string;
 }> {
-  const resp = await fetchApi(`/api/projects/${projectId}/status`);
+  const resp = await fetchApi(`${SYNC}/projects/${projectId}/status`);
   const json = await resp.json();
   return json.data ?? json;
 }
@@ -146,7 +187,7 @@ export async function getRemoteStatus(projectId: string): Promise<{
 export async function uploadZip(gruppeId: string, zipBlob: Blob, filename: string): Promise<void> {
   const formData = new FormData();
   formData.append('file', zipBlob, filename);
-  await fetchApi(`/api/projects/${gruppeId}/upload-zip`, {
+  await fetchApi(`${SYNC}/projects/${gruppeId}/upload-zip`, {
     method: 'POST',
     body: formData,
     timeoutMs: UPLOAD_TIMEOUT_MS,
@@ -156,7 +197,7 @@ export async function uploadZip(gruppeId: string, zipBlob: Blob, filename: strin
 /** Abonnierte Projekte vom Server laden */
 export async function getSubscriptions(): Promise<string[]> {
   try {
-    const resp = await fetchApi(`/api/subscriptions/${getDeviceId()}`);
+    const resp = await fetchApi(`${SYNC}/subscriptions/${getDeviceId()}`);
     const data = await resp.json();
     return data.projects || [];
   } catch {
@@ -166,7 +207,7 @@ export async function getSubscriptions(): Promise<string[]> {
 
 /** Projekt-Abos auf dem Server speichern */
 export async function saveSubscriptions(projectIds: string[]): Promise<void> {
-  await fetchApi(`/api/subscriptions/${getDeviceId()}`, {
+  await fetchApi(`${SYNC}/subscriptions/${getDeviceId()}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -199,7 +240,7 @@ export async function syncProject(gruppeId: string): Promise<{ downloaded: boole
 
 /** Projekt-Katalog vom Server laden, filtern und in IndexedDB importieren */
 export async function downloadProjectCatalog(): Promise<{ total: number; imported: number }> {
-  const resp = await fetchApi('/api/projects-catalog', { timeoutMs: UPLOAD_TIMEOUT_MS });
+  const resp = await fetchApi(`${SYNC}/projects-catalog`, { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
 
   if (!Array.isArray(raw)) {
@@ -227,7 +268,7 @@ export async function downloadProjectCatalog(): Promise<{ total: number; importe
 
 /** Adressen-Katalog vom Server laden und in IndexedDB importieren */
 export async function downloadAddressCatalog(): Promise<{ adressen: number; ansprechpartner: number }> {
-  const resp = await fetchApi('/api/addresses-catalog', { timeoutMs: UPLOAD_TIMEOUT_MS });
+  const resp = await fetchApi(`${SYNC}/addresses-catalog`, { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
 
   if (!Array.isArray(raw)) {
