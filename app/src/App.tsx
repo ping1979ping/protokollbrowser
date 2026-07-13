@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from './types';
 import { getProtokolleByGruppe, getOrCreateDraftProtokoll, findBautagebuchProtokoll } from './db';
 import ImportScreen from './components/ImportScreen';
@@ -11,6 +11,8 @@ import ExportScreen from './components/ExportScreen';
 import SchnellErstellung from './components/SchnellErstellung';
 import ServerImportScreen from './components/ServerImportScreen';
 import SyncSettings from './components/SyncSettings';
+import LoginScreen from './components/LoginScreen';
+import { isLoggedIn } from './authService';
 
 type Screen =
   | { name: 'import' }
@@ -24,9 +26,22 @@ type Screen =
   | { name: 'schnell'; protokoll: Protokoll; gruppe: Protokollgruppe };
 
 export default function App() {
+  const [loggedIn, setLoggedIn] = useState(isLoggedIn());
   const [screen, setScreen] = useState<Screen>({ name: 'import' });
   const [key, setKey] = useState(0);
   const uebersichtStateRef = useRef<UebersichtState | undefined>(undefined);
+
+  // Session-Ablauf abfangen: schlug ein Refresh fehl, hat syncService.logout()
+  // die Tokens geloescht -> beim naechsten Fenster-Fokus zurueck zum Login (T-06-06-02).
+  useEffect(() => {
+    const check = () => setLoggedIn(isLoggedIn());
+    window.addEventListener('focus', check);
+    return () => window.removeEventListener('focus', check);
+  }, []);
+
+  if (!loggedIn) {
+    return <LoginScreen onLoggedIn={() => setLoggedIn(true)} />;
+  }
 
   function refresh() { setKey(k => k + 1); }
 
