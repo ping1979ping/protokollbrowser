@@ -157,6 +157,20 @@ export default function AboHome({
     [],
   );
 
+  // --- Server-User-Abos laden (Plan 06.1-06) ---
+  // „Meine Protokolle" kommt jetzt aus den user-scoped Hub-Abos und ist damit
+  // geraeteuebergreifend dieselbe Liste wie im Hub-Desktop. Idempotent —
+  // parallele Screens teilen sich den Ladelauf.
+  useEffect(() => {
+    void aboStore.load();
+  }, []);
+
+  // Store-Fehler (z. B. offline beim Abonnieren/Entfernen) kurz als Toast.
+  useEffect(() => {
+    if (aboState.error) zeigeToast(aboState.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aboState.error]);
+
   // --- Abgeleitete, sortierte Karten-Liste ---
   // Jede Render-Runde neu berechnet: useAboState() löst bei Änderung von
   // Reihenfolge/Abo-Menge ohnehin ein Re-Render aus, daher liest der Store

@@ -64,6 +64,12 @@ export default function AbonnierenScreen({ onBack, onFertig }: AbonnierenScreenP
   }, []);
 
   // Alle Gruppen-Ids — nötig, damit der Abo-Store die Default-Menge materialisieren kann.
+  // Server-User-Abos initial laden (Plan 06.1-06) — der abonnierte Zustand
+  // hier entspricht damit dem Hub-Desktop, auch bei Direkteinstieg.
+  useEffect(() => {
+    void aboStore.load();
+  }, []);
+
   const allIds = useMemo(() => gruppen.map((g) => g.id), [gruppen]);
 
   // Gruppen zu aufklappbaren Projekt-Panels bündeln, aufsteigend nach Projektnummer.
