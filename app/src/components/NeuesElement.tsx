@@ -8,6 +8,8 @@ import { formatCoord } from './map/mapUtils';
 import BautagebuchWizard from './BautagebuchWizard';
 import ScrollToTopFab from './ScrollToTopFab';
 import StatusBadge from './StatusBadge';
+import { ScreenHeader, Card, SectionLabel, Chip, PrimaryButton, SecondaryButton } from '../ui/primitives';
+import { IconMapPin, IconCamera, IconCalendar, IconUser, IconFolder, IconPlus, IconX } from '../ui/icons';
 
 interface Props {
   protokoll: Protokoll;
@@ -77,6 +79,8 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
   const [dirty, setDirty] = useState(false);
   const [showBtWizard, setShowBtWizard] = useState(!!isBautagebuch);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
+  // Rein praesentationaler Ausklapper fuer weitere Themen-Chips ("…") — analog showStatusPicker.
+  const [themenRestOpen, setThemenRestOpen] = useState(false);
   const fotoRef = useRef<HTMLInputElement>(null);
   const galerieRef = useRef<HTMLInputElement>(null);
 
@@ -294,222 +298,288 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
     }
   }
 
+  // Themen-Chips: Top-3 als Schnellauswahl, Rest hinter "…"-Ausklapper.
+  const themenTop = themenVorschlaege.slice(0, 3);
+  const themenRest = themenVorschlaege.slice(3);
+  const themaIstFrei = !!thema && !themenVorschlaege.includes(thema);
+
+  const alleStatus = [...HAUPT_STATUS, ...WEITERE_STATUS];
+
   return (
-    <div className="min-h-screen bg-ping-bg">
-      {/* Compact Header — 2 lines */}
-      <div className="bg-ping-blue text-white p-3">
-        {/* Line 1: 3 equal buttons */}
-        <div className="flex gap-2">
-          <button onClick={() => {
-            if (dirty && !confirm('Aenderungen werden nicht gespeichert. Zur Uebersicht?')) return;
-            onBack();
-          }} className="flex-1 py-2 rounded-lg font-bold text-sm bg-ping-blue-dark hover:bg-ping-blue-dark/80 transition">
-            &larr; Uebersicht
-          </button>
-          <button onClick={speichern}
-            className={`flex-1 py-2 rounded-lg font-bold text-sm text-white transition ${
-              dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'
-            }`}>
-            &#10003; Speichern
-          </button>
-          <button onClick={speichernUndNeu}
-            className="flex-1 py-2 rounded-lg font-bold text-sm bg-ping-blue-dark hover:bg-ping-blue-dark/80 transition">
-            + Speichern &amp; Neu
-          </button>
-          {onSavedAndClone && (
-            <button onClick={speichernUndKlonen}
-              className="flex-1 py-2 rounded-lg font-bold text-sm bg-ping-blue-dark hover:bg-ping-blue-dark/80 transition">
-              &#x2398; Klonen
-            </button>
-          )}
-        </div>
-        {/* Line 2: Status + Protocol name + title */}
-        <div className="flex items-center gap-2 mt-2 text-sm">
-          <StatusBadge status={0} />
-          <span className="text-ping-blue-light/70 truncate">{protokoll.name}</span>
-          <span className="font-semibold ml-auto whitespace-nowrap">
-            {vorgaenger ? 'Nachfolger erstellen' : 'Neues Element'}
-          </span>
-        </div>
+    <div className="min-h-screen bg-ping-surface pb-40">
+      {/* Blauer Kopf */}
+      <ScreenHeader
+        onBack={() => {
+          if (dirty && !confirm('Änderungen werden nicht gespeichert. Zur Übersicht?')) return;
+          onBack();
+        }}
+        title={vorgaenger ? 'Nachfolger erstellen' : 'Neuer Punkt'}
+        subtitle={protokoll.name}
+      />
+
+      {/* Inhalt — fensterscrollend, damit ScrollToTopFab (window.scrollY) unverändert greift */}
+      <div className="mx-auto flex max-w-[760px] flex-col gap-3 p-4">
+
+        {/* Vorgänger-Hinweis */}
         {vorgaenger && (
-          <p className="text-xs text-ping-blue-light mt-1">
-            Vorgaenger: Pos. {vorgaenger.position} — {vorgaenger.positionstext.slice(0, 50)}...
-          </p>
+          <Card className="p-3">
+            <SectionLabel>Vorgänger</SectionLabel>
+            <p className="text-[13px] leading-snug text-ping-text">
+              <span className="mr-1 rounded bg-ping-blue-light px-1.5 py-0.5 font-mono text-[12px] font-semibold text-ping-blue">
+                Pos. {vorgaenger.position}
+              </span>
+              {vorgaenger.positionstext.slice(0, 80)}…
+            </p>
+          </Card>
         )}
-      </div>
 
-      {/* Body — viewport-filling */}
-      <div className="flex flex-col p-3 gap-2.5" style={{ minHeight: 'calc(100vh - 76px)' }}>
-
-        {/* 1. Positionstext — flex-1 */}
-        <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300 flex flex-col">
-          <label className="text-xs text-gray-700 font-semibold block mb-0.5">Positionstext *</label>
-          <textarea value={positionstext} onChange={(e) => { setPositionstext(e.target.value); setDirty(true); }}
+        {/* 1. Positionstext (Pflichtfeld) */}
+        <Card className="p-4">
+          <SectionLabel>Positionstext *</SectionLabel>
+          <textarea
+            value={positionstext}
+            onChange={(e) => { setPositionstext(e.target.value); setDirty(true); }}
             onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
             ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
-            placeholder="Beschreibung des Punktes..."
-            className="flex-1 w-full px-2 py-1 border border-gray-200 rounded text-sm text-gray-400 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none min-h-[9rem] max-h-[50vh] overflow-auto" />
-        </div>
+            placeholder="Beschreibung des Punktes …"
+            className="max-h-[50vh] min-h-[9rem] w-full resize-none overflow-auto rounded-xl border border-black/10 bg-white px-3 py-2.5 text-[14px] leading-relaxed text-ping-text outline-none placeholder:text-ping-text-light focus:border-ping-blue"
+          />
+        </Card>
 
-        {/* 2. Termin (flex:1) + Verantwortlich (flex:1) + Thema (flex:1) — one row */}
-        <div className="flex gap-2">
-          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300 overflow-hidden">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
-            <input type="date" value={termin} onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
-              className={`w-full max-w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue box-border ${terminUeberfaellig ? 'text-red-600 font-semibold' : ''}`} />
+        {/* 2. Status */}
+        <Card className="p-4">
+          <SectionLabel>Status</SectionLabel>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={status} />
+            <button
+              type="button"
+              onClick={() => setShowStatusPicker(!showStatusPicker)}
+              className="rounded-lg border border-black/10 px-2.5 py-1 text-[12px] font-semibold text-ping-text-mid transition hover:bg-black/5"
+            >
+              {showStatusPicker ? 'Schließen' : 'Ändern'}
+            </button>
           </div>
-          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>
-            <select value={verantwFirmaOid} onChange={(e) => { setVerantwFirmaOid(e.target.value); setDirty(true); }}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-              <option value=""></option>
-              {alleFirmen.map(t => (
-                <option key={t.oid} value={t.oid}>{t.kuerzel ? `${t.kuerzel} — ${t.name}` : t.name}</option>
+          {showStatusPicker && (
+            <div className="mt-2.5 flex flex-wrap gap-2 border-t border-black/5 pt-2.5">
+              {alleStatus.map((s) => STATUS_MAP[s] && (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { setStatus(s); setShowStatusPicker(false); setDirty(true); }}
+                  className="rounded-full transition active:scale-95"
+                  style={status === s ? { boxShadow: '0 0 0 2px var(--color-ping-blue)' } : undefined}
+                >
+                  <StatusBadge status={s} />
+                </button>
               ))}
-            </select>
-          </div>
-          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Thema</label>
-            <div className="flex gap-1">
-              <select value={thema}
-                onChange={(e) => { setThema(e.target.value); setDirty(true); }}
-                className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-                <option value=""></option>
-                {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
-                {thema && !themenVorschlaege.includes(thema) && <option value={thema}>{thema}</option>}
-              </select>
-              <button onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) { setThema(val); setDirty(true); } }}
-                className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
             </div>
-          </div>
-        </div>
+          )}
+        </Card>
 
-        {/* 3. Status (flex:2) + Titel (flex:2) — one row */}
-        <div className="flex gap-2">
-          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-700 font-semibold">Status</span>
-              <StatusBadge status={status} />
-              <button onClick={() => setShowStatusPicker(!showStatusPicker)}
-                className="ml-auto px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200 transition">
-                &middot;&middot;&middot;
+        {/* 3. Thema — Chips Top-3 + „…"-Ausklapper + Freitext („+") */}
+        <Card className="p-4">
+          <SectionLabel>Thema</SectionLabel>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {themenTop.map((t) => (
+              <Chip key={t} active={thema === t} onClick={() => { setThema(t); setDirty(true); }}>
+                {t}
+              </Chip>
+            ))}
+            {themenRest.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setThemenRestOpen(!themenRestOpen)}
+                className="rounded-full border border-black/10 bg-white px-3 py-1 text-[13px] font-bold text-ping-text-mid transition hover:bg-black/5"
+                title="Weitere Themen"
+              >
+                …
               </button>
-            </div>
-            {showStatusPicker && (
-              <div className="flex gap-1 flex-wrap mt-2 pt-2 border-t border-gray-100">
-                {[...HAUPT_STATUS, ...WEITERE_STATUS].map(s => STATUS_MAP[s] && (
-                  <button key={s} onClick={() => { setStatus(s); setShowStatusPicker(false); setDirty(true); }}
-                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                      status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-                    }`}>
-                    {STATUS_MAP[s].label}
-                  </button>
-                ))}
-              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) { setThema(val); setDirty(true); } }}
+              className="inline-flex items-center gap-1 rounded-full border border-dashed border-ping-blue/40 px-3 py-1 text-[13px] font-semibold text-ping-blue transition hover:bg-ping-blue-light"
+              title="Eigenes Thema"
+            >
+              <IconPlus size={13} /> Thema
+            </button>
+            {themaIstFrei && (
+              <Chip active tone="gold">{thema}</Chip>
             )}
           </div>
-          <div className="flex-[2] bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex items-center gap-2">
-            <span className="text-xs text-gray-500 shrink-0">Titel</span>
-            <input type="text" value={titel} onChange={(e) => { setTitel(e.target.value); setDirty(true); }}
+          {themenRestOpen && themenRest.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5 border-t border-black/5 pt-2">
+              {themenRest.map((t) => (
+                <Chip key={t} active={thema === t} onClick={() => { setThema(t); setThemenRestOpen(false); setDirty(true); }}>
+                  {t}
+                </Chip>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* 4. Termin + Verantwortlich */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Card className="p-4">
+            <SectionLabel>Termin</SectionLabel>
+            <div className="flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2 focus-within:border-ping-blue">
+              <IconCalendar size={17} className="shrink-0 text-ping-blue" />
+              <input
+                type="date"
+                value={termin}
+                onChange={(e) => { setTermin(e.target.value); setDirty(true); }}
+                className={`w-full bg-transparent text-[14px] outline-none ${terminUeberfaellig ? 'font-semibold text-red-600' : 'text-ping-text'}`}
+              />
+            </div>
+            {terminUeberfaellig && <p className="mt-1 text-[11px] font-semibold text-red-600">Termin überfällig</p>}
+          </Card>
+
+          <Card className="p-4">
+            <SectionLabel>Verantwortlich</SectionLabel>
+            <div className="flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2 focus-within:border-ping-blue">
+              <IconUser size={17} className="shrink-0 text-ping-blue" />
+              <select
+                value={verantwFirmaOid}
+                onChange={(e) => { setVerantwFirmaOid(e.target.value); setDirty(true); }}
+                className="w-full bg-transparent text-[14px] text-ping-text outline-none"
+              >
+                <option value="">(keine)</option>
+                {alleFirmen.map((t) => (
+                  <option key={t.oid} value={t.oid}>{t.kuerzel ? `${t.kuerzel} — ${t.name}` : t.name}</option>
+                ))}
+              </select>
+            </div>
+          </Card>
+        </div>
+
+        {/* 5. Titel + Position */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Card className="p-4">
+            <SectionLabel>Titel</SectionLabel>
+            <input
+              type="text"
+              value={titel}
+              onChange={(e) => { setTitel(e.target.value); setDirty(true); }}
               placeholder="optional"
-              className="flex-1 min-w-0 px-2 py-0.5 text-xs focus:outline-none" />
-          </div>
+              className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-[14px] text-ping-text outline-none placeholder:text-ping-text-light focus:border-ping-blue"
+            />
+          </Card>
+          <Card className="p-4">
+            <SectionLabel>Position</SectionLabel>
+            <input
+              type="text"
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              placeholder="automatisch"
+              className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 font-mono text-[14px] text-ping-text outline-none placeholder:text-ping-text-light focus:border-ping-blue"
+            />
+          </Card>
         </div>
 
-        {/* 5. Position (flex:1) + Bemerkung (flex:2) — one row, NO labels */}
-        <div className="flex gap-2">
-          <div className="flex-1 bg-white rounded-lg p-2.5 border border-gray-200">
-            <input type="text" value={position} onChange={(e) => setPosition(e.target.value)}
-              placeholder="Position (auto)"
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-          </div>
-          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
-            <textarea value={bemerkung} onChange={(e) => setBemerkung(e.target.value)} rows={1}
-              placeholder="Optionale Bemerkung (intern)"
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
-          </div>
-        </div>
+        {/* 6. Bemerkung */}
+        <Card className="p-4">
+          <SectionLabel>Bemerkung (intern)</SectionLabel>
+          <textarea
+            value={bemerkung}
+            onChange={(e) => setBemerkung(e.target.value)}
+            rows={2}
+            placeholder="Optionale interne Bemerkung"
+            className="w-full resize-none rounded-xl border border-black/10 bg-white px-3 py-2 text-[14px] text-ping-text outline-none placeholder:text-ping-text-light focus:border-ping-blue"
+          />
+        </Card>
 
-        {/* 6. Standort + Fotos — combined in ONE card */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-200">
-          <div className="flex gap-4">
-            {/* Left: Standort */}
-            <div className="flex-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-medium block mb-1">Standort</span>
-              <div className="flex gap-1">
-                <button onClick={gpsErfassen}
-                  className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
-                  GPS
-                </button>
-                <button onClick={() => setKarteOffen(true)}
-                  className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
-                  Karte
-                </button>
+        {/* 7. Standort + Fotos */}
+        <Card className="p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Standort */}
+            <div>
+              <SectionLabel>Standort</SectionLabel>
+              <div className="flex items-center gap-2">
+                <PrimaryButton className="flex-1 !px-3 !py-2 !text-[13px]" onClick={gpsErfassen}>
+                  <IconMapPin size={16} /> GPS
+                </PrimaryButton>
+                <SecondaryButton className="flex-1 !px-3 !py-2 !text-[13px]" onClick={() => setKarteOffen(true)}>
+                  <IconMapPin size={16} /> Karte
+                </SecondaryButton>
                 {geoLat != null && (
-                  <button onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
-                    className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-xs font-medium">
-                    x
+                  <button
+                    type="button"
+                    onClick={() => { setGeoLat(null); setGeoLon(null); setGeoAcc(null); setGeoHeading(null); setGeoText(''); }}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/10 text-ping-text-mid transition hover:bg-black/5"
+                    aria-label="Standort entfernen"
+                  >
+                    <IconX size={16} />
                   </button>
                 )}
               </div>
             </div>
-            {/* Right: Fotos */}
-            <div className="flex-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-medium block mb-1">Fotos</span>
-              <div className="flex gap-1 items-center">
-                <button onClick={() => fotoRef.current?.click()}
-                  className="bg-ping-blue text-white px-2 py-1 rounded text-xs font-medium">
-                  Kamera
-                </button>
-                <button onClick={() => galerieRef.current?.click()}
-                  className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-xs font-medium">
-                  MEDIA
-                </button>
+            {/* Fotos */}
+            <div>
+              <SectionLabel>Fotos</SectionLabel>
+              <div className="flex items-center gap-2">
+                <PrimaryButton className="flex-1 !px-3 !py-2 !text-[13px]" onClick={() => fotoRef.current?.click()}>
+                  <IconCamera size={16} /> Kamera
+                </PrimaryButton>
+                <SecondaryButton className="flex-1 !px-3 !py-2 !text-[13px]" onClick={() => galerieRef.current?.click()}>
+                  <IconFolder size={16} /> Galerie
+                </SecondaryButton>
                 {tempFotos.length > 0 && (
-                  <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+                  <span className="shrink-0 rounded-full bg-ping-gold-light px-2 py-1 text-[11px] font-bold text-ping-gold-dark">
                     {tempFotos.length}
                   </span>
                 )}
               </div>
             </div>
           </div>
-          {/* GPS text + Auto-GPS toggle */}
-          <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-gray-100">
-            <div className="text-xs text-gray-600">
-              {geoText ? geoText : (autoGps ? 'Wird ermittelt...' : 'Kein Standort')}
+
+          {/* GPS-Text + Auto-GPS-Schalter */}
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-black/5 pt-3">
+            <div className="min-w-0 truncate text-[12px] font-medium text-ping-text-mid">
+              {geoText ? geoText : (autoGps ? 'Wird ermittelt …' : 'Kein Standort')}
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider">Auto-GPS</span>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-ping-text-light">Auto-GPS</span>
               <button
+                type="button"
                 onClick={toggleAutoGps}
-                className={`relative inline-flex items-center w-8 h-4 rounded-full transition ${autoGps ? 'bg-green-500' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-4 w-8 items-center rounded-full transition ${autoGps ? 'bg-green-500' : 'bg-gray-300'}`}
+                aria-pressed={autoGps}
+                aria-label="Auto-GPS umschalten"
               >
-                <span className={`inline-block w-3 h-3 bg-white rounded-full shadow transition-transform ${autoGps ? 'translate-x-[1rem]' : 'translate-x-0.5'}`} />
+                <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform ${autoGps ? 'translate-x-[1rem]' : 'translate-x-0.5'}`} />
               </button>
             </div>
           </div>
-          {/* Foto thumbnails */}
+
+          {/* Foto-Vorschau */}
           {tempFotos.length > 0 && (
-            <div className="flex gap-1 flex-wrap mt-2">
+            <div className="mt-3 flex flex-wrap gap-2">
               {tempFotos.map((f, i) => (
-                <div key={i} className="relative w-10 h-10">
-                  <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover rounded" />
-                  <button onClick={() => setTempFotos(prev => prev.filter((_, j) => j !== i))}
-                    className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">x</button>
+                <div key={i} className="relative h-12 w-12">
+                  <img src={URL.createObjectURL(f)} alt="" className="h-full w-full rounded-lg object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setTempFotos(prev => prev.filter((_, j) => j !== i))}
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow"
+                    aria-label="Foto entfernen"
+                  >
+                    <IconX size={11} />
+                  </button>
                 </div>
               ))}
             </div>
           )}
-          {/* Hidden file inputs */}
+
+          {/* Versteckte Datei-Inputs */}
           <input ref={fotoRef} type="file" accept="image/*" capture="environment"
             onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); fotoRef.current!.value = ''; } }}
             className="hidden" />
           <input ref={galerieRef} type="file" accept="image/*" multiple
             onChange={async (e) => { if (e.target.files) { const files: File[] = []; for (const f of Array.from(e.target.files)) { const buf = await f.arrayBuffer(); files.push(new File([buf], f.name, { type: f.type || 'image/jpeg', lastModified: f.lastModified })); } setTempFotos(prev => [...prev, ...files]); } }}
             className="hidden" />
-        </div>
+        </Card>
 
-        {/* Map Editor Modal */}
+        {/* Map-Editor-Modal */}
         {karteOffen && (
           <MapEditorModal
             lat={geoLat}
@@ -525,7 +595,27 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         )}
       </div>
 
-      {/* Bautagebuch Wizard */}
+      {/* Sticky Aktionsleiste unten — „Punkt anlegen" primär */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/5 bg-white/90 px-4 pb-4 pt-3 backdrop-blur">
+        <div className="mx-auto flex max-w-[760px] flex-col gap-2">
+          {dirty && (
+            <span className="text-[11px] font-semibold text-ping-gold-dark">Ungespeicherte Änderungen</span>
+          )}
+          <div className="flex gap-2">
+            <SecondaryButton className="flex-1" onClick={speichernUndNeu}>
+              <IconPlus size={16} /> Speichern &amp; Neu
+            </SecondaryButton>
+            {onSavedAndClone && (
+              <SecondaryButton className="flex-1" onClick={speichernUndKlonen}>
+                Klonen
+              </SecondaryButton>
+            )}
+          </div>
+          <PrimaryButton block onClick={speichern}>Punkt anlegen</PrimaryButton>
+        </div>
+      </div>
+
+      {/* Bautagebuch-Wizard */}
       {showBtWizard && (
         <BautagebuchWizard
           gruppe={gruppe}

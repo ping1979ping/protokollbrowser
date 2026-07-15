@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
-import { STATUS_MAP } from '../types';
 import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
 import type { Verantwortlicher } from '../db';
 import { extractGpsFromImage } from '../exifGps';
 import MapEditorModal from './map/MapEditorModal';
+import StatusBadge from './StatusBadge';
+import { Screen, ScreenHeader, StickyFooter, Card, SectionLabel, Chip, PrimaryButton } from '../ui/primitives';
+import { IconCamera, IconFolder, IconMapPin, IconCheck, IconX, IconPlus } from '../ui/icons';
 
 interface Props {
   protokoll: Protokoll;
@@ -249,118 +251,172 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
     keins:     { farbe: 'bg-red-400', text: 'Kein GPS' },
   }[gpsStatus];
 
-  // --- Phase: Einstellungen ---
+  // ------------------------------------------------------------------
+  //  Phase: Einstellungen — Voreinstellungen fuer den Foto-Batch
+  // ------------------------------------------------------------------
   if (phase === 'einstellungen') {
     return (
-      <div className="min-h-screen bg-ping-bg">
-        <div className="bg-ping-blue text-white p-3">
-          <button onClick={onBack} className="text-ping-blue-light hover:text-white text-xs">&larr; Uebersicht</button>
-          <h1 className="text-base font-bold mt-0.5">Schnellerstellung</h1>
-          <p className="text-xs text-ping-blue-light">Voreinstellungen fuer Foto-Batch</p>
-        </div>
-
-        <div className="p-3 space-y-2.5">
+      <Screen
+        header={
+          <ScreenHeader
+            title="Schnellerstellung"
+            subtitle="Voreinstellungen für den Foto-Batch"
+            onBack={onBack}
+            backLabel="Übersicht"
+          />
+        }
+        footer={
+          <StickyFooter>
+            <PrimaryButton block onClick={() => setPhase('fotos')}>
+              <IconCamera size={18} /> Fotos aufnehmen
+            </PrimaryButton>
+          </StickyFooter>
+        }
+      >
+        <div className="mx-auto flex max-w-[640px] flex-col gap-3 p-4">
           {/* Positionstext */}
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Positionstext (optional)</label>
-            <textarea value={positionstext} onChange={(e) => setPositionstext(e.target.value)} rows={3}
-              placeholder="Wird fuer alle Punkte uebernommen. Leer = Dateiname."
-              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
-          </div>
+          <Card className="p-4">
+            <SectionLabel>Positionstext (optional)</SectionLabel>
+            <textarea
+              value={positionstext}
+              onChange={(e) => setPositionstext(e.target.value)}
+              rows={3}
+              placeholder="Wird für alle Punkte übernommen …"
+              className="w-full resize-none rounded-xl border border-black/10 bg-white px-3 py-2 text-[14px] text-ping-text outline-none focus:border-ping-blue"
+            />
+            <p className="mt-2 text-[12px] text-ping-text-light">
+              Leer lassen → der Dateiname wird als Positionstext übernommen.
+            </p>
+          </Card>
 
-          {/* Status */}
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase mb-1.5 block">Status</label>
-            <div className="flex gap-1 flex-wrap">
-              {HAUPT_STATUS.map(s => (
-                <button key={s} onClick={() => setStatus(s)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                    status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-                  }`}>
-                  {STATUS_MAP[s].label}
+          {/* Status — nie frei einfaerben, immer StatusBadge */}
+          <Card className="p-4">
+            <SectionLabel>Status</SectionLabel>
+            <div className="flex flex-wrap items-center gap-2">
+              {HAUPT_STATUS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStatus(s)}
+                  className="rounded-full transition active:scale-[.98]"
+                  style={status === s ? { boxShadow: '0 0 0 2px var(--color-ping-blue)' } : { opacity: 0.45 }}
+                  aria-pressed={status === s}
+                >
+                  <StatusBadge status={s} />
                 </button>
               ))}
             </div>
-          </div>
+          </Card>
 
-          {/* Thema / Termin */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-              <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Thema</label>
-              <div className="flex gap-1">
-                <select value={thema}
-                  onChange={(e) => setThema(e.target.value)}
-                  className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-                  <option value="">(keins)</option>
-                  {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
-                  {thema && !themenVorschlaege.includes(thema) && <option value={thema}>{thema}</option>}
-                </select>
-                <button onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) setThema(val); }}
-                  className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-              <label className="text-xs text-gray-400 font-medium uppercase block mb-0.5">Termin</label>
-              <input type="date" value={termin} onChange={(e) => setTermin(e.target.value)}
-                className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue" />
-            </div>
-          </div>
-
-          {/* Verantwortlich */}
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Verantwortlich</label>
-            <select value={verantwFirmaOid} onChange={(e) => setVerantwFirmaOid(e.target.value)}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
-              <option value=""></option>
-              {alleFirmen.map(t => (
-                <option key={t.oid} value={t.oid}>{t.name}</option>
+          {/* Thema — Vorschlaege als Chips + Freitext ueber Prompt */}
+          <Card className="p-4">
+            <SectionLabel>Thema</SectionLabel>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Chip active={thema === ''} onClick={() => setThema('')}>
+                Keins
+              </Chip>
+              {themenVorschlaege.map((t) => (
+                <Chip key={t} active={thema === t} onClick={() => setThema(t)}>
+                  {t}
+                </Chip>
               ))}
-            </select>
-          </div>
+              {thema && !themenVorschlaege.includes(thema) && (
+                <Chip active onClick={() => setThema(thema)}>
+                  {thema}
+                </Chip>
+              )}
+              <button
+                type="button"
+                onClick={() => { const val = prompt('Neues Thema eingeben:', thema); if (val != null) setThema(val); }}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-ping-blue px-3 py-1 text-[13px] font-medium text-ping-blue transition hover:bg-ping-blue-light"
+              >
+                <IconPlus size={14} /> Neu
+              </button>
+            </div>
+          </Card>
 
-          {/* Weiter-Button */}
-          <button
-            onClick={() => setPhase('fotos')}
-            className="w-full py-3 rounded-lg font-medium text-white text-sm bg-green-600 hover:bg-green-700 transition"
-          >
-            Fotos aufnehmen &rarr;
-          </button>
+          {/* Termin + Verantwortlich */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Card className="p-4">
+              <SectionLabel>Termin</SectionLabel>
+              <input
+                type="date"
+                value={termin}
+                onChange={(e) => setTermin(e.target.value)}
+                className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-[14px] text-ping-text outline-none focus:border-ping-blue"
+              />
+            </Card>
+            <Card className="p-4">
+              <SectionLabel>Verantwortlich</SectionLabel>
+              <select
+                value={verantwFirmaOid}
+                onChange={(e) => setVerantwFirmaOid(e.target.value)}
+                className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-[14px] text-ping-text outline-none focus:border-ping-blue"
+              >
+                <option value="">(keine)</option>
+                {alleFirmen.map((t) => (
+                  <option key={t.oid} value={t.oid}>{t.name}</option>
+                ))}
+              </select>
+            </Card>
+          </div>
         </div>
-      </div>
+      </Screen>
     );
   }
 
-  // --- Phase: Fotos ---
+  // ------------------------------------------------------------------
+  //  Phase: Fotos — aufnehmen, auswaehlen, Batch abschliessen
+  // ------------------------------------------------------------------
   if (phase === 'fotos') {
     return (
-      <div className="min-h-screen bg-ping-bg">
-        <div className="bg-ping-blue text-white p-3">
-          <button onClick={() => setPhase('einstellungen')} className="text-ping-blue-light hover:text-white text-xs">&larr; Einstellungen</button>
-          <div className="flex items-center gap-2 mt-0.5">
-            <h1 className="text-base font-bold">Fotos aufnehmen</h1>
-            {/* GPS-Status-Indikator */}
-            <span className={`w-2 h-2 rounded-full ${gpsIndikator.farbe}`}
-              title={gpsIndikator.text} />
-          </div>
-          <p className="text-xs text-ping-blue-light">
-            {fotos.length} Foto{fotos.length !== 1 ? 's' : ''} — {gpsIndikator.text}
-          </p>
-        </div>
-
-        <div className="p-3 space-y-3">
-          {/* Kamera + Galerie Buttons */}
-          <div className="flex gap-2">
+      <Screen
+        header={
+          <ScreenHeader
+            title="Fotos aufnehmen"
+            subtitle={`${fotos.length} Foto${fotos.length !== 1 ? 's' : ''} — ${gpsIndikator.text}`}
+            onBack={() => setPhase('einstellungen')}
+            backLabel="Einstellungen"
+            right={
+              // GPS-Status-Indikator (Farbe spiegelt die Fallback-Kette)
+              <span
+                className={`inline-block h-2.5 w-2.5 rounded-full ${gpsIndikator.farbe}`}
+                title={gpsIndikator.text}
+              />
+            }
+          />
+        }
+        footer={
+          fotos.length > 0 ? (
+            <StickyFooter>
+              <PrimaryButton block onClick={abschliessen} disabled={verarbeitet}>
+                {verarbeitet ? 'Wird erstellt …' : (
+                  <>
+                    <IconCheck size={18} /> Abschließen · {fotos.length} Punkte
+                  </>
+                )}
+              </PrimaryButton>
+            </StickyFooter>
+          ) : undefined
+        }
+      >
+        <div className="mx-auto flex max-w-[640px] flex-col gap-3 p-4">
+          {/* Aufnahme-Aktionen */}
+          <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => fotoRef.current?.click()}
-              className="flex-1 py-6 rounded-xl bg-purple-600 text-white font-medium text-base hover:bg-purple-700 active:bg-purple-800 transition shadow-lg"
+              className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-ping-blue py-8 text-white shadow-lg transition hover:bg-ping-blue-dark active:scale-[.99]"
             >
-              Foto aufnehmen
+              <IconCamera size={30} />
+              <span className="text-[15px] font-semibold">Foto aufnehmen</span>
             </button>
             <button
               onClick={() => galerieRef.current?.click()}
-              className="flex-1 py-6 rounded-xl bg-blue-600 text-white font-medium text-base hover:bg-blue-700 active:bg-blue-800 transition shadow-lg"
+              className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-ping-blue-light py-8 text-ping-blue transition hover:brightness-95 active:scale-[.99]"
+              style={{ boxShadow: 'var(--shadow-card)' }}
             >
-              Aus Galerie
+              <IconFolder size={30} />
+              <span className="text-[15px] font-semibold">Aus Galerie</span>
             </button>
           </div>
           <input ref={fotoRef} type="file" accept="image/*" capture="environment"
@@ -372,62 +428,70 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           {(gpsStatus === 'keins' || gpsStatus === 'bbox' || gpsStatus === 'manuell') && (
             <button
               onClick={() => setShowMapPicker(true)}
-              className="w-full py-2 rounded-lg text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 transition"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-semibold transition hover:brightness-95"
+              style={{
+                background: 'var(--color-ping-gold-light)',
+                color: 'var(--color-ping-gold-dark)',
+                borderColor: 'var(--color-ping-gold)',
+              }}
             >
-              Startposition auf Karte waehlen
+              <IconMapPin size={16} /> Startposition auf Karte wählen
             </button>
           )}
 
           {/* Auto-Capture Toggle */}
-          <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-gray-100">
-            <span className="text-xs text-gray-600">Kamera automatisch erneut oeffnen</span>
+          <Card className="flex items-center justify-between p-4">
+            <span className="text-[14px] text-ping-text-mid">Kamera automatisch erneut öffnen</span>
             <button
               onClick={() => setAutoCapture(!autoCapture)}
-              className={`relative inline-flex items-center w-10 h-5 rounded-full transition ${autoCapture ? 'bg-green-500' : 'bg-gray-300'}`}
+              className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition"
+              style={{ background: autoCapture ? 'var(--color-ping-success)' : 'rgba(0,0,0,.18)' }}
+              role="switch"
+              aria-checked={autoCapture}
             >
-              <span className={`inline-block w-4 h-4 bg-white rounded-full shadow transition-transform ${autoCapture ? 'translate-x-[1.3rem]' : 'translate-x-0.5'}`} />
+              <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${autoCapture ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
-          </div>
+          </Card>
 
-          {/* Kompakte Foto-Anzeige */}
+          {/* Foto-Uebersicht */}
           {fotos.length > 0 && (
-            <div className="bg-white rounded-lg p-2.5 border border-gray-100">
+            <Card className="p-4">
               <div className="flex items-center gap-3">
-                <span className="text-2xl font-bold text-purple-600">{fotos.length}</span>
-                <span className="text-sm text-gray-500">Fotos</span>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ping-blue-light text-ping-blue">
+                  <IconCamera size={22} />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[22px] font-bold leading-none text-ping-text">{fotos.length}</div>
+                  <div className="text-[12px] text-ping-text-light">Foto{fotos.length !== 1 ? 's' : ''} aufgenommen</div>
+                </div>
                 {fotoUrls.length > 0 && (
-                  <img src={fotoUrls[fotoUrls.length - 1]} alt="" className="w-10 h-10 rounded object-cover ml-auto" />
+                  <img src={fotoUrls[fotoUrls.length - 1]} alt="" className="ml-auto h-11 w-11 rounded-lg object-cover" />
                 )}
-                <button onClick={() => setShowGrid(!showGrid)}
-                  className="text-xs text-ping-blue hover:underline">
+                <button
+                  onClick={() => setShowGrid(!showGrid)}
+                  className="shrink-0 text-[13px] font-semibold text-ping-blue hover:underline"
+                >
                   {showGrid ? 'Zuklappen' : 'Alle anzeigen'}
                 </button>
               </div>
               {showGrid && (
-                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                <div className="mt-3 grid grid-cols-4 gap-1.5">
                   {fotos.map((_, i) => (
                     <div key={i} className="relative aspect-square">
-                      <img src={fotoUrls[i]} alt="" className="w-full h-full object-cover rounded-lg" />
-                      <button onClick={() => fotoEntfernen(i)}
-                        className="absolute -top-1 -right-1 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow">
-                        x
+                      <img src={fotoUrls[i]} alt="" className="h-full w-full rounded-lg object-cover" />
+                      <button
+                        onClick={() => fotoEntfernen(i)}
+                        className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-white shadow"
+                        style={{ background: 'var(--color-ping-danger)' }}
+                        aria-label="Foto entfernen"
+                      >
+                        <IconX size={12} />
                       </button>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Abschliessen */}
-          {fotos.length > 0 && (
-            <button
-              onClick={abschliessen}
-              disabled={verarbeitet}
-              className="w-full py-3 rounded-lg font-medium text-white text-sm bg-green-600 hover:bg-green-700 transition disabled:opacity-50"
-            >
-              {verarbeitet ? 'Wird erstellt...' : `Abschliessen (${fotos.length} Punkte erstellen)`}
-            </button>
+            </Card>
           )}
         </div>
 
@@ -445,26 +509,30 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
             onCancel={() => setShowMapPicker(false)}
           />
         )}
-      </div>
+      </Screen>
     );
   }
 
-  // --- Phase: Fertig ---
+  // ------------------------------------------------------------------
+  //  Phase: Fertig — Erfolgsmeldung
+  // ------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-ping-bg flex items-center justify-center">
-      <div className="bg-white rounded-xl p-6 shadow-lg text-center max-w-sm mx-4">
-        <div className="text-4xl mb-3 text-green-600">&#10003;</div>
-        <h2 className="text-lg font-bold text-gray-800 mb-1">{erstellt} Punkte erstellt</h2>
-        <p className="text-sm text-gray-500 mb-4">
+    <div className="flex h-[100dvh] flex-col items-center justify-center bg-ping-surface p-6">
+      <Card className="w-full max-w-sm p-6 text-center">
+        <div
+          className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+          style={{ background: '#EAFAF0', color: 'var(--color-ping-success-dark)' }}
+        >
+          <IconCheck size={32} />
+        </div>
+        <h2 className="text-[19px] font-bold text-ping-text">{erstellt} Punkte erstellt</h2>
+        <p className="mt-1 text-[14px] text-ping-text-mid">
           Alle Fotos wurden als neue Protokollpunkte angelegt.
         </p>
-        <button
-          onClick={onDone}
-          className="w-full py-2.5 rounded-lg font-medium text-white text-sm bg-ping-blue hover:bg-ping-blue-dark transition"
-        >
-          Zur Uebersicht
-        </button>
-      </div>
+        <PrimaryButton block className="mt-5" onClick={onDone}>
+          Zur Übersicht
+        </PrimaryButton>
+      </Card>
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { fetchWeather } from '../weatherService';
 import { getVerantwortliche, getLetzteBautagebuchElemente } from '../db';
 import type { Verantwortlicher } from '../db';
 import type { Protokollelement, Protokollgruppe } from '../types';
+import { Card, SectionLabel, PrimaryButton, SecondaryButton } from '../ui/primitives';
+import { IconBook, IconCalendar, IconUser, IconMapPin, IconPlus, IconTrash } from '../ui/icons';
 
 interface BautagebuchFirma {
   oid: string;
@@ -242,64 +244,112 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
   );
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-stretch justify-center p-2">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col">
-        {/* Header */}
-        <div className="bg-ping-blue text-white p-3 rounded-t-xl shrink-0">
-          <h2 className="text-base font-bold">Bautagebuch-Eintrag</h2>
-          <p className="text-ping-blue-light text-xs">{existingElement ? 'Bearbeiten' : 'Neuer Eintrag'}</p>
+    <div
+      className="fixed inset-0 z-50 flex items-stretch justify-center p-2"
+      style={{ background: 'rgba(15,23,42,.45)' }}
+    >
+      <div
+        className="flex w-full max-w-lg flex-col overflow-hidden bg-ping-surface shadow-2xl"
+        style={{ borderRadius: 20 }}
+      >
+        {/* Header — Gold-Akzent (Bautagebuch-Kontext) */}
+        <div
+          className="shrink-0 bg-white px-4 pb-3 pt-4"
+          style={{ borderTop: '3px solid var(--color-ping-gold)' }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ping-gold-light text-ping-gold-dark">
+              <IconBook size={22} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="truncate text-[19px] font-bold leading-tight text-ping-text">Bautagebuch-Eintrag</h2>
+              <p className="text-[13px] text-ping-text-mid">{existingElement ? 'Bearbeiten' : 'Neuer Eintrag'}</p>
+            </div>
+          </div>
         </div>
 
         {/* Scrollbarer Inhalt */}
-        <div className="p-3 space-y-3 flex-1 overflow-auto min-h-0">
+        <div className="ping-scroll min-h-0 flex-1 space-y-3 overflow-auto p-3">
           {/* Datum */}
-          <div className="bg-gray-50 rounded-lg p-2.5">
-            <label className="text-[10px] text-gray-400 font-medium uppercase block mb-0.5">Datum</label>
+          <Card className="p-3">
+            <SectionLabel>
+              <span className="inline-flex items-center gap-1.5">
+                <IconCalendar size={14} /> Datum
+              </span>
+            </SectionLabel>
             <input
               type="date"
               value={datum}
               onChange={(e) => setDatum(e.target.value)}
-              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue"
+              className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm text-ping-text outline-none focus:border-ping-blue focus:ring-1 focus:ring-ping-blue"
             />
-          </div>
+          </Card>
 
           {/* Wetter */}
-          <div className="bg-gray-50 rounded-lg p-2.5">
-            <div className="flex items-center justify-between mb-0.5">
-              <label className="text-[10px] text-gray-400 font-medium uppercase">Wetter</label>
-              {wetterLaedt && <span className="text-[10px] text-ping-blue">Laden...</span>}
-              {!wetterLaedt && wetterGeladen && <span className="text-[10px] text-green-600">API</span>}
+          <Card className="p-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-ping-text-light">Wetter</span>
+              {wetterLaedt && (
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: '#E6EEF7', color: '#004899' }}>
+                  Lädt…
+                </span>
+              )}
+              {!wetterLaedt && wetterGeladen && (
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: '#EAFAF0', color: '#16803C' }}>
+                  API
+                </span>
+              )}
             </div>
             <input
               type="text"
               value={wetter}
               onChange={(e) => setWetter(e.target.value)}
-              placeholder={geoLat == null ? 'Kein GPS — Wetter manuell eingeben' : 'Wird geladen...'}
-              className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue"
+              placeholder={geoLat == null ? 'Kein GPS — Wetter manuell eingeben' : 'Wird geladen…'}
+              className="w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-sm text-ping-text outline-none focus:border-ping-blue focus:ring-1 focus:ring-ping-blue"
             />
             {!wetterGeladen && !wetterLaedt && geoLat == null && (
-              <p className="text-[9px] text-gray-400 mt-0.5">Kein GPS-Standort verfuegbar. Wetter manuell eingeben.</p>
+              <p className="mt-1 text-[11px] text-ping-text-light">Kein GPS-Standort verfügbar. Wetter manuell eingeben.</p>
             )}
-          </div>
+          </Card>
+
+          {/* GPS — erfasster Standort (nur Anzeige) */}
+          {geoLat != null && geoLon != null && (
+            <Card className="p-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ping-blue-light text-ping-blue">
+                  <IconMapPin size={18} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold text-ping-text">Standort erfasst</div>
+                  <div className="truncate font-mono text-[11px] text-ping-text-mid">
+                    {geoLat.toFixed(5)}, {geoLon.toFixed(5)}
+                    {geoAcc != null ? ` · ±${geoAcc} m` : ''}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* Firmen */}
-          <div className="bg-gray-50 rounded-lg p-2.5">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] text-gray-400 font-medium uppercase">Baufirmen auf der Baustelle</label>
-              <div className="relative">
+          <Card className="p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-ping-text-light">
+                <IconUser size={14} /> Baufirmen auf der Baustelle
+              </span>
+              <div className="relative shrink-0">
                 <button
                   onClick={() => setFirmaDropdown(!firmaDropdown)}
-                  className="bg-ping-blue text-white px-2 py-0.5 rounded text-[10px]"
+                  className="inline-flex items-center gap-1 rounded-full bg-ping-gold px-3 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-95"
                 >
-                  + Firma
+                  <IconPlus size={14} /> Firma
                 </button>
                 {firmaDropdown && nichtVerwendeteFirmen.length > 0 && (
-                  <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-48 overflow-auto min-w-[200px]">
+                  <div className="absolute right-0 top-full z-10 mt-1 max-h-48 min-w-[200px] overflow-auto rounded-xl border border-black/10 bg-white shadow-lg">
                     {nichtVerwendeteFirmen.map(v => (
                       <button
                         key={v.id}
                         onClick={() => firmaHinzufuegen(v)}
-                        className="block w-full text-left px-3 py-1.5 text-xs hover:bg-ping-blue-light border-b border-gray-50 last:border-0"
+                        className="block w-full border-b border-black/5 px-3 py-2.5 text-left text-[13px] text-ping-text last:border-0 hover:bg-ping-blue-light"
                       >
                         {v.name}
                       </button>
@@ -310,35 +360,38 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
             </div>
 
             {firmen.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-2">Keine Firmen — "Firma hinzufuegen" klicken</p>
+              <p className="py-3 text-center text-[13px] text-ping-text-light">Keine Firmen — „Firma" hinzufügen</p>
             )}
 
             <div className="space-y-2">
               {firmen.map((firma, i) => (
-                <div key={firma.oid || i} className="bg-white rounded-lg p-2 border border-gray-200">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-medium text-gray-800">{firma.name}</span>
+                <div key={firma.oid || i} className="rounded-xl border border-black/10 bg-ping-bg p-2.5">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-[13px] font-semibold text-ping-text">{firma.name}</span>
                     <button
                       onClick={() => firmaEntfernen(i)}
-                      className="text-red-400 hover:text-red-600 text-sm leading-none px-1"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ping-text-light transition hover:bg-white hover:text-[#DC2626]"
+                      aria-label="Firma entfernen"
                     >
-                      x
+                      <IconTrash size={16} />
                     </button>
                   </div>
 
                   {/* Mitarbeiter */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[10px] text-gray-500 w-16">Mitarbeiter:</span>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="w-20 text-[11px] font-medium text-ping-text-mid">Mitarbeiter</span>
                     <button
                       onClick={() => updateFirma(i, { mitarbeiter: Math.max(0, firma.mitarbeiter - 1) })}
-                      className="w-7 h-7 rounded bg-gray-100 text-gray-600 flex items-center justify-center text-sm font-bold hover:bg-gray-200"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-lg font-bold text-ping-text-mid transition hover:bg-ping-bg"
+                      aria-label="Mitarbeiter verringern"
                     >
-                      -
+                      −
                     </button>
-                    <span className="text-sm font-mono font-medium w-6 text-center">{firma.mitarbeiter}</span>
+                    <span className="w-8 text-center font-mono text-[15px] font-semibold text-ping-text">{firma.mitarbeiter}</span>
                     <button
                       onClick={() => updateFirma(i, { mitarbeiter: firma.mitarbeiter + 1 })}
-                      className="w-7 h-7 rounded bg-ping-blue text-white flex items-center justify-center text-sm font-bold hover:bg-ping-blue-dark"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg bg-ping-gold text-lg font-bold text-white transition hover:brightness-95"
+                      aria-label="Mitarbeiter erhöhen"
                     >
                       +
                     </button>
@@ -346,35 +399,35 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
 
                   {/* Baustand */}
                   <div>
-                    <span className="text-[10px] text-gray-500">Baustand:</span>
+                    <span className="mb-1 block text-[11px] font-medium text-ping-text-mid">Baustand</span>
                     <input
                       type="text"
                       value={firma.baustand}
                       onChange={(e) => updateFirma(i, { baustand: e.target.value })}
-                      placeholder="Aktueller Baustand..."
-                      className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue mt-0.5"
+                      placeholder="Aktueller Baustand…"
+                      className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-[13px] outline-none focus:border-ping-blue focus:ring-1 focus:ring-ping-blue"
                     />
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Buttons — immer sichtbar unten */}
-        <div className="p-3 border-t flex gap-2 shrink-0">
-          <button
-            onClick={onAbbrechen}
-            className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 transition"
-          >
-            Abbrechen
-          </button>
-          <button
-            onClick={uebernehmen}
-            className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-green-600 text-white hover:bg-green-700 transition"
-          >
-            Uebernehmen
-          </button>
+        <div className="shrink-0 border-t border-black/5 bg-white p-3">
+          <div className="flex gap-2">
+            <SecondaryButton onClick={onAbbrechen} className="flex-1">
+              Abbrechen
+            </SecondaryButton>
+            <PrimaryButton
+              onClick={uebernehmen}
+              className="flex-1 hover:brightness-95"
+              style={{ backgroundColor: 'var(--color-ping-gold)' }}
+            >
+              Übernehmen
+            </PrimaryButton>
+          </div>
         </div>
       </div>
     </div>
