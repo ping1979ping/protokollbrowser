@@ -1,12 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
-import { STATUS_MAP } from '../types';
 import { updateElement, deleteElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord } from './map/mapUtils';
 import BautagebuchWizard from './BautagebuchWizard';
 import ScrollToTopFab from './ScrollToTopFab';
+import StatusBadge from './StatusBadge';
+import { Card, SectionLabel, PrimaryButton, SecondaryButton, DangerButton } from '../ui/primitives';
+import {
+  IconChevronLeft, IconChevronRight, IconList, IconCamera, IconMapPin,
+  IconTrash, IconPlus, IconX, IconCalendar, IconCheck, IconUser,
+} from '../ui/icons';
 
 interface Props {
   element: Protokollelement;
@@ -17,6 +22,8 @@ interface Props {
   onNachfolger: (vorgaenger: Protokollelement) => void;
   onNavigate: (element: Protokollelement) => void;
   onClone?: (clone: { thema: string; status: number; termin: string; verantwOid: string; geoLat: number | null; geoLon: number | null; geoAcc: number | null; geoHeading: number | null; geoText: string }) => void;
+  /** Tablet-Enabler: eingebettet in ein Master-Detail-Panel (Wurzel füllt Parent, Speichern-Leiste absolut statt fixed). Ändert keine Logik. */
+  embedded?: boolean;
 }
 
 const HAUPT_STATUS = [0, 10, 20];
@@ -40,7 +47,7 @@ function useSwipe(onLeft: () => void, onRight: () => void, enabled: boolean) {
   return { onTouchStart, onTouchEnd };
 }
 
-export default function ElementDetail({ element, protokoll, gruppe, filteredIds, onBack, onNachfolger, onNavigate, onClone }: Props) {
+export default function ElementDetail({ element, protokoll, gruppe, filteredIds, onBack, onNachfolger, onNavigate, onClone, embedded = false }: Props) {
   const [elem, setElem] = useState<Protokollelement>({ ...element });
   const [fotos, setFotos] = useState<{ fotoId: string; blob: Blob; fileName: string; url?: string }[]>([]);
   const [gespeichert, setGespeichert] = useState(false);
@@ -172,7 +179,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
 
   async function gpsErfassen() {
     if (!window.isSecureContext) { alert('GPS erfordert eine HTTPS-Verbindung.\nBitte Server mit SSL-Zertifikat starten.'); return; }
-    if (!navigator.geolocation) { alert('GPS nicht verfuegbar.'); return; }
+    if (!navigator.geolocation) { alert('GPS nicht verfügbar.'); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude, lon = pos.coords.longitude;
@@ -221,76 +228,79 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
     await ladenFotos();
   }
 
-  const st = STATUS_MAP[elem.status];
   const terminUeberfaellig = elem.termin && [0, 10].includes(elem.status) && new Date(elem.termin) < new Date(new Date().toDateString());
 
+  // Auswahl-Button für einen Status (Farbe kommt aus StatusBadge, aktiv = blauer Ring).
+  const statusPickerBtn = (s: number) => (
+    <button key={s} onClick={() => updateStatus(s)}
+      className="rounded-full transition"
+      style={{ boxShadow: elem.status === s ? '0 0 0 2px var(--color-ping-blue)' : undefined }}
+      aria-pressed={elem.status === s}>
+      <StatusBadge status={s} />
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-ping-bg" onTouchStart={swipe.onTouchStart} onTouchEnd={swipe.onTouchEnd}>
-      {/* Header */}
-      <div className="bg-ping-blue text-white p-3">
-        {/* Zeile 1: Vorh. | Uebersicht | Naechst. — alle gleich breit */}
-        <div className="flex gap-1.5">
+    <div
+      className={`relative bg-ping-surface ${embedded ? 'flex h-full flex-col overflow-hidden' : 'min-h-[100dvh]'}`}
+      onTouchStart={swipe.onTouchStart}
+      onTouchEnd={swipe.onTouchEnd}
+    >
+      {/* Kopfzeile: ‹ Übersicht › + Positions-Meta */}
+      <header className={`bg-ping-blue px-3 pb-2.5 pt-2.5 text-white ${embedded ? 'shrink-0' : 'sticky top-0 z-10'}`}>
+        <div className="flex items-stretch gap-2">
           <button onClick={() => prevElem && !dirty && onNavigate(prevElem)} disabled={!prevElem || dirty}
-            className={`flex-1 py-2 rounded-lg text-xs font-medium text-center ${prevElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
-            &larr; Vorh.
+            className="flex w-12 items-center justify-center rounded-lg bg-ping-blue-dark text-white transition enabled:hover:bg-ping-blue-light enabled:hover:text-ping-blue disabled:opacity-30"
+            title="Vorheriges Element" aria-label="Vorheriges Element">
+            <IconChevronLeft size={18} />
           </button>
           <button onClick={onBack}
-            className="flex-1 py-2 rounded-lg text-xs font-medium text-center bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue">
-            &uarr; Uebersicht
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-ping-blue-dark py-2.5 text-[13px] font-semibold text-white transition hover:bg-ping-blue-light hover:text-ping-blue">
+            <IconList size={16} /> Übersicht
           </button>
           <button onClick={() => nextElem && !dirty && onNavigate(nextElem)} disabled={!nextElem || dirty}
-            className={`flex-1 py-2 rounded-lg text-xs font-medium text-center ${nextElem && !dirty ? 'bg-ping-blue-dark text-white hover:bg-ping-blue-light hover:text-ping-blue' : 'bg-ping-blue-dark/30 text-white/30 cursor-default'}`}>
-            Naechst. &rarr;
+            className="flex w-12 items-center justify-center rounded-lg bg-ping-blue-dark text-white transition enabled:hover:bg-ping-blue-light enabled:hover:text-ping-blue disabled:opacity-30"
+            title="Nächstes Element" aria-label="Nächstes Element">
+            <IconChevronRight size={18} />
           </button>
         </div>
-        {/* Zeile 2: Status | Pos. | Protokollname | Modus */}
-        <div className="flex items-center gap-2 mt-1.5">
-          {st && <span className={`px-2 py-0.5 rounded text-[10px] font-medium w-20 text-center shrink-0 ${st.css}`}>{st.label}</span>}
-          <span className="text-xs text-ping-blue-light">Pos. {elem.position}</span>
-          <span className="text-[10px] text-ping-blue-light/70 truncate">{protokoll.name}</span>
-          <span className={`text-[10px] shrink-0 ml-auto ${istNeu ? 'text-green-300' : 'text-ping-blue-light'}`}>
-            ({istNeu ? 'editierbar' : 'Status/GPS'})
+        <div className="mt-2 flex items-center gap-2">
+          <span className="shrink-0 font-mono text-[12px] font-semibold text-white">Pos. {elem.position}</span>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-ping-blue-light">{protokoll.name}</span>
+          {gespeichert && !dirty && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[10.5px] font-semibold text-green-200">
+              <IconCheck size={12} /> Gespeichert
+            </span>
+          )}
+          <span className={`shrink-0 text-[10.5px] ${istNeu ? 'text-green-200' : 'text-ping-blue-light'}`}>
+            {istNeu ? 'editierbar' : 'Status/GPS'}
           </span>
         </div>
-      </div>
+      </header>
 
-      {/* Buttons direkt unter Header */}
-      <div className="px-3 pt-2 flex gap-2">
-        <button onClick={speichern}
-          className={`flex-1 py-2.5 rounded-lg font-medium text-white text-sm transition ${
-            gespeichert ? 'bg-green-600' : dirty ? 'bg-red-500 hover:bg-red-600' : 'bg-ping-blue hover:bg-ping-blue-dark'
-          }`}>
-          {gespeichert ? 'Gespeichert' : dirty ? 'Speichern!' : 'Speichern'}
-        </button>
-        <button onClick={() => { setElem({ ...element }); setDirty(false); setGespeichert(false); }}
-          disabled={!dirty}
-          className={`flex-1 py-2.5 rounded-lg font-medium text-sm transition ${dirty ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-gray-100 text-gray-400 cursor-default'}`}>
-          Rueckgaengig
-        </button>
-      </div>
+      {/* Inhalt — im Panel-Modus eigener Scroll-Container, sonst Seiten-Scroll (ScrollToTopFab) */}
+      <div className={`px-3 pt-3 ${dirty ? 'pb-28' : 'pb-8'} space-y-2.5 ${embedded ? 'ping-scroll min-h-0 flex-1 overflow-y-auto' : ''}`}>
 
-      <div className="p-3 space-y-2.5">
-
-        {/* Vorgaenger/Nachfolger Navigation */}
+        {/* Vorgänger / Nachfolger */}
         {(vorgaenger.length > 0 || nachfolger.length > 0) && (
-          <div className="bg-amber-50 rounded-lg p-2 border border-amber-200">
+          <div className="rounded-2xl p-2.5" style={{ background: 'var(--color-ping-gold-light)', boxShadow: 'var(--shadow-card)' }}>
             {vorgaenger.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-[10px] text-amber-600 font-medium">Vorgaenger:</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-ping-gold-dark">Vorgänger</span>
                 {vorgaenger.map(v => (
                   <button key={v.id} onClick={() => onNavigate(v)}
-                    className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded hover:bg-amber-200">
+                    className="rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-medium text-ping-gold-dark transition hover:bg-white">
                     Pos. {v.position} — {v.positionstext.slice(0, 40)}...
                   </button>
                 ))}
               </div>
             )}
             {nachfolger.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap mt-1">
-                <span className="text-[10px] text-amber-600 font-medium">Nachfolger:</span>
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-ping-gold-dark">Nachfolger</span>
                 {nachfolger.map(n => (
                   <button key={n.id} onClick={() => onNavigate(n)}
-                    className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded hover:bg-amber-200">
+                    className="rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-medium text-ping-gold-dark transition hover:bg-white">
                     Pos. {n.position} — {n.positionstext.slice(0, 40)}...
                   </button>
                 ))}
@@ -299,33 +309,69 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </div>
         )}
 
+        {/* Status */}
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ping-text-light">Status</span>
+            <StatusBadge status={elem.status} />
+          </div>
+          <div className="mt-2.5 flex gap-2">
+            <button onClick={() => updateStatus(10)}
+              className="flex flex-1 items-center justify-center rounded-xl border border-black/5 bg-white py-2.5 transition"
+              style={{ boxShadow: elem.status === 10 ? '0 0 0 2px var(--color-ping-blue)' : undefined }}
+              aria-pressed={elem.status === 10}>
+              <StatusBadge status={10} />
+            </button>
+            <button onClick={() => updateStatus(20)}
+              className="flex flex-1 items-center justify-center rounded-xl border border-black/5 bg-white py-2.5 transition"
+              style={{ boxShadow: elem.status === 20 ? '0 0 0 2px var(--color-ping-blue)' : undefined }}
+              aria-pressed={elem.status === 20}>
+              <StatusBadge status={20} />
+            </button>
+            <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
+              className="w-12 shrink-0 rounded-xl border border-black/10 bg-ping-bg text-[15px] font-semibold text-ping-text-mid"
+              aria-expanded={showWeitereStatus} title="Weitere Status">···</button>
+          </div>
+          {/* weitere Status — ausklappbar */}
+          {showWeitereStatus && (
+            <div className="mt-2.5 border-t border-black/5 pt-2.5">
+              <div className="flex flex-wrap gap-1.5">
+                {HAUPT_STATUS.map(s => statusPickerBtn(s))}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {WEITERE_STATUS.map(s => statusPickerBtn(s))}
+              </div>
+            </div>
+          )}
+        </Card>
+
         {/* Positionstext */}
-        <div className="bg-white rounded-lg p-2.5 border-2 border-gray-300">
-          <label className="text-xs text-gray-700 font-semibold">Positionstext</label>
+        <Card className="p-3">
+          <SectionLabel>Positionstext</SectionLabel>
           {istNeu ? (
             <textarea value={elem.positionstext} onChange={(e) => update({ positionstext: e.target.value })}
               onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
               ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
-              className="w-full px-2 py-1 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none mt-0.5 min-h-[9rem] max-h-[50vh] overflow-auto" />
+              className="max-h-[50vh] min-h-[9rem] w-full resize-none overflow-auto rounded-xl border border-black/10 bg-white px-3 py-2 text-[14px] leading-relaxed outline-none focus:border-ping-blue" />
           ) : (
-            <p className="text-sm text-gray-700 mt-0.5">{elem.positionstext || '—'}</p>
+            <p className="text-[14px] leading-relaxed text-ping-text">{elem.positionstext || '—'}</p>
           )}
-        </div>
+        </Card>
 
-        {/* Termin + Verantwortlich + Thema — eine Zeile */}
+        {/* Termin · Verantwortlich · Thema */}
         <div className="flex gap-2">
-          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Termin</label>
+          <Card className="min-w-0 flex-1 p-2.5">
+            <SectionLabel><span className="inline-flex items-center gap-1"><IconCalendar size={12} /> Termin</span></SectionLabel>
             {istNeu ? (
               <input type="date" value={elem.termin ? elem.termin.slice(0, 10) : ''}
                 onChange={(e) => update({ termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
-                className="w-full px-2 py-1.5 border border-gray-200 rounded text-sm focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
             ) : (
-              <p className={`text-xs ${terminUeberfaellig ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>{elem.termin ? new Date(elem.termin).toLocaleDateString('de-DE') : '—'}</p>
+              <p className="text-[12.5px] font-semibold text-ping-text" style={terminUeberfaellig ? { color: 'var(--color-ping-danger)' } : undefined}>{elem.termin ? new Date(elem.termin).toLocaleDateString('de-DE') : '—'}</p>
             )}
-          </div>
-          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Verantwortlich</label>
+          </Card>
+          <Card className="min-w-0 flex-1 p-2.5">
+            <SectionLabel><span className="inline-flex items-center gap-1"><IconUser size={12} /> Verantw.</span></SectionLabel>
             {istNeu ? (
               <select value={elem.verantwortlicher_id || ''}
                 onChange={(e) => {
@@ -333,195 +379,138 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
                   const t = alleFirmen.find(t => t.oid === v);
                   update({ verantwortlicher_id: t?.oid || null, verantwortlicher_name: t?.name || '' });
                 }}
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                className="w-full rounded-lg border border-black/10 bg-white px-1.5 py-1.5 text-[12px] outline-none focus:border-ping-blue">
                 <option value=""></option>
                 {alleFirmen.map(t => (
                   <option key={t.oid} value={t.oid}>{t.kuerzel ? `${t.kuerzel} — ${t.name}` : t.name}</option>
                 ))}
               </select>
             ) : (
-              <p className="text-xs text-gray-700">{(() => { const f = alleFirmen.find(t => t.oid === (elem.verantwortlicher_id || '')); return f ? (f.kuerzel ? `${f.kuerzel} — ${f.name}` : f.name) : (elem.verantwortlicher_name || '—'); })()}</p>
+              <p className="text-[12.5px] text-ping-text">{(() => { const f = alleFirmen.find(t => t.oid === (elem.verantwortlicher_id || '')); return f ? (f.kuerzel ? `${f.kuerzel} — ${f.name}` : f.name) : (elem.verantwortlicher_name || '—'); })()}</p>
             )}
-          </div>
-          <div className="flex-1 bg-white rounded-lg p-2.5 border-2 border-gray-300">
-            <label className="text-xs text-gray-700 font-semibold block mb-0.5">Thema</label>
+          </Card>
+          <Card className="min-w-0 flex-1 p-2.5">
+            <SectionLabel>Thema</SectionLabel>
             {istNeu ? (
               <div className="flex gap-1">
                 <select value={elem.thema}
                   onChange={(e) => update({ thema: e.target.value })}
-                  className="flex-1 min-w-0 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue">
+                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-1.5 py-1.5 text-[12px] outline-none focus:border-ping-blue">
                   {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
                   {elem.thema && !themenVorschlaege.includes(elem.thema) && <option value={elem.thema}>{elem.thema}</option>}
                 </select>
                 <button onClick={() => { const val = prompt('Neues Thema eingeben:', elem.thema); if (val != null) update({ thema: val }); }}
-                  className="px-1.5 bg-ping-blue text-white rounded text-xs font-bold shrink-0" title="Neues Thema">+</button>
+                  className="flex shrink-0 items-center justify-center rounded-lg bg-ping-blue px-2 text-white" title="Neues Thema" aria-label="Neues Thema">
+                  <IconPlus size={14} />
+                </button>
               </div>
             ) : (
-              <p className="text-xs text-gray-700">{elem.thema || '—'}</p>
+              <p className="text-[12.5px] text-ping-text">{elem.thema || '—'}</p>
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Status + Titel — eine Zeile */}
+        {/* Position + Titel */}
         <div className="flex gap-2">
-          <div className="flex-[2] bg-white rounded-lg px-2.5 py-2 border border-gray-200">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 shrink-0">Status</span>
-              {st && <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${st.css}`}>{st.label}</span>}
-              <div className="flex gap-1 ml-auto">
-                <button onClick={() => updateStatus(10)}
-                  className={`px-3 py-1.5 rounded text-xs font-medium transition ${
-                    elem.status === 10 ? 'bg-yellow-200 text-yellow-800 ring-2 ring-ping-blue' : 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
-                  }`}>Offen</button>
-                <button onClick={() => updateStatus(20)}
-                  className={`px-3 py-1.5 rounded text-xs font-medium transition ${
-                    elem.status === 20 ? 'bg-green-200 text-green-800 ring-2 ring-ping-blue' : 'bg-green-50 text-green-700 hover:bg-green-100'
-                  }`}>Erledigt</button>
-                <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
-                  className="bg-gray-100 text-gray-500 px-2 py-1.5 rounded text-xs border border-gray-300">···</button>
-              </div>
-            </div>
-          </div>
-          <div className="flex-[2] bg-white rounded-lg px-2.5 py-2 border border-gray-200 flex items-center gap-2">
-            <span className="text-xs text-gray-500 shrink-0">Titel</span>
-            {istNeu ? (
-              <input type="text" value={elem.positionstitel} onChange={(e) => update({ positionstitel: e.target.value })}
-                placeholder="optional"
-                className="flex-1 min-w-0 px-2 py-0.5 text-xs focus:outline-none" />
-            ) : (
-              <span className="text-xs text-gray-700 truncate">{elem.positionstitel || '—'}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Status picker — expandable */}
-        {showWeitereStatus && (
-          <div className="bg-white rounded-lg p-2.5 border border-gray-200">
-            <div className="flex gap-1 flex-wrap">
-              {HAUPT_STATUS.map(s => (
-                <button key={s} onClick={() => updateStatus(s)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                    elem.status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-                  }`}>
-                  {STATUS_MAP[s].label}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-1 flex-wrap mt-1.5 pt-1.5 border-t border-gray-100">
-              {WEITERE_STATUS.map(s => STATUS_MAP[s] && (
-                <button key={s} onClick={() => updateStatus(s)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-medium transition ${
-                    elem.status === s ? STATUS_MAP[s].css + ' ring-2 ring-ping-blue' : 'bg-gray-50 text-gray-500'
-                  }`}>
-                  {STATUS_MAP[s].label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Position + Bemerkung — eine Zeile, keine Labels */}
-        <div className="flex gap-2">
-          <div className="flex-1 bg-white rounded-lg p-2.5 border border-gray-200">
+          <Card className="w-28 shrink-0 p-2.5">
+            <SectionLabel>Position</SectionLabel>
             {istNeu ? (
               <input type="text" value={elem.position} onChange={(e) => update({ position: e.target.value })}
                 placeholder="Position"
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ping-blue" />
+                className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 font-mono text-[13px] outline-none focus:border-ping-blue" />
             ) : (
-              <p className="text-xs text-gray-700 font-mono">{elem.position}</p>
+              <p className="font-mono text-[13px] text-ping-text">{elem.position}</p>
             )}
-          </div>
-          <div className="flex-[2] bg-white rounded-lg p-2.5 border border-gray-200">
+          </Card>
+          <Card className="min-w-0 flex-1 p-2.5">
+            <SectionLabel>Titel</SectionLabel>
             {istNeu ? (
-              <textarea value={elem.bemerkung} onChange={(e) => update({ bemerkung: e.target.value })} rows={1}
-                placeholder="Optionale Bemerkung (intern)"
-                className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-ping-blue resize-none" />
+              <input type="text" value={elem.positionstitel} onChange={(e) => update({ positionstitel: e.target.value })}
+                placeholder="optional"
+                className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
             ) : (
-              <p className="text-xs text-gray-700">{elem.bemerkung || '—'}</p>
+              <p className="truncate text-[13px] text-ping-text">{elem.positionstitel || '—'}</p>
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Standort + Fotos — kombinierte Karte */}
-        <div className="bg-white rounded-lg p-2.5 border border-gray-200">
+        {/* Bemerkung */}
+        <Card className="p-2.5">
+          <SectionLabel>Bemerkung (intern)</SectionLabel>
+          {istNeu ? (
+            <textarea value={elem.bemerkung} onChange={(e) => update({ bemerkung: e.target.value })} rows={2}
+              placeholder="Optionale Bemerkung (intern)"
+              className="w-full resize-none rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
+          ) : (
+            <p className="text-[13px] text-ping-text">{elem.bemerkung || '—'}</p>
+          )}
+        </Card>
+
+        {/* Standort + Fotos */}
+        <Card className="p-3">
           <div className="flex gap-4">
             {/* Standort */}
             <div className="flex-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Standort</span>
-              <div className="flex gap-1 mt-1">
-                <button onClick={gpsErfassen} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">GPS</button>
-                <button onClick={() => setKarteOffen(true)} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">Karte</button>
+              <SectionLabel><span className="inline-flex items-center gap-1"><IconMapPin size={12} /> Standort</span></SectionLabel>
+              <div className="flex flex-wrap gap-1.5">
+                <button onClick={gpsErfassen} className="rounded-lg bg-ping-blue px-3 py-2 text-[12px] font-semibold text-white">GPS</button>
+                <button onClick={() => setKarteOffen(true)} className="rounded-lg bg-ping-blue-light px-3 py-2 text-[12px] font-semibold text-ping-blue">Karte</button>
                 {elem.mobile_erfassung.geo_lat != null && (
                   <button onClick={() => updateMobile({ geo_lat: null, geo_lon: null, geo_accuracy: null, geo_heading: null, geo_text: null })}
-                    className="bg-gray-100 text-gray-500 border border-gray-300 px-2 py-1 rounded text-[10px] font-medium">x</button>
+                    className="inline-flex items-center rounded-lg border border-black/10 bg-ping-bg px-2 py-2 text-ping-text-mid" aria-label="Standort löschen"><IconX size={14} /></button>
                 )}
               </div>
             </div>
             {/* Fotos */}
             <div className="flex-1">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-semibold">Fotos</span>
-              <div className="flex gap-1 mt-1 items-center">
+              <SectionLabel><span className="inline-flex items-center gap-1"><IconCamera size={12} /> Fotos</span></SectionLabel>
+              <div className="flex flex-wrap items-center gap-1.5">
                 {istNeu && (
                   <>
-                    <button onClick={() => fotoRef.current?.click()} className="bg-ping-blue text-white px-2 py-1 rounded text-[10px] font-medium">
-                      Kamera
+                    <button onClick={() => fotoRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg bg-ping-blue px-3 py-2 text-[12px] font-semibold text-white">
+                      <IconCamera size={14} /> Kamera
                     </button>
-                    <button onClick={() => galerieRef.current?.click()} className="bg-gray-100 text-gray-700 border border-gray-300 px-2 py-1 rounded text-[10px] font-medium">
-                      MEDIA
+                    <button onClick={() => galerieRef.current?.click()} className="rounded-lg bg-ping-blue-light px-3 py-2 text-[12px] font-semibold text-ping-blue">
+                      Galerie
                     </button>
                     <input ref={fotoRef} type="file" accept="image/*" capture="environment" onChange={fotoHinzufuegen} className="hidden" />
                     <input ref={galerieRef} type="file" accept="image/*" multiple onChange={fotoHinzufuegen} className="hidden" />
                   </>
                 )}
                 {fotos.length > 0 && (
-                  <span className="bg-amber-100 text-amber-800 text-[10px] font-semibold px-1.5 py-0.5 rounded">{fotos.length}</span>
+                  <span className="rounded-full bg-ping-gold-light px-2 py-0.5 text-[11px] font-semibold text-ping-gold-dark">{fotos.length}</span>
                 )}
               </div>
             </div>
           </div>
-          {/* GPS coordinates */}
+          {/* GPS-Koordinaten */}
           {elem.mobile_erfassung.geo_lat != null
-            ? <p className="text-[10px] text-gray-600 mt-1.5">
+            ? <p className="mt-2 text-[11px] text-ping-text-mid">
                 {formatCoord(elem.mobile_erfassung.geo_lat, elem.mobile_erfassung.geo_lon!, elem.mobile_erfassung.geo_accuracy, elem.mobile_erfassung.geo_heading)}
               </p>
-            : <p className="text-[10px] text-gray-400 mt-1.5">Kein Standort</p>}
-          {/* Foto thumbnails */}
+            : <p className="mt-2 text-[11px] text-ping-text-light">Kein Standort</p>}
+          {/* Foto-Thumbnails */}
           {fotos.length > 0 && (
-            <div className="flex gap-1 flex-wrap mt-1.5">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {fotos.map(f => (
-                <div key={f.fotoId} className="relative w-10 h-10">
-                  <img src={f.url} alt="" className="w-full h-full object-cover rounded" />
+                <div key={f.fotoId} className="relative h-12 w-12">
+                  <img src={f.url} alt="" className="h-full w-full rounded-lg object-cover" />
                   {istNeu && (
                     <button onClick={() => fotoLoeschen(f.fotoId)}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center">x</button>
+                      className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-white"
+                      style={{ background: 'var(--color-ping-danger)' }} aria-label="Foto löschen"><IconX size={10} /></button>
                   )}
                 </div>
               ))}
             </div>
           )}
-        </div>
-        {karteOffen && (
-          <MapEditorModal
-            lat={elem.mobile_erfassung.geo_lat}
-            lon={elem.mobile_erfassung.geo_lon}
-            heading={elem.mobile_erfassung.geo_heading ?? null}
-            onSave={(lat, lon, heading) => {
-              const acc = elem.mobile_erfassung.geo_accuracy;
-              updateMobile({
-                geo_lat: lat, geo_lon: lon, geo_heading: heading,
-                geo_text: formatCoord(lat, lon, acc, heading),
-              });
-              setKarteOffen(false);
-            }}
-            onCancel={() => setKarteOffen(false)}
-          />
-        )}
+        </Card>
 
         {/* Bautagebuch bearbeiten */}
         {istBautagebuch && (
           <button
             onClick={() => setShowBtWizard(true)}
-            className="w-full py-2.5 rounded-lg font-medium text-sm bg-amber-600 text-white hover:bg-amber-700 transition"
+            className="w-full rounded-xl bg-ping-gold px-4 py-[13px] text-[15px] font-semibold text-white transition hover:bg-ping-gold-dark"
           >
             Bautagebuch bearbeiten
           </button>
@@ -529,13 +518,10 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
 
         {/* Verschieben in anderes Protokoll (nur neue Elemente) */}
         {istNeu && verschiebungsziele.length > 0 && (
-          <div className="bg-white rounded-lg p-2.5 border border-gray-100">
-            <button
-              onClick={() => setShowProtokollWahl(!showProtokollWahl)}
-              className="w-full py-2.5 rounded-lg font-medium text-sm bg-indigo-600 text-white hover:bg-indigo-700 transition"
-            >
+          <Card className="p-2.5">
+            <SecondaryButton block onClick={() => setShowProtokollWahl(!showProtokollWahl)}>
               In anderes Protokoll verschieben
-            </button>
+            </SecondaryButton>
             {showProtokollWahl && (
               <div className="mt-2 space-y-1">
                 {verschiebungsziele.map(p => (
@@ -546,53 +532,86 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
                       await updateElement(updated);
                       onBack();
                     }}
-                    className="w-full text-left px-3 py-2 rounded bg-gray-50 hover:bg-indigo-50 text-xs border border-gray-200"
+                    className="w-full rounded-lg border border-black/10 bg-ping-bg px-3 py-2 text-left text-[13px] transition hover:bg-ping-blue-light"
                   >
                     {p.name} {p.nummer < 0 ? '(Anhang)' : p.is_new ? '(Entwurf)' : `Nr. ${p.nummer}`}
                   </button>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
         )}
 
-        {/* Loeschen (nur neue Elemente) */}
+        {/* Löschen (nur neue Elemente) */}
         {istNeu && (
-          <button
+          <DangerButton
+            block
             onClick={async () => {
-              if (!confirm('Diesen Punkt wirklich loeschen?')) return;
+              if (!confirm('Diesen Punkt wirklich löschen?')) return;
               await deleteElement(elem.id);
               onBack();
             }}
-            className="w-full py-2.5 rounded-lg font-medium text-sm bg-red-600 text-white hover:bg-red-700 transition"
           >
-            Punkt loeschen
-          </button>
+            <IconTrash size={16} /> Punkt löschen
+          </DangerButton>
         )}
 
         {/* Nachfolger + Klonen */}
         {!istNeu && !istBautagebuch && (
           <div className="flex gap-2">
-            <button onClick={() => onNachfolger(elem)}
-              className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-ping-gold text-white hover:bg-ping-gold-dark transition">
-              Nachfolger
-            </button>
+            <PrimaryButton className="flex-1" onClick={() => onNachfolger(elem)}>
+              <IconPlus size={16} /> Nachfolger
+            </PrimaryButton>
             {onClone && (
-              <button onClick={() => onClone({
+              <SecondaryButton className="flex-1" onClick={() => onClone({
                 thema: elem.thema, status: elem.status,
                 termin: elem.termin ? elem.termin.slice(0, 10) : '',
                 verantwOid: elem.verantwortlicher_id || '',
                 geoLat: elem.mobile_erfassung.geo_lat, geoLon: elem.mobile_erfassung.geo_lon,
                 geoAcc: elem.mobile_erfassung.geo_accuracy, geoHeading: elem.mobile_erfassung.geo_heading,
                 geoText: elem.mobile_erfassung.geo_text || '',
-              })}
-                className="flex-1 py-2.5 rounded-lg font-medium text-sm bg-amber-600 text-white hover:bg-amber-700 transition">
+              })}>
                 Klonen
-              </button>
+              </SecondaryButton>
             )}
           </div>
         )}
       </div>
+
+      {/* Schwebende Aktionsleiste — nur bei Änderungen (dirty) */}
+      {dirty && (
+        <div
+          className={`${embedded ? 'absolute' : 'fixed'} inset-x-0 bottom-0 z-30 border-t border-black/5 bg-white/85 px-3 py-3 backdrop-blur`}
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
+          <div className="mx-auto flex max-w-[640px] items-center gap-2">
+            <SecondaryButton className="flex-1" onClick={() => { setElem({ ...element }); setDirty(false); setGespeichert(false); }}>
+              Rückgängig
+            </SecondaryButton>
+            <PrimaryButton className="flex-[1.4]" onClick={speichern}>
+              Speichern
+            </PrimaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* Karten-Editor */}
+      {karteOffen && (
+        <MapEditorModal
+          lat={elem.mobile_erfassung.geo_lat}
+          lon={elem.mobile_erfassung.geo_lon}
+          heading={elem.mobile_erfassung.geo_heading ?? null}
+          onSave={(lat, lon, heading) => {
+            const acc = elem.mobile_erfassung.geo_accuracy;
+            updateMobile({
+              geo_lat: lat, geo_lon: lon, geo_heading: heading,
+              geo_text: formatCoord(lat, lon, acc, heading),
+            });
+            setKarteOffen(false);
+          }}
+          onCancel={() => setKarteOffen(false)}
+        />
+      )}
 
       {/* Bautagebuch Wizard Modal */}
       {showBtWizard && (
