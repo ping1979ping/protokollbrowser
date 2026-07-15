@@ -21,6 +21,10 @@ const UPLOAD_TIMEOUT_MS = 30000;
 // PWA bleiben logisch dieselben, werden aber unter diesem Namespace bedient.
 const SYNC = '/api/protokoll-sync';
 
+// Hub-REST-Basis fuer die user-scoped Abo-/Gruppen-Endpunkte (Plan 06.1-02).
+// Diese liegen NEBEN dem Sync-Namespace direkt unter /api (nicht unter SYNC).
+const API = '/api';
+
 // Server-URL aus localStorage
 const STORAGE_KEY = 'sync-server-url';
 
@@ -194,7 +198,11 @@ export async function uploadZip(gruppeId: string, zipBlob: Blob, filename: strin
   });
 }
 
-/** Abonnierte Projekte vom Server laden */
+/**
+ * Abonnierte Projekte (Geraete-Sync-Scope) vom Server laden. `projects` wird
+ * serverseitig aus den User-Abos abgeleitet (Hub-Phase 06.1, Plan 02) — der
+ * Response-Shape `data.projects` (legacy_id-Liste) bleibt byte-identisch.
+ */
 export async function getSubscriptions(): Promise<string[]> {
   try {
     const resp = await fetchApi(`${SYNC}/subscriptions/${getDeviceId()}`);
@@ -215,6 +223,77 @@ export async function saveSubscriptions(projectIds: string[]): Promise<void> {
       deviceName: getDeviceName(),
       projects: projectIds,
     }),
+  });
+}
+
+// ===================================================================
+// User-scoped Protokoll-Abos (Plan 06.1-06, Hub-JWT).
+// „Meine Protokolle" ist jetzt user-basiert und geraeteuebergreifend identisch
+// mit dem Hub-Desktop. Die Abo-Endpunkte adressieren die Hub-UUID der
+// Protokollgruppe (Protokollgruppe.id) — NICHT die lokale PWA-gruppe.id. Die
+// Aufloesung local -> legacy_id -> Hub-UUID uebernimmt der aboStore;
+// listHubGruppen() liefert dafuer die Zuordnung id <-> legacy_id.
+// ===================================================================
+
+/** Hub-Protokollgruppe (Zuordnungsquelle): id = Hub-UUID, legacy_id = DF-OID. */
+export interface HubGruppe {
+  id: string;
+  legacy_id: string;
+  name?: string;
+  projekt_nummer?: string;
+  projekt_name?: string;
+}
+
+/**
+ * Katalog aller Hub-Protokollgruppen (durchpaginiert). Liefert id (Hub-UUID)
+ * UND legacy_id — die Bruecke von der lokalen PWA-Gruppe (kennt nur legacy_id)
+ * auf die Hub-UUID, die die Abo-Endpunkte erwarten.
+ */
+export async function listHubGruppen(): Promise<HubGruppe[]> {
+  const alle: HubGruppe[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const resp = await fetchApi(`${API}/protokollgruppen?page=${page}&size=100`);
+    const body = await resp.json();
+    const items: HubGruppe[] = Array.isArray(body?.data) ? body.data : [];
+    alle.push(...items);
+    const total: number = body?.meta?.total ?? alle.length;
+    if (items.length === 0 || alle.length >= total) break;
+  }
+  return alle;
+}
+
+/** Ein User-Abo (Hub-Envelope entpackt): gruppe_id = Hub-UUID. */
+export interface UserAbo {
+  gruppe_id: string;
+  sort_order: number;
+  name?: string;
+  projekt_name?: string | null;
+  projekt_nummer?: string | null;
+}
+
+/** Abos des eingeloggten MA (bereits serverseitig nach sort_order sortiert). */
+export async function listUserAbos(): Promise<UserAbo[]> {
+  const resp = await fetchApi(`${API}/protokoll-abos`);
+  const body = await resp.json();
+  return Array.isArray(body?.data) ? body.data : [];
+}
+
+/** Gruppe abonnieren (idempotent). gruppeId = Hub-UUID. */
+export async function addUserAbo(gruppeId: string): Promise<void> {
+  await fetchApi(`${API}/protokoll-abos/${encodeURIComponent(gruppeId)}`, { method: 'PUT' });
+}
+
+/** Abo entfernen (nur die eigene Zeile). gruppeId = Hub-UUID. */
+export async function removeUserAbo(gruppeId: string): Promise<void> {
+  await fetchApi(`${API}/protokoll-abos/${encodeURIComponent(gruppeId)}`, { method: 'DELETE' });
+}
+
+/** Reihenfolge der eigenen Abos setzen (fremde/unbekannte IDs ignoriert der Server). */
+export async function reorderUserAbos(gruppeIds: string[]): Promise<void> {
+  await fetchApi(`${API}/protokoll-abos/reihenfolge`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ gruppe_ids: gruppeIds }),
   });
 }
 
