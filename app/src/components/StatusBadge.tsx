@@ -11,6 +11,8 @@ const STATUS_STYLE: Record<number, { bg: string; fg: string }> = {
   20: { bg: '#EAFAF0', fg: '#16803C' }, // Erledigt (gruen)
   21: { bg: '#EEF0F3', fg: '#5B6472' }, // Uebertragen (grau)
   25: { bg: '#EAFAF0', fg: '#16803C' }, // Mangel - beseitigt (gruen)
+  16: { bg: '#FEF3C7', fg: '#92400E' }, // Restarbeit (R) (amber, analog Desktop)
+  26: { bg: '#EAFAF0', fg: '#16803C' }, // erledigt (R) (gruen wie 20/25)
 };
 
 const FALLBACK = { bg: '#EEF0F3', fg: '#5B6472' };

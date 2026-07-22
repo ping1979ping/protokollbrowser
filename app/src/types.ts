@@ -109,6 +109,8 @@ export const STATUS_MAP: Record<number, { label: string; farbe: string; css: str
   11: { label: 'Mangel - offen',    farbe: 'rot', css: 'bg-red-200 text-red-800' },
   25: { label: 'Mangel - beseitigt',farbe: 'gruen', css: 'bg-green-200 text-green-800' },
   17: { label: 'Erledigt (Info)',   farbe: 'grau', css: 'bg-gray-200 text-gray-700' },
+  16: { label: 'Restarbeit (R)',    farbe: 'gelb', css: 'bg-amber-100 text-amber-800' },
+  26: { label: 'erledigt (R)',      farbe: 'gruen', css: 'bg-green-200 text-green-800' },
 };
 
 // --- Hub API Response Types ---

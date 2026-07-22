@@ -24,7 +24,7 @@ interface Props {
 }
 
 const HAUPT_STATUS = [0, 10, 20];
-const WEITERE_STATUS = [19, 11, 25, 17, 21];
+const WEITERE_STATUS = [19, 11, 25, 17, 21, 16, 26];
 
 /**
  * Erkennt das Positions-Nummernschema im Bautagebuch-Protokoll und setzt fort.
