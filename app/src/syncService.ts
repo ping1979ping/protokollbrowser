@@ -13,6 +13,7 @@ import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { parseAdressenJson } from './adressenimport';
 import { getDeviceId, getDeviceName, getUserName } from './deviceIdentity';
 import { getAccessToken, refresh, logout } from './authService';
+import { waehleLegacyId } from './gruppenLegacyId';
 
 const TIMEOUT_MS = 5000;
 const UPLOAD_TIMEOUT_MS = 30000;
@@ -133,16 +134,17 @@ export async function resolveGruppenLegacyId(projectId: string): Promise<string>
   } catch {
     treffer = undefined;
   }
-  if (treffer && treffer.legacy_id) return treffer.legacy_id;
-  try {
-    const alle = await getAllGruppen();
-    const fallback = alle.find((g) => g.id === projectId);
-    if (fallback && fallback.legacy_id) return fallback.legacy_id;
-  } catch {
-    /* Katalog nicht ladbar -> Passthrough versuchen */
+  // Voll-Scan nur, wenn der PK-Lookup keine legacy_id lieferte.
+  let alle: Awaited<ReturnType<typeof getAllGruppen>> = [];
+  if (!treffer || !treffer.legacy_id) {
+    try {
+      alle = await getAllGruppen();
+    } catch {
+      alle = [];
+    }
   }
-  // projectId ist bereits eine legacy_id (ServerImport) -> unveraendert.
-  return projectId;
+  // Reine Entscheidungskette (06.3-Review IN-04, testbar ohne IndexedDB).
+  return waehleLegacyId(projectId, treffer ?? null, alle);
 }
 
 /** Projekt vom Server herunterladen und in IndexedDB importieren */
