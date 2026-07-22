@@ -25,9 +25,11 @@ export default function SyncIndicator({ sync }: Props) {
         </span>
       )}
 
-      {/* Letzte Sync-Zeit */}
-      {timeStr && (
-        <span className="text-white/60">{timeStr}</span>
+      {/* Letzte Sync-Zeit — bei Fehler stattdessen 'Sync fehlgeschlagen' (m4x) */}
+      {sync.syncError ? (
+        <span className="text-red-300" title={sync.syncError}>Sync fehlgeschlagen</span>
+      ) : (
+        timeStr && <span className="text-white/60">{timeStr}</span>
       )}
 
       {/* Sync-Button */}

@@ -7,7 +7,7 @@
  * abgefangen; bleibt es beim 401 -> sauberer Logout (T-06-06-02).
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, getAllGruppen, getProtokollgruppe, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner } from './db';
 import { parseDfJson } from './dfimport';
 import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { parseAdressenJson } from './adressenimport';
@@ -119,9 +119,36 @@ export async function listRemoteProjects(): Promise<{
   return list;
 }
 
+/**
+ * Lokale PWA-Gruppen-UUID -> Hub-legacy_id (DF-OID) fuer die Export-/Sync-Pfade.
+ * Der Hub loest {id} in /projects/{id}/export ueber Protokollgruppe.legacy_id auf
+ * (quick-260720-m4x): eine geraetelokale UUID ergaebe sonst 404. PK-Lookup zuerst,
+ * dann Voll-Scan als Fallback; ist der Wert bereits eine legacy_id (ServerImport-
+ * Pfad), bleibt er unveraendert (Passthrough).
+ */
+export async function resolveGruppenLegacyId(projectId: string): Promise<string> {
+  let treffer;
+  try {
+    treffer = await getProtokollgruppe(projectId);
+  } catch {
+    treffer = undefined;
+  }
+  if (treffer && treffer.legacy_id) return treffer.legacy_id;
+  try {
+    const alle = await getAllGruppen();
+    const fallback = alle.find((g) => g.id === projectId);
+    if (fallback && fallback.legacy_id) return fallback.legacy_id;
+  } catch {
+    /* Katalog nicht ladbar -> Passthrough versuchen */
+  }
+  // projectId ist bereits eine legacy_id (ServerImport) -> unveraendert.
+  return projectId;
+}
+
 /** Projekt vom Server herunterladen und in IndexedDB importieren */
 export async function downloadProject(projectId: string): Promise<void> {
-  const resp = await fetchApi(`${SYNC}/projects/${projectId}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
+  const legacyId = await resolveGruppenLegacyId(projectId);
+  const resp = await fetchApi(`${SYNC}/projects/${encodeURIComponent(legacyId)}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
   const { pakete, verantwortliche } = parseDfJson(raw);
   if (pakete.length === 0) throw new Error('Keine Protokolle in den Server-Daten');
@@ -299,13 +326,10 @@ export async function reorderUserAbos(gruppeIds: string[]): Promise<void> {
 
 /** Sync: Nur Download vom Server (Upload nur über manuellen ZIP-Export) */
 export async function syncProject(gruppeId: string): Promise<{ downloaded: boolean }> {
-  let downloaded = false;
-  try {
-    await downloadProject(gruppeId);
-    downloaded = true;
-  } catch {
-    // Export möglicherweise nicht vorhanden
-  }
+  // quick-260720-m4x: Fehler NICHT mehr schlucken. Der Aufrufer (useSyncStatus)
+  // braucht ihn, um syncError zu setzen und lastSync NICHT faelschlich zu
+  // aktualisieren. downloadProject setzt bei Erfolg bereits die Sync-Meta.
+  await downloadProject(gruppeId);
 
   await setSyncMeta({
     gruppeId,
@@ -314,7 +338,7 @@ export async function syncProject(gruppeId: string): Promise<{ downloaded: boole
     autoSync: true,
   });
 
-  return { downloaded };
+  return { downloaded: true };
 }
 
 /** Projekt-Katalog vom Server laden, filtern und in IndexedDB importieren */

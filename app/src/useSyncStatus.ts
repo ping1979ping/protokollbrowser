@@ -8,6 +8,7 @@ export interface SyncStatus {
   isOnline: boolean;
   serverReachable: boolean;
   lastSync: string | null;
+  syncError: string | null;
   pendingCount: number;
   isSyncing: boolean;
   syncNow: () => Promise<void>;
@@ -17,6 +18,7 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [serverReachable, setServerReachable] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const wasReachable = useRef(false);
@@ -31,6 +33,7 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
   const doSync = useCallback(async () => {
     if (isSyncing || !getServerUrl()) return;
     setIsSyncing(true);
+    setSyncError(null);
     try {
       await syncProject(gruppeId);
       const now = new Date().toISOString();
@@ -38,7 +41,11 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
       await setSyncMeta({ gruppeId, serverUrl: getServerUrl(), lastSync: now, autoSync: true });
       await refreshPending();
     } catch (err) {
+      // quick-260720-m4x: Fehler sichtbar machen — KEIN lastSync (kein falsches
+      // 'gerade eben'). Pending neu einlesen, damit es korrekt pending bleibt.
       console.warn('[Sync] Fehler:', err);
+      setSyncError(err instanceof Error ? err.message : 'Sync fehlgeschlagen');
+      await refreshPending();
     } finally {
       setIsSyncing(false);
     }
@@ -102,6 +109,7 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
     isOnline,
     serverReachable,
     lastSync,
+    syncError,
     pendingCount,
     isSyncing,
     syncNow: doSync,
