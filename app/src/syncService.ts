@@ -291,6 +291,25 @@ export async function listHubGruppen(): Promise<HubGruppe[]> {
   return alle;
 }
 
+/**
+ * Neue Protokollgruppe im Hub anlegen (SC-3: EIN Anlage-Endpoint fuer Desktop
+ * UND PWA — POST /api/protokollgruppen). `fetchApi` kapselt Bearer-Token +
+ * 401-Refresh+Retry; NIE roher fetch. Es gehen ausschliesslich
+ * name/projekt_nummer/vorwort an den Server — `quelle`/`vorlageId` der PWA-Sheet
+ * haben KEIN Backend-Gegenstueck (D-02-Andockpunkt) und werden bewusst NICHT
+ * durchgereicht (RULE-2/Param-Drift-Schutz). `projekt_nummer` erzwingt den
+ * Projekt-Bezug — eine Gruppe ohne Projekt waere verwaist (Anti-Pattern).
+ */
+export async function createGruppe(payload: { name: string; projekt_nummer: string; vorwort?: string }): Promise<HubGruppe> {
+  const resp = await fetchApi(`${API}/protokollgruppen`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const body = await resp.json();
+  return body.data; // Hub-Envelope { data, meta, errors } entpacken
+}
+
 /** Ein User-Abo (Hub-Envelope entpackt): gruppe_id = Hub-UUID. */
 export interface UserAbo {
   gruppe_id: string;

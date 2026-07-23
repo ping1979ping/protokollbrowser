@@ -18,8 +18,16 @@ export interface NeueGruppeData {
 interface NeueGruppeSheetProps {
   open: boolean;
   onClose: () => void;
-  /** Orchestrator übernimmt das eigentliche Anlegen. */
-  onCreate: (data: NeueGruppeData) => void;
+  /**
+   * Aktueller Projekt-Scope (projekt_nummer). Fehlt er, ist die Anlage blockiert
+   * (keine verwaiste Gruppe) — das Sheet zeigt dann den „Kein Projekt"-Hinweis.
+   */
+  projektNummer?: string | null;
+  /**
+   * Orchestrator legt die Gruppe an (POST /api/protokollgruppen, SC-3). Wirft die
+   * Zusage bei Fehler, bleibt das Sheet offen und zeigt die Inline-Fehlerzeile.
+   */
+  onCreate: (data: NeueGruppeData) => void | Promise<void>;
 }
 
 /* ---------- Konstanten ---------- */
@@ -83,12 +91,15 @@ function SourceTile({
 
 /* ---------- Sheet ---------- */
 
-export default function NeueGruppeSheet({ open, onClose, onCreate }: NeueGruppeSheetProps) {
+export default function NeueGruppeSheet({ open, onClose, projektNummer, onCreate }: NeueGruppeSheetProps) {
   const [step, setStep] = useState<Step>('quelle');
   const [quelle, setQuelle] = useState<Quelle | null>(null);
   const [name, setName] = useState('');
   const [vorwort, setVorwort] = useState('');
   const [vorlageId, setVorlageId] = useState(VORLAGEN[0].id);
+  const [busy, setBusy] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [nameTouched, setNameTouched] = useState(false);
 
   // Beim Schließen (Backdrop, Esc oder Anlegen) den lokalen State zurücksetzen.
   useEffect(() => {
@@ -98,6 +109,9 @@ export default function NeueGruppeSheet({ open, onClose, onCreate }: NeueGruppeS
     setName('');
     setVorwort('');
     setVorlageId(VORLAGEN[0].id);
+    setBusy(false);
+    setFehler(null);
+    setNameTouched(false);
   }, [open]);
 
   const pick = (q: Quelle) => {
@@ -105,27 +119,50 @@ export default function NeueGruppeSheet({ open, onClose, onCreate }: NeueGruppeS
     setStep('form');
   };
 
-  const canCreate = name.trim().length > 0;
+  // Projekt-Bezug ist Pflicht (sonst verwaist die Gruppe); Name ist Pflichtfeld.
+  const hatProjekt = !!(projektNummer && projektNummer.trim().length > 0);
+  const nameLeer = name.trim().length === 0;
+  const canCreate = !nameLeer && hatProjekt && !busy;
 
-  const handleCreate = () => {
-    if (!quelle || !canCreate) return;
+  const handleCreate = async () => {
+    if (!quelle || busy) return;
+    setNameTouched(true);
+    if (nameLeer || !hatProjekt) return;
+    setFehler(null);
+    setBusy(true);
     const data: NeueGruppeData = { name: name.trim(), quelle };
     if (quelle === 'vorlage') data.vorlageId = vorlageId;
     const vw = vorwort.trim();
     if (vw) data.vorwort = vw;
-    onCreate(data);
-    onClose();
+    try {
+      // Erfolg: Sheet schließt (State-Reset via useEffect open=false),
+      // Toast + Listen-Refresh übernimmt der Orchestrator.
+      await onCreate(data);
+      onClose();
+    } catch {
+      // Fehler (Netz/500): Sheet bleibt offen, Inline-Fehlerzeile.
+      setFehler('Gruppe konnte nicht angelegt werden. Bitte versuchen Sie es erneut.');
+      setBusy(false);
+    }
   };
 
-  // Footer nur im Formular-Schritt (Zurück + Anlegen).
+  // Footer nur im Formular-Schritt (Zurück + Anlegen). Während des Requests ist
+  // der Primär-CTA deaktiviert und zeigt einen Spinner (Ladezustand, UI-SPEC §5).
   const footer =
     step === 'form' ? (
       <div className="flex items-center gap-2">
-        <SecondaryButton type="button" onClick={() => setStep('quelle')}>
+        <SecondaryButton type="button" onClick={() => setStep('quelle')} disabled={busy}>
           Zurück
         </SecondaryButton>
         <PrimaryButton type="button" onClick={handleCreate} disabled={!canCreate} className="flex-1">
-          Anlegen
+          {busy ? (
+            <>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              Anlegen …
+            </>
+          ) : (
+            'Anlegen'
+          )}
         </PrimaryButton>
       </div>
     ) : undefined;
@@ -208,6 +245,11 @@ export default function NeueGruppeSheet({ open, onClose, onCreate }: NeueGruppeS
               className={inputClass}
               autoFocus
             />
+            {nameTouched && nameLeer && (
+              <span className="mt-1 block text-[12.5px]" style={{ color: 'var(--color-ping-danger)' }}>
+                Bitte einen Namen eingeben.
+              </span>
+            )}
           </label>
 
           {/* Optional: Vorwort */}
@@ -221,6 +263,21 @@ export default function NeueGruppeSheet({ open, onClose, onCreate }: NeueGruppeS
               className={`${inputClass} resize-none leading-relaxed`}
             />
           </label>
+
+          {/* Projekt-Bezug fehlt -> Anlage blockiert (keine verwaiste Gruppe).
+              UI-SPEC §5 verbatim: "Kein Projekt gewaehlt — bitte zuerst ein Projekt oeffnen." */}
+          {!hatProjekt && (
+            <p className="text-[12.5px]" style={{ color: 'var(--color-ping-danger)' }}>
+              Kein Projekt gewählt — bitte zuerst ein Projekt öffnen.
+            </p>
+          )}
+
+          {/* Fehlerzeile (Netz/500) — Sheet bleibt offen, erneuter Versuch möglich. */}
+          {fehler && (
+            <p className="text-[12.5px]" style={{ color: 'var(--color-ping-danger)' }}>
+              {fehler}
+            </p>
+          )}
         </div>
       )}
     </BottomSheet>

@@ -20,6 +20,8 @@ import AbonnierenScreen from './components/redesign/AbonnierenScreen';
 import Gruppenuebersicht from './components/redesign/Gruppenuebersicht';
 import GruppeDetail from './components/redesign/GruppeDetail';
 import NeueGruppeSheet from './components/redesign/NeueGruppeSheet';
+import { createGruppe } from './syncService';
+import { Toast } from './ui/primitives';
 
 type Sel = { element: Protokollelement; protokoll: Protokoll; gruppe: Protokollgruppe; filteredIds?: string[] };
 
@@ -43,6 +45,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'abos' });
   const [key, setKey] = useState(0);
   const [neueGruppeOpen, setNeueGruppeOpen] = useState(false);
+  const [erfolgToast, setErfolgToast] = useState<string | null>(null);
   const [tabletDetail, setTabletDetail] = useState<Sel | null>(null);
   const uebersichtStateRef = useRef<UebersichtState | undefined>(undefined);
   const { isTablet, orientation } = useFormFactor();
@@ -158,6 +161,7 @@ export default function App() {
       case 'gruppen':
         return (
           <Gruppenuebersicht
+            key={key}
             projektNummer={screen.projektNummer}
             onOpenGruppeDetail={(gruppeId) => setScreen({ name: 'gruppeDetail', gruppeId })}
             onNeueGruppe={() => setNeueGruppeOpen(true)}
@@ -257,18 +261,34 @@ export default function App() {
     }
   })();
 
+  // Projekt-Scope der Anlage: das Sheet wird ausschliesslich aus der
+  // Gruppenuebersicht eines Projekts geoeffnet. Fehlt der Bezug, blockiert das
+  // Sheet die Anlage (keine verwaiste Gruppe).
+  const aktuelleProjektNummer = screen.name === 'gruppen' ? screen.projektNummer : null;
+
   return (
     <>
       {content}
       <NeueGruppeSheet
         open={neueGruppeOpen}
         onClose={() => setNeueGruppeOpen(false)}
-        onCreate={(data) => {
-          // Front-end-only: das eigentliche Anlegen in DocuFrame/DB folgt (Server-Wiring).
-          alert(`Neue Protokollgruppe „${data.name}" (${data.quelle}) — Anlegen wird im naechsten Schritt mit dem Server verdrahtet.`);
-          setNeueGruppeOpen(false);
+        projektNummer={aktuelleProjektNummer}
+        onCreate={async (data) => {
+          // SC-3: dieselbe Anlage wie im Hub-Desktop -> POST /api/protokollgruppen
+          // (kein PWA-eigener Regelpfad). `quelle`/`vorlageId` haben KEIN Backend-
+          // Gegenstueck -> nicht durchreichen (D-02-Andockpunkt). Projekt-Bezug
+          // erzwungen. Bei Fehler wirft createGruppe -> das Sheet bleibt offen.
+          await createGruppe({
+            name: data.name,
+            projekt_nummer: aktuelleProjektNummer ?? '',
+            ...(data.vorwort ? { vorwort: data.vorwort } : {}),
+          });
+          setErfolgToast('Gruppe angelegt');
+          window.setTimeout(() => setErfolgToast(null), 2600);
+          refresh(); // Liste neu laden (Gruppenuebersicht per key)
         }}
       />
+      <Toast message={erfolgToast} />
     </>
   );
 }
