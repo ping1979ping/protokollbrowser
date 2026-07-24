@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
-import { updateElement, deleteElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe } from '../db';
+import { updateElement, deleteElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord } from './map/mapUtils';
@@ -12,6 +12,8 @@ import {
   IconChevronLeft, IconChevronRight, IconList, IconCamera, IconMapPin,
   IconTrash, IconPlus, IconX, IconCalendar, IconCheck, IconUser,
 } from '../ui/icons';
+import { nameNorm, bestMatch, computeSuggestion, type TermLike } from '../termNorm';
+import ThemaAbgleichDialog from './ThemaAbgleichDialog';
 
 interface Props {
   element: Protokollelement;
@@ -60,7 +62,11 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   const galerieRef = useRef<HTMLInputElement>(null);
   const [karteOffen, setKarteOffen] = useState(false);
   const [firmen, setFirmen] = useState<Verantwortlicher[]>([]);
-  const [themenVorschlaege, setThemenVorschlaege] = useState<string[]>([]);
+  // 06.5-09: Projektwoerterbuch-Picker (Term-basiert).
+  const [gruppenThemen, setGruppenThemen] = useState<ProjektThema[]>([]);
+  const [alleThemen, setAlleThemen] = useState<ProjektThema[]>([]);
+  const [adhocEingabe, setAdhocEingabe] = useState('');
+  const [abgleich, setAbgleich] = useState<{ eingabe: string; treffer: ProjektThema } | null>(null);
   const [showWeitereStatus, setShowWeitereStatus] = useState(false);
   const [showBtWizard, setShowBtWizard] = useState(false);
   const [showProtokollWahl, setShowProtokollWahl] = useState(false);
@@ -121,15 +127,14 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   }
 
   async function ladenThemen() {
-    const prots = await getProtokolleByGruppe(gruppe.id);
-    const themen = new Set<string>();
-    for (const p of prots) {
-      const elems = await getElemente(p.id);
-      for (const e of elems) {
-        if (e.thema?.trim() && e.thema.trim() !== 'Bautagebuch') themen.add(e.thema.trim());
-      }
-    }
-    setThemenVorschlaege([...themen].sort());
+    const projektId = gruppe.projekt_id;
+    if (!projektId) return;
+    const alle = (await getProjektThemenByProjekt(projektId)).filter(t => t.is_active);
+    setAlleThemen(alle);
+    const grp = gruppe.hub_id
+      ? await getProjektThemenByGruppe(projektId, gruppe.hub_id)
+      : alle;
+    setGruppenThemen(grp);
   }
 
   async function ladenVerschiebungsziele() {
@@ -148,6 +153,53 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           .filter(v => !protokoll.teilnehmer.some(t => t.oid === v.oid))
           .map(v => ({ oid: v.oid, kuerzel: v.nummer || '', name: v.name })),
       ];
+
+  // 06.5-09: Kaskade (§6.5) — nur auf editierbarem Element mit leerem Thema (D-11).
+  const gruppenTermLike = useMemo<TermLike[]>(() =>
+    gruppenThemen.map(t => ({
+      id: t.id, name: t.name, name_norm: t.name_norm, synonyme: t.synonyme, is_active: t.is_active,
+      sort_order: t.gruppen.find(g => g.gruppe_id === gruppe.hub_id)?.sort_order ?? 0,
+    })), [gruppenThemen, gruppe.hub_id]);
+
+  const vorschlag = useMemo(() => {
+    if (!istNeu || elem.thema_term_id) return null;
+    const inhId = vorgaenger[0]?.thema_term_id;
+    const inh = inhId ? alleThemen.find(t => t.id === inhId) : null;
+    return computeSuggestion({
+      inheritedTerm: inh ? { id: inh.id, name: inh.name, name_norm: inh.name_norm, synonyme: inh.synonyme, is_active: inh.is_active } : null,
+      elementText: `${elem.positionstitel} ${elem.positionstext}`,
+      groupThemes: gruppenTermLike,
+      lastElementTerm: null,
+    });
+  }, [istNeu, elem.thema_term_id, elem.positionstitel, elem.positionstext, vorgaenger, alleThemen, gruppenTermLike]);
+
+  function waehleTerm(t: { id: string; name: string }) {
+    update({ thema: t.name, thema_term_id: t.id });
+    setAdhocEingabe('');
+  }
+
+  async function legeAdhocAn(val: string) {
+    const name = val.trim();
+    if (!name) return;
+    const projektId = gruppe.projekt_id;
+    if (!projektId) { update({ thema: name, thema_term_id: null }); return; }
+    const term = await createAdhocProjektThema(projektId, name);
+    setAlleThemen(prev => prev.some(t => t.id === term.id) ? prev : [...prev, term]);
+    setGruppenThemen(prev => prev.some(t => t.id === term.id) ? prev : [...prev, term]);
+    waehleTerm(term);
+  }
+
+  // Ad-hoc (§6.7): gleiche name_norm/Trigramm-Regel wie online (O-PW-10).
+  async function starteAdhoc(val: string) {
+    const name = val.trim();
+    if (!name) return;
+    const nn = nameNorm(name);
+    const exakt = alleThemen.find(t => t.name_norm === nn);
+    if (exakt) { waehleTerm(exakt); return; }
+    const treffer = bestMatch(name, alleThemen);
+    if (treffer) { setAbgleich({ eingabe: name, treffer }); return; }
+    await legeAdhocAn(name);
+  }
 
   function markDirty() { setDirty(true); setGespeichert(false); }
 
@@ -392,17 +444,41 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel>Thema</SectionLabel>
             {istNeu ? (
-              <div className="flex gap-1">
-                <select value={elem.thema}
-                  onChange={(e) => update({ thema: e.target.value })}
-                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white px-1.5 py-1.5 text-[12px] outline-none focus:border-ping-blue">
-                  {themenVorschlaege.map(t => <option key={t} value={t}>{t}</option>)}
-                  {elem.thema && !themenVorschlaege.includes(elem.thema) && <option value={elem.thema}>{elem.thema}</option>}
+              <div className="flex flex-col gap-1.5">
+                {/* Kaskaden-Vorschlag: sichtbar, 1 Tap, NIE auto-gespeichert (W-4). */}
+                {vorschlag && (
+                  <button type="button" onClick={() => waehleTerm(vorschlag.term)}
+                    className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-ping-blue/40 bg-ping-blue-light/50 px-2 py-1 text-left">
+                    <IconCheck size={13} className="shrink-0 text-ping-blue" />
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-ping-text">{vorschlag.term.name}</span>
+                    <span className="shrink-0 text-[10px] text-ping-text-mid">Vorschlag</span>
+                  </button>
+                )}
+                <select value={elem.thema_term_id ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) { update({ thema: '', thema_term_id: null }); return; }
+                    const t = gruppenThemen.find(x => x.id === v) || alleThemen.find(x => x.id === v);
+                    if (t) waehleTerm(t);
+                  }}
+                  className="min-w-0 rounded-lg border border-black/10 bg-white px-1.5 py-1.5 text-[12px] outline-none focus:border-ping-blue">
+                  <option value="">Thema wählen oder eingeben</option>
+                  {gruppenThemen.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  {elem.thema_term_id && !gruppenThemen.some(t => t.id === elem.thema_term_id) && (
+                    <option value={elem.thema_term_id}>{elem.thema}</option>
+                  )}
                 </select>
-                <button onClick={() => { const val = prompt('Neues Thema eingeben:', elem.thema); if (val != null) update({ thema: val }); }}
-                  className="flex shrink-0 items-center justify-center rounded-lg bg-ping-blue px-2 text-white" title="Neues Thema" aria-label="Neues Thema">
-                  <IconPlus size={14} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <input value={adhocEingabe}
+                    onChange={(e) => setAdhocEingabe(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && adhocEingabe.trim()) { e.preventDefault(); starteAdhoc(adhocEingabe); } }}
+                    placeholder="Neues Thema"
+                    className="min-w-0 flex-1 rounded-lg border border-dashed border-ping-blue/40 bg-white px-1.5 py-1.5 text-[12px] outline-none focus:border-ping-blue" />
+                  <button type="button" onClick={() => starteAdhoc(adhocEingabe)} disabled={!adhocEingabe.trim()}
+                    className="flex min-h-[44px] shrink-0 items-center justify-center rounded-lg bg-ping-blue px-2 text-white disabled:opacity-40" title="als neues Thema anlegen" aria-label="als neues Thema anlegen">
+                    <IconPlus size={14} />
+                  </button>
+                </div>
               </div>
             ) : (
               <p className="text-[12.5px] text-ping-text">{elem.thema || '—'}</p>
@@ -642,6 +718,16 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             setShowBtWizard(false);
           }}
           onAbbrechen={() => setShowBtWizard(false)}
+        />
+      )}
+      {/* Linie-2-Abgleich (§6.7): unscharfer Offline-Treffer -> „Meintest du?". */}
+      {abgleich && (
+        <ThemaAbgleichDialog
+          eingabe={abgleich.eingabe}
+          treffer={abgleich.treffer.name}
+          onUebernehmen={() => { waehleTerm(abgleich.treffer); setAbgleich(null); }}
+          onTrotzdem={async () => { const v = abgleich.eingabe; setAbgleich(null); await legeAdhocAn(v); }}
+          onClose={() => setAbgleich(null)}
         />
       )}
       <ScrollToTopFab />

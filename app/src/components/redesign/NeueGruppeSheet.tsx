@@ -11,7 +11,9 @@ import { IconBook, IconFolder, IconPlus } from '../../ui/icons';
 export interface NeueGruppeData {
   name: string;
   quelle: 'vorlage' | 'leer' | 'csv';
-  vorlageId?: string;
+  // 06.5-09 (D-08/§6b): leichte Besprechungstyp-Auswahl. Ohne vorlage_id seedet
+  // der Hub die Default-Vorlage des Typs (voller Vorlagen-Picker deferred).
+  besprechungstyp?: string;
   vorwort?: string;
 }
 
@@ -35,12 +37,9 @@ interface NeueGruppeSheetProps {
 type Quelle = NeueGruppeData['quelle'];
 type Step = 'quelle' | 'form';
 
-// Dummy-Vorlagen, bis eine echte Vorlagen-Quelle angebunden ist.
-const VORLAGEN: { id: string; name: string }[] = [
-  { id: 'vl-baubesprechung', name: 'Baubesprechung' },
-  { id: 'vl-planerbesprechung', name: 'Planerbesprechung' },
-  { id: 'vl-jourfixe', name: 'Jour Fixe' },
-];
+// Leichte Besprechungstyp-Auswahl (D-08, §6b) — KEIN voller Vorlagen-Picker
+// (deferred). Ohne vorlage_id seedet der Hub die Default-Vorlage des Typs.
+const BESPRECHUNGSTYPEN: string[] = ['Baubesprechung', 'Planerbesprechung', 'Jour Fixe', 'Gesprächsnotiz'];
 
 // Gemeinsame Feld-Optik: weißes Feld, dezenter Rahmen, Fokus in PING-Blau.
 const inputClass =
@@ -96,7 +95,7 @@ export default function NeueGruppeSheet({ open, onClose, projektNummer, onCreate
   const [quelle, setQuelle] = useState<Quelle | null>(null);
   const [name, setName] = useState('');
   const [vorwort, setVorwort] = useState('');
-  const [vorlageId, setVorlageId] = useState(VORLAGEN[0].id);
+  const [besprechungstyp, setBesprechungstyp] = useState('');
   const [busy, setBusy] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [nameTouched, setNameTouched] = useState(false);
@@ -108,7 +107,7 @@ export default function NeueGruppeSheet({ open, onClose, projektNummer, onCreate
     setQuelle(null);
     setName('');
     setVorwort('');
-    setVorlageId(VORLAGEN[0].id);
+    setBesprechungstyp('');
     setBusy(false);
     setFehler(null);
     setNameTouched(false);
@@ -131,7 +130,7 @@ export default function NeueGruppeSheet({ open, onClose, projektNummer, onCreate
     setFehler(null);
     setBusy(true);
     const data: NeueGruppeData = { name: name.trim(), quelle };
-    if (quelle === 'vorlage') data.vorlageId = vorlageId;
+    if (besprechungstyp) data.besprechungstyp = besprechungstyp;
     const vw = vorwort.trim();
     if (vw) data.vorwort = vw;
     try {
@@ -196,23 +195,22 @@ export default function NeueGruppeSheet({ open, onClose, projektNummer, onCreate
       ) : (
         /* Schritt 2 — Formular */
         <div className="flex flex-col gap-4 pt-1">
-          {/* Quelle = Vorlage: Dummy-Vorlagen-Auswahl */}
-          {quelle === 'vorlage' && (
-            <label className="block">
-              <span className="mb-1.5 block text-[12px] font-semibold text-ping-text-mid">Vorlage</span>
-              <select
-                value={vorlageId}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) => setVorlageId(e.target.value)}
-                className={inputClass}
-              >
-                {VORLAGEN.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          {/* Besprechungstyp (D-08, §6b): leichte Typ-Auswahl. Ohne vorlage_id seedet
+              der Hub die Default-Vorlage des Typs — keine Gruppe startet themenlos. */}
+          <label className="block">
+            <span className="mb-1.5 block text-[12px] font-semibold text-ping-text-mid">Besprechungstyp</span>
+            <select
+              value={besprechungstyp}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setBesprechungstyp(e.target.value)}
+              className={inputClass}
+            >
+              <option value="">(kein Typ)</option>
+              {BESPRECHUNGSTYPEN.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11.5px] text-ping-text-light">Themen werden automatisch übernommen.</span>
+          </label>
 
           {/* Quelle = CSV: reiner UI-Hinweis, keine Verarbeitung */}
           {quelle === 'csv' && (

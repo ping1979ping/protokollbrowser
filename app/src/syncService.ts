@@ -400,7 +400,7 @@ export async function listHubGruppen(): Promise<HubGruppe[]> {
  * durchgereicht (RULE-2/Param-Drift-Schutz). `projekt_nummer` erzwingt den
  * Projekt-Bezug — eine Gruppe ohne Projekt waere verwaist (Anti-Pattern).
  */
-export async function createGruppe(payload: { name: string; projekt_nummer: string; vorwort?: string }): Promise<HubGruppe> {
+export async function createGruppe(payload: { name: string; projekt_nummer: string; vorwort?: string; besprechungstyp?: string }): Promise<HubGruppe> {
   const resp = await fetchApi(`${API}/protokollgruppen`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

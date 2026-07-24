@@ -282,6 +282,8 @@ export default function App() {
             name: data.name,
             projekt_nummer: aktuelleProjektNummer ?? '',
             ...(data.vorwort ? { vorwort: data.vorwort } : {}),
+            // 06.5-09 (D-08): Besprechungstyp -> Hub seedet die Default-Vorlage.
+            ...(data.besprechungstyp ? { besprechungstyp: data.besprechungstyp } : {}),
           });
           setErfolgToast('Gruppe angelegt');
           window.setTimeout(() => setErfolgToast(null), 2600);
