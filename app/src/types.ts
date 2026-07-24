@@ -39,6 +39,8 @@ export interface Protokollelement extends HubEntity {
   positionstitel: string;
   positionstext: string;
   thema: string;
+  /** 06.5-09: kanonische Hub-Term-id ODER Client-UUID (Offline-Ad-hoc). Denorm. ``thema``-String bleibt. */
+  thema_term_id?: string | null;
   status: number;
   termin: string;
   verantwortlicher_id: string | null;
@@ -90,6 +92,9 @@ export interface Protokollgruppe extends HubEntity {
   nachwort: string;
   themen: string;
   bemerkung: string;
+  /** 06.5-09: waehrend des Downloads aufgeloest (Hub-Projekt-UUID / Hub-Gruppen-UUID). */
+  projekt_id?: string;
+  hub_id?: string;
 }
 
 export interface ProtokollPaket {

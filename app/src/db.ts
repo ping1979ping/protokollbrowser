@@ -1,9 +1,10 @@
 import { openDB } from 'idb';
+import { nameNorm } from './termNorm';
 import type { IDBPDatabase } from 'idb';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste, Adresse, Ansprechpartner } from './types';
 
 const DB_NAME = 'protokoll-app';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 export interface ProtokollMitGruppe extends Protokoll {
   gruppe_id: string;
@@ -76,6 +77,19 @@ async function getDb(): Promise<IDBPDatabase> {
           aspStore.createIndex('byLegacyId', 'legacy_id');
           aspStore.createIndex('byParentOid', 'parent_oid');
           aspStore.createIndex('byKuerzel', 'kuerzel');
+        }
+      }
+      // v10: Projekt-Woerterbuch (Protokoll-Themen als projektweite Terms,
+      // 06.5-09). Ohne diesen Block wirft ein bestehender v9-Client
+      // "object store not found" (Pitfall 6). Gruppen-Zuordnungen liegen IM
+      // Term-Record (Feld ``gruppen``) — kein zweiter Store; die Sync-Payload
+      // (06.5-02) liefert ``terms`` + ``zuordnungen`` getrennt, der Upsert
+      // merged sie in dieses Schema.
+      if (oldVersion < 10) {
+        if (!db.objectStoreNames.contains('projektThemen')) {
+          const ptStore = db.createObjectStore('projektThemen', { keyPath: 'id' });
+          ptStore.createIndex('byProjekt', 'project_id');
+          ptStore.createIndex('byNameNorm', ['project_id', 'name_norm']);
         }
       }
       if (!db.objectStoreNames.contains('syncMeta')) {
@@ -284,6 +298,7 @@ export async function clearAll(): Promise<void> {
   if (db.objectStoreNames.contains('wertelisten')) storeNames.push('wertelisten');
   if (db.objectStoreNames.contains('adressen')) storeNames.push('adressen');
   if (db.objectStoreNames.contains('ansprechpartner')) storeNames.push('ansprechpartner');
+  if (db.objectStoreNames.contains('projektThemen')) storeNames.push('projektThemen');
   const tx = db.transaction(storeNames, 'readwrite');
   await tx.objectStore('protokollgruppen').clear();
   await tx.objectStore('protokolle').clear();
@@ -295,6 +310,7 @@ export async function clearAll(): Promise<void> {
   if (db.objectStoreNames.contains('wertelisten')) await tx.objectStore('wertelisten').clear();
   if (db.objectStoreNames.contains('adressen')) await tx.objectStore('adressen').clear();
   if (db.objectStoreNames.contains('ansprechpartner')) await tx.objectStore('ansprechpartner').clear();
+  if (db.objectStoreNames.contains('projektThemen')) await tx.objectStore('projektThemen').clear();
   await tx.done;
 }
 
@@ -524,4 +540,187 @@ export async function getAllAnsprechpartner(): Promise<Ansprechpartner[]> {
 export async function getAnsprechpartnerByAdresse(adressOid: string): Promise<Ansprechpartner[]> {
   const db = await getDb();
   return db.getAllFromIndex('ansprechpartner', 'byParentOid', adressOid);
+}
+
+// ============================================================
+// Projekt-Woerterbuch (Protokoll-Themen) — 06.5-09, DB_VERSION 10
+// Store ``projektThemen``: EIN Record je projektweiter Term; die Gruppen-
+// Zuordnungen (aus der Sync-Payload ``zuordnungen``) liegen IM Record (Feld
+// ``gruppen``) statt in einem zweiten Store — die Payload (06.5-02) transportiert
+// sie getrennt, der Upsert merged sie hier zusammen.
+// ============================================================
+
+export interface ProjektThemaGruppe {
+  gruppe_id: string;   // Hub-UUID der Protokollgruppe
+  sort_order: number;
+}
+
+export interface ProjektThema {
+  id: string;                 // kanonische Hub-Term-id ODER Client-UUID (Offline-Ad-hoc)
+  project_id: string;         // Hub-Projekt-UUID (Namensraum)
+  name: string;
+  name_norm: string;
+  kurzzeichen: string | null;
+  synonyme: string[];
+  kategorie: string;          // 'protokollthema'
+  herkunft: string;           // 'vorlage' | 'pl' | 'adhoc' | 'import'
+  is_active: boolean;
+  gruppen: ProjektThemaGruppe[];  // Gruppen-Zuordnungen (aus zuordnungen gemerged)
+}
+
+interface SyncTerm {
+  id: string;
+  name: string;
+  name_norm?: string;
+  kurzzeichen?: string | null;
+  synonyme?: string[] | null;
+  kategorie?: string;
+  herkunft?: string;
+  is_active?: boolean;
+}
+
+interface SyncZuordnung {
+  gruppe_id: string;
+  term_id: string;
+  sort_order: number;
+}
+
+/**
+ * Sync-Payload (06.5-02: { terms, zuordnungen }) in den Store schreiben. Merge:
+ * jeder Term wird zur ProjektThema, die Zuordnungen werden je term_id in
+ * ``gruppen`` eingehaengt. Offline-Ad-hoc-Terms (herkunft='adhoc'), die noch nicht
+ * gesynct sind, stehen NICHT im Payload und bleiben unangetastet (Put nur je
+ * gelieferter id).
+ */
+export async function upsertProjektThemen(
+  projectId: string,
+  terms: SyncTerm[],
+  zuordnungen: SyncZuordnung[],
+): Promise<void> {
+  const db = await getDb();
+  const byTerm = new Map<string, ProjektThemaGruppe[]>();
+  for (const z of zuordnungen || []) {
+    const list = byTerm.get(z.term_id) || [];
+    list.push({ gruppe_id: z.gruppe_id, sort_order: z.sort_order });
+    byTerm.set(z.term_id, list);
+  }
+  const tx = db.transaction('projektThemen', 'readwrite');
+  for (const t of terms || []) {
+    const rec: ProjektThema = {
+      id: t.id,
+      project_id: projectId,
+      name: t.name,
+      name_norm: t.name_norm || nameNorm(t.name),
+      kurzzeichen: t.kurzzeichen ?? null,
+      synonyme: t.synonyme ?? [],
+      kategorie: t.kategorie || 'protokollthema',
+      herkunft: t.herkunft || 'import',
+      is_active: t.is_active ?? true,
+      gruppen: byTerm.get(t.id) || [],
+    };
+    await tx.objectStore('projektThemen').put(rec);
+  }
+  await tx.done;
+}
+
+export async function getProjektThemenByProjekt(projectId: string): Promise<ProjektThema[]> {
+  const db = await getDb();
+  if (!db.objectStoreNames.contains('projektThemen')) return [];
+  return db.getAllFromIndex('projektThemen', 'byProjekt', projectId);
+}
+
+/** Aktive Themen einer bestimmten Gruppe (Hub-UUID) in sort_order. */
+export async function getProjektThemenByGruppe(
+  projectId: string,
+  gruppeHubId: string,
+): Promise<ProjektThema[]> {
+  const alle = await getProjektThemenByProjekt(projectId);
+  const sortFor = (t: ProjektThema) =>
+    t.gruppen.find(g => g.gruppe_id === gruppeHubId)?.sort_order ?? 0;
+  return alle
+    .filter(t => t.is_active && t.gruppen.some(g => g.gruppe_id === gruppeHubId))
+    .sort((a, b) => sortFor(a) - sortFor(b));
+}
+
+export async function getProjektThemaByNameNorm(
+  projectId: string,
+  nn: string,
+): Promise<ProjektThema | undefined> {
+  const db = await getDb();
+  if (!db.objectStoreNames.contains('projektThemen')) return undefined;
+  const res = await db.getAllFromIndex('projektThemen', 'byNameNorm', [projectId, nn]);
+  return res[0];
+}
+
+/**
+ * Offline-Ad-hoc-Thema anlegen (Client-UUID, herkunft='adhoc'). Idempotent auf
+ * name_norm: existiert das Thema im Projekt schon (egal welche Herkunft), wird es
+ * zurueckgegeben — kein Duplikat, kein stiller Wildwuchs. Sonst neuer Record mit
+ * Client-UUID (nach Sync remappt der Server auf die kanonische id, §6.8).
+ */
+export async function createAdhocProjektThema(
+  projectId: string,
+  name: string,
+): Promise<ProjektThema> {
+  const nn = nameNorm(name);
+  const bestehend = await getProjektThemaByNameNorm(projectId, nn);
+  if (bestehend) return bestehend;
+  const rec: ProjektThema = {
+    id: crypto.randomUUID(),
+    project_id: projectId,
+    name: name.trim(),
+    name_norm: nn,
+    kurzzeichen: null,
+    synonyme: [],
+    kategorie: 'protokollthema',
+    herkunft: 'adhoc',
+    is_active: true,
+    gruppen: [],
+  };
+  const db = await getDb();
+  await db.put('projektThemen', rec);
+  return rec;
+}
+
+/** Alle Offline-Ad-hoc-Terms eines Projekts (Upload-Term-Vorpass, §6.8). */
+export async function getAdhocProjektThemen(projectId: string): Promise<ProjektThema[]> {
+  const alle = await getProjektThemenByProjekt(projectId);
+  return alle.filter(t => t.herkunft === 'adhoc');
+}
+
+/**
+ * Remap nach Sync (§6.8): fuer jede {client_uuid -> kanonische id} alle Elemente
+ * mit thema_term_id === client_uuid auf die kanonische id umbiegen und den lokalen
+ * Verlierer-Term verwerfen. Still — kein Nutzer-Dialog. Returns die Zahl der
+ * umgebogenen Elemente.
+ */
+export async function remapThemaTermIds(remap: Record<string, string>): Promise<number> {
+  const keys = Object.keys(remap || {});
+  if (keys.length === 0) return 0;
+  const db = await getDb();
+  let updated = 0;
+  const elemTx = db.transaction('elemente', 'readwrite');
+  const alle = await elemTx.objectStore('elemente').getAll();
+  for (const e of alle as Protokollelement[]) {
+    const canonical = e.thema_term_id ? remap[e.thema_term_id] : undefined;
+    if (canonical && canonical !== e.thema_term_id) {
+      e.thema_term_id = canonical;
+      await elemTx.objectStore('elemente').put(e);
+      updated++;
+    }
+  }
+  await elemTx.done;
+  // Lokale Verlierer-Terms (Client-UUIDs) verwerfen — nur wenn die kanonische id
+  // wirklich abweicht (ein bereits kanonischer Term bleibt).
+  if (db.objectStoreNames.contains('projektThemen')) {
+    const ptTx = db.transaction('projektThemen', 'readwrite');
+    for (const clientUuid of keys) {
+      const canonical = remap[clientUuid];
+      if (canonical && canonical !== clientUuid) {
+        await ptTx.objectStore('projektThemen').delete(clientUuid);
+      }
+    }
+    await ptTx.done;
+  }
+  return updated;
 }
