@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Protokoll, Protokollgruppe, Protokollelement } from '../types';
 import { getElemente, getFotos, clearSyncFlags, getProtokolleByGruppe, savePendingExport, getPendingExports, deletePendingExport, updateElement, getVerantwortliche } from '../db';
-import { checkConnectivity, uploadZip } from '../syncService';
+import { checkConnectivity, uploadZip, collectOfflineTermsPaket } from '../syncService';
 import { fetchWeather } from '../weatherService';
 import JSZip from 'jszip';
 
@@ -147,6 +147,8 @@ function buildClassicExportJson(
       base.Status = e.status;
       base.Termin = e.termin;
       base.Verweise = e.verweise || [];
+      // 06.5-09: kanonische/Client-UUID des Themas (Hub loest sie via term_remap auf).
+      base.ThemaTermId = e.thema_term_id ?? '';
     } else {
       base.StatusNeu = e.status;
       base.TerminNeu = e.termin;
@@ -296,6 +298,14 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         : buildClassicExportJson(gruppe, prots, relevante, protokoll, datum, autor, vorbemerkung);
 
       const jsonFilename = exportFormat === 'v5c' ? 'protokolle.json' : 'protocol_export.json';
+
+      // 06.5-09 (§6.8): Offline-Ad-hoc-Terms als hubToDf-Paket-Addon anhaengen.
+      // Die Hub-Reconciliation (06.5-06) upsertet sie auf name_norm und liefert
+      // ``term_remap`` zurueck (uploadZip wendet es still an). Kein neuer Endpunkt.
+      if (gruppe.projekt_id) {
+        const termsPaket = await collectOfflineTermsPaket(gruppe.projekt_id);
+        if (termsPaket) exportJson.push(termsPaket);
+      }
 
       // ZIP bauen
       const zip = new JSZip();

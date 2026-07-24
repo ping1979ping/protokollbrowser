@@ -7,7 +7,7 @@
  * abgefangen; bleibt es beim 401 -> sauberer Logout (T-06-06-02).
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, getAllGruppen, getProtokollgruppe, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, getAllGruppen, getProtokollgruppe, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner, upsertProjektThemen, getAdhocProjektThemen, remapThemaTermIds, updateGruppeRefs } from './db';
 import { parseDfJson } from './dfimport';
 import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { parseAdressenJson } from './adressenimport';
@@ -174,6 +174,19 @@ export async function downloadProject(projectId: string): Promise<void> {
     lastSync: new Date().toISOString(),
     autoSync: true,
   });
+
+  // 06.5-09 (§6.8): Projekt-Woerterbuch spiegeln. BEST-EFFORT — ein
+  // Term-Sync-Fehler darf den Protokoll-Download NICHT abbrechen (die
+  // Erfassung degradiert dann auf "kein Picker", nicht auf einen kaputten Sync).
+  try {
+    const refs = await resolveHubGruppeRefs(pakete[0].protokollgruppe.legacy_id);
+    if (refs?.projekt_id) {
+      await updateGruppeRefs(gruppeId, refs.projekt_id, refs.hub_id);
+      await syncProjektThemen(refs.projekt_id);
+    }
+  } catch (e) {
+    console.warn('[06.5-09] Woerterbuch-Sync uebersprungen:', e);
+  }
 }
 
 /**
@@ -216,15 +229,99 @@ export async function getRemoteStatus(projectId: string): Promise<{
   return json.data ?? json;
 }
 
-/** ZIP-Datei (JSON + Fotos) an den Server hochladen */
-export async function uploadZip(gruppeId: string, zipBlob: Blob, filename: string): Promise<void> {
+/**
+ * 06.5-09 (§6.8): Projekt-Woerterbuch vom Hub in den IndexedDB-Store
+ * ``projektThemen`` spiegeln. Kanal = GET /api/projects/{id}/terms/sync
+ * (06.5-02), Hub-Envelope { data: { terms, zuordnungen } }. Es werden ALLE
+ * Projekt-Terms gespiegelt (nicht nur die offene Gruppe) — der Offline-
+ * Abgleich laeuft projektweit. Immer via fetchApi (Bearer + 401-Refresh).
+ */
+export async function syncProjektThemen(projektId: string): Promise<void> {
+  const resp = await fetchApi(`${API}/projects/${encodeURIComponent(projektId)}/terms/sync`);
+  const body = await resp.json();
+  const data = (body?.data ?? body ?? {}) as { terms?: unknown[]; zuordnungen?: unknown[] };
+  await upsertProjektThemen(
+    projektId,
+    (data.terms ?? []) as Parameters<typeof upsertProjektThemen>[1],
+    (data.zuordnungen ?? []) as Parameters<typeof upsertProjektThemen>[2],
+  );
+}
+
+/**
+ * Hub-Referenzen einer Gruppe (Projekt-UUID + Gruppen-UUID) ueber die
+ * legacy_id aufloesen. Der /api/protokollgruppen-Katalog traegt ``projekt_id``
+ * bereits (ProtokollgruppeRead) — rein clientseitige Bruecke, KEIN neuer Endpunkt.
+ */
+export async function resolveHubGruppeRefs(
+  legacyId: string,
+): Promise<{ projekt_id?: string; hub_id: string } | null> {
+  if (!legacyId) return null;
+  const alle = await listHubGruppen();
+  const treffer = alle.find(g => g.legacy_id === legacyId);
+  if (!treffer) return null;
+  return { projekt_id: treffer.projekt_id, hub_id: treffer.id };
+}
+
+/**
+ * Offline angelegte Ad-hoc-Terms eines Projekts als hubToDf-Paket-Addon fuer
+ * den Upload (§6.8). Shape exakt wie von der Hub-Reconciliation (06.5-06)
+ * erwartet: { ProtokollMeta, Elemente:[], terms:[{client_uuid, name, synonyme}] }.
+ * ``_iter_pakete`` akzeptiert es (ProtokollMeta/Elemente-Keys vorhanden), die
+ * Elemente-Liste ist leer (Elemente reiten im normalen Export), die Terms
+ * werden VOR den Elementen auf name_norm gemergt und liefern das term_remap.
+ * ``null``, wenn keine Ad-hoc-Terms vorliegen (dann kein Addon anhaengen).
+ */
+export async function collectOfflineTermsPaket(
+  projektId: string,
+): Promise<Record<string, unknown> | null> {
+  const adhoc = await getAdhocProjektThemen(projektId);
+  if (adhoc.length === 0) return null;
+  return {
+    ProtokollMeta: {},
+    Elemente: [],
+    terms: adhoc.map(t => ({
+      client_uuid: t.id,
+      name: t.name,
+      synonyme: t.synonyme ?? [],
+    })),
+  };
+}
+
+/** Report des ZIP-Uploads (Hub-Envelope-Daten). */
+export interface UploadReport {
+  status?: string;
+  written?: number;
+  skipped?: number;
+  term_remap?: Record<string, string>;
+  [k: string]: unknown;
+}
+
+/** ZIP-Datei (JSON + Fotos) an den Server hochladen. Wendet danach das
+ * ``term_remap`` (§6.8) STILL auf die lokalen thema_term_ids an. */
+export async function uploadZip(gruppeId: string, zipBlob: Blob, filename: string): Promise<UploadReport> {
   const formData = new FormData();
   formData.append('file', zipBlob, filename);
-  await fetchApi(`${SYNC}/projects/${gruppeId}/upload-zip`, {
+  const resp = await fetchApi(`${SYNC}/projects/${gruppeId}/upload-zip`, {
     method: 'POST',
     body: formData,
     timeoutMs: UPLOAD_TIMEOUT_MS,
   });
+  // 06.5-09 (§6.8): Hub-Envelope entpacken; term_remap {client_uuid ->
+  // kanonische id} auf die lokalen IndexedDB-thema_term_ids anwenden und die
+  // Verlierer-Terms verwerfen — STILL, kein Nutzer-Dialog. Best-effort: ein
+  // Remap-Fehler kippt den Upload-Erfolg nicht (Terms serverseitig konsolidiert).
+  let report: UploadReport = {};
+  try {
+    const body = await resp.json();
+    report = (body?.data ?? body ?? {}) as UploadReport;
+    const remap = report.term_remap;
+    if (remap && Object.keys(remap).length > 0) {
+      await remapThemaTermIds(remap);
+    }
+  } catch (e) {
+    console.warn('[06.5-09] term_remap uebersprungen:', e);
+  }
+  return report;
 }
 
 /**
@@ -271,6 +368,9 @@ export interface HubGruppe {
   name?: string;
   projekt_nummer?: string;
   projekt_name?: string;
+  // 06.5-09: das Katalog-Read (ProtokollgruppeRead) traegt projekt_id bereits —
+  // rein clientseitige Bruecke legacy_id -> Hub-Projekt-UUID (kein neuer Endpunkt).
+  projekt_id?: string;
 }
 
 /**

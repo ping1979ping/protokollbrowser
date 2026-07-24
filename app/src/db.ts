@@ -724,3 +724,21 @@ export async function remapThemaTermIds(remap: Record<string, string>): Promise<
   }
   return updated;
 }
+
+/**
+ * 06.5-09: Hub-Referenzen (Projekt-/Gruppen-UUID) auf einer lokalen Gruppe
+ * persistieren — waehrend des Downloads aufgeloest, damit die Offline-Erfassung
+ * ``projekt_id`` (Woerterbuch-Scope) und ``hub_id`` (Gruppen-Themen-Filter) kennt.
+ */
+export async function updateGruppeRefs(
+  localGruppeId: string,
+  projektId?: string,
+  hubId?: string,
+): Promise<void> {
+  const db = await getDb();
+  const g = await db.get('protokollgruppen', localGruppeId);
+  if (!g) return;
+  if (projektId) g.projekt_id = projektId;
+  if (hubId) g.hub_id = hubId;
+  await db.put('protokollgruppen', g);
+}
