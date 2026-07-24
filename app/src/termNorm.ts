@@ -4,7 +4,7 @@
  *
  * EIN Spiegel der DB-/Python-/Hub-TS-Regel (O-PW-10): online und offline duerfen
  * NICHT auseinanderlaufen. Deckungsgleich mit
- *   - DB (Migration 0087, autoritativ): lower(regexp_replace(btrim(name), '\s+', ' ', 'g'))
+ *   - DB (Migration 0088, autoritativ, WR-03): lower(btrim(regexp_replace(name, '\s+', ' ', 'g')))
  *   - Python (services/term_norm.name_norm):  re.sub(r"\s+", " ", s.strip()).lower()
  *   - Hub-Frontend (frontend/src/lib/protokoll/termNorm.ts): s.trim().replace(/\s+/g," ").toLowerCase()
  *
