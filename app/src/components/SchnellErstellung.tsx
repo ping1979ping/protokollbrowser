@@ -3,6 +3,7 @@ import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
 import type { Verantwortlicher } from '../db';
 import { extractGpsFromImage } from '../exifGps';
+import { formatLatLon } from '../map-core/format';
 import MapEditorModal from './map/MapEditorModal';
 import StatusBadge from './StatusBadge';
 import { Screen, ScreenHeader, StickyFooter, Card, SectionLabel, Chip, PrimaryButton } from '../ui/primitives';
@@ -226,7 +227,7 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
           geo_lat: finalLat,
           geo_lon: finalLon,
           geo_accuracy: accuracy,
-          geo_text: finalLat != null ? `${finalLat.toFixed(7)}, ${finalLon!.toFixed(7)} (${gpsSource})` : null,
+          geo_text: finalLat != null ? `${formatLatLon(finalLat, finalLon!)} (${gpsSource})` : null,
           geo_heading: null,
           geo_altitude: null,
           fotos: [{ file_name: fileName, relative_path: `photos/${fileName}`, ziel_pfad: '' }],

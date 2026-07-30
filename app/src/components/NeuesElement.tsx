@@ -4,7 +4,7 @@ import { STATUS_MAP } from '../types';
 import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
-import { formatCoord } from '../map-core/format';
+import { formatCoord, formatLatLon } from '../map-core/format';
 import BautagebuchWizard from './BautagebuchWizard';
 import ScrollToTopFab from './ScrollToTopFab';
 import StatusBadge from './StatusBadge';
@@ -103,7 +103,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
           const lat = p.coords.latitude, lon = p.coords.longitude;
           const acc = Math.round(p.coords.accuracy);
           setGeoLat(lat); setGeoLon(lon); setGeoAcc(acc);
-          setGeoText(`${lat.toFixed(7)}, ${lon.toFixed(7)} (${acc} m)`);
+          setGeoText(`${formatLatLon(lat, lon)} (${acc} m)`);
         },
         () => { if (!deviceErfolg) fallbackAusBbox(); },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
@@ -124,7 +124,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         // Kleiner Versatz basierend auf Anzahl existierender Punkte
         const offset = 0.000018 * mitGps.length;
         setGeoLat(lat - offset); setGeoLon(lon + offset); setGeoAcc(50);
-        setGeoText(`${(lat - offset).toFixed(7)}, ${(lon + offset).toFixed(7)} (geschaetzt)`);
+        setGeoText(`${formatLatLon(lat - offset, lon + offset)} (geschaetzt)`);
       }
     }
   }, []);
@@ -199,7 +199,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
         const lat = pos.coords.latitude, lon = pos.coords.longitude;
         const acc = Math.round(pos.coords.accuracy);
         setGeoLat(lat); setGeoLon(lon); setGeoAcc(acc);
-        setGeoText(`${lat.toFixed(7)}, ${lon.toFixed(7)} (${acc} m)`);
+        setGeoText(`${formatLatLon(lat, lon)} (${acc} m)`);
       },
       (err) => alert('GPS-Fehler: ' + err.message),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
@@ -710,7 +710,7 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
               setGeoLat(result.geoLat);
               setGeoLon(result.geoLon);
               setGeoAcc(result.geoAcc);
-              setGeoText(result.geoLat != null ? `${result.geoLat.toFixed(7)}, ${result.geoLon!.toFixed(7)}` : '');
+              setGeoText(result.geoLat != null ? formatLatLon(result.geoLat, result.geoLon!) : '');
             }
             setDirty(true);
             setShowBtWizard(false);

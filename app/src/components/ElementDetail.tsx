@@ -3,7 +3,7 @@ import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { updateElement, deleteElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
-import { formatCoord } from '../map-core/format';
+import { formatCoord, formatLatLon } from '../map-core/format';
 import BautagebuchWizard from './BautagebuchWizard';
 import ScrollToTopFab from './ScrollToTopFab';
 import StatusBadge from './StatusBadge';
@@ -236,7 +236,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
       (pos) => {
         const lat = pos.coords.latitude, lon = pos.coords.longitude;
         const acc = Math.round(pos.coords.accuracy);
-        updateMobile({ geo_lat: lat, geo_lon: lon, geo_accuracy: acc, geo_text: `${lat.toFixed(7)}, ${lon.toFixed(7)} (${acc} m)` });
+        updateMobile({ geo_lat: lat, geo_lon: lon, geo_accuracy: acc, geo_text: `${formatLatLon(lat, lon)} (${acc} m)` });
       },
       (err) => alert('GPS-Fehler: ' + err.message),
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },

@@ -9,7 +9,7 @@ import ZoomDisplay from './ZoomDisplay';
 import LayerControl from './LayerControl';
 import TileCacheManager from './TileCacheManager';
 import { DEFAULT_CENTER, elementeWithGps } from './mapUtils';
-import { LAYERS } from '../../map-core';
+import { LAYERS, formatLatLon } from '../../map-core';
 import type { LayerDef } from '../../map-core';
 import 'leaflet/dist/leaflet.css';
 
@@ -88,7 +88,7 @@ export default function MapOverview({ elemente, onElementClick, onRefresh }: Pro
       if (!elem) continue;
       const acc = elem.mobile_erfassung.geo_accuracy;
       const heading = elem.mobile_erfassung.geo_heading;
-      let geoText = `${lat.toFixed(7)}, ${lon.toFixed(7)}`;
+      let geoText = formatLatLon(lat, lon);
       if (acc != null) geoText += ` (${acc} m)`;
       if (heading != null) geoText += ` ${Math.round(heading)}°`;
       await updateElement({

@@ -3,6 +3,7 @@ import { fetchWeather } from '../weatherService';
 import { getVerantwortliche, getLetzteBautagebuchElemente } from '../db';
 import type { Verantwortlicher } from '../db';
 import type { Protokollelement, Protokollgruppe } from '../types';
+import { formatLatLon } from '../map-core/format';
 import { Card, SectionLabel, PrimaryButton, SecondaryButton } from '../ui/primitives';
 import { IconBook, IconCalendar, IconUser, IconMapPin, IconPlus, IconTrash } from '../ui/icons';
 
@@ -322,7 +323,7 @@ export default function BautagebuchWizard({ gruppe, existingElement, onUebernehm
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-semibold text-ping-text">Standort erfasst</div>
                   <div className="truncate font-mono text-[11px] text-ping-text-mid">
-                    {geoLat.toFixed(5)}, {geoLon.toFixed(5)}
+                    {formatLatLon(geoLat, geoLon)}
                     {geoAcc != null ? ` · ±${geoAcc} m` : ''}
                   </div>
                 </div>

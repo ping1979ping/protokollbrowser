@@ -9,6 +9,6 @@
 export { LAYERS } from './layers';
 export type { LayerDef } from './layers';
 export { latLonToTile, getTilesInBounds } from './tiles';
-export { formatCoord, headingArrow } from './format';
-export { statusColor } from './status';
+export { formatLatLon, formatCoord, headingArrow, KOORDINATEN_STELLEN } from './format';
+export { statusColor, STATUS_FARBEN, STATUS_FARBE, STATUS_FARBE_UNBEKANNT } from './status';
 export { createSvgIcon } from './marker';
