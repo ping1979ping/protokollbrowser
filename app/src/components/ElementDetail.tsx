@@ -3,7 +3,7 @@ import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { updateElement, deleteElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
-import { formatCoord } from './map/mapUtils';
+import { formatCoord } from '../map-core/format';
 import BautagebuchWizard from './BautagebuchWizard';
 import ScrollToTopFab from './ScrollToTopFab';
 import StatusBadge from './StatusBadge';

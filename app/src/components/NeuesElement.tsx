@@ -4,7 +4,7 @@ import { STATUS_MAP } from '../types';
 import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
-import { formatCoord } from './map/mapUtils';
+import { formatCoord } from '../map-core/format';
 import BautagebuchWizard from './BautagebuchWizard';
 import ScrollToTopFab from './ScrollToTopFab';
 import StatusBadge from './StatusBadge';

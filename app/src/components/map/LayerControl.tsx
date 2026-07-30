@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import L from 'leaflet';
-import { LAYERS } from './mapUtils';
-import type { LayerDef } from './mapUtils';
+import { LAYERS } from '../../map-core';
+import type { LayerDef } from '../../map-core';
 
 interface Props {
   activeLayer: string;

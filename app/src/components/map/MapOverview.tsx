@@ -8,8 +8,9 @@ import DirectionMarker from './DirectionMarker';
 import ZoomDisplay from './ZoomDisplay';
 import LayerControl from './LayerControl';
 import TileCacheManager from './TileCacheManager';
-import { DEFAULT_CENTER, elementeWithGps, LAYERS } from './mapUtils';
-import type { LayerDef } from './mapUtils';
+import { DEFAULT_CENTER, elementeWithGps } from './mapUtils';
+import { LAYERS } from '../../map-core';
+import type { LayerDef } from '../../map-core';
 import 'leaflet/dist/leaflet.css';
 
 interface Props {

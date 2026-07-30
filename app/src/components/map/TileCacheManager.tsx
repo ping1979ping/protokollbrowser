@@ -2,8 +2,9 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Rectangle, useMap, useMapEvents, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import ZoomDisplay from './ZoomDisplay';
-import { DEFAULT_CENTER, getTilesInBounds, LAYERS } from './mapUtils';
-import type { LayerDef } from './mapUtils';
+import { DEFAULT_CENTER } from './mapUtils';
+import { getTilesInBounds, LAYERS } from '../../map-core';
+import type { LayerDef } from '../../map-core';
 import 'leaflet/dist/leaflet.css';
 
 interface Props {

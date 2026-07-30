@@ -3,8 +3,9 @@ import { MapContainer, TileLayer } from 'react-leaflet';
 import DirectionMarker from './DirectionMarker';
 import ZoomDisplay from './ZoomDisplay';
 import LayerControl from './LayerControl';
-import { DEFAULT_CENTER, DETAIL_ZOOM, LAYERS, formatCoord } from './mapUtils';
-import type { LayerDef } from './mapUtils';
+import { DEFAULT_CENTER, DETAIL_ZOOM } from './mapUtils';
+import { LAYERS, formatCoord } from '../../map-core';
+import type { LayerDef } from '../../map-core';
 import 'leaflet/dist/leaflet.css';
 
 interface Props {
