@@ -1,0 +1,130 @@
+[
+  {
+    "ProtokollgruppeId": "lokal-g1",
+    "ProtokollIdAlt": "lokal-p4",
+    "AktionProtokoll": "CREATE",
+    "ProtokollMeta": {
+      "Name": "Baubesprechung 5",
+      "Datum": "2026-09-17T09:00:00",
+      "Ort": "Baustelle",
+      "Autor": "Ing. Muster",
+      "Vorbemerkung": "Folgeprotokoll zu Nr. 4",
+      "Nachbemerkung": ""
+    },
+    "Elemente": [
+      {
+        "Aktion": "UPDATE",
+        "DfElementId": "lokal-e1",
+        "StatusNeu": 20,
+        "TerminNeu": "2026-09-10T00:00:00",
+        "BemerkungNeu": "{Bilder: 4711_Bild_1.jpg}",
+        "VerantwortlicherFirmaOidNeu": "OID-T1",
+        "MobileDaten": {
+          "GeoLat": 50.3245,
+          "GeoLon": 11.285,
+          "GeoAccuracy": 5,
+          "GeoText": "50.3245, 11.285 (5 m)",
+          "GeoHeading": 90,
+          "GeoAltitude": 301.5,
+          "Fotos": [
+            {
+              "file_name": "4711_Bild_1.jpg",
+              "relative_path": "photos/4711_Bild_1.jpg",
+              "ziel_pfad": ""
+            }
+          ],
+          "FotoAnzahl": 1,
+          "FotoPfad": "P:/4711/Fotos",
+          "MobilErfasst": true,
+          "MobilDatum": "2026-09-17T08:00:00",
+          "MobilUser": "CP",
+          "Notiz": "Prüfbericht nachreichen",
+          "Info": "Kranprüfung"
+        }
+      }
+    ]
+  },
+  {
+    "ProtokollgruppeId": "lokal-g1",
+    "ProtokollIdAlt": "lokal-p4",
+    "AktionProtokoll": "CREATE",
+    "ProtokollMeta": {
+      "Name": "Baubesprechung 5",
+      "Datum": "2026-09-17T09:00:00",
+      "Ort": "Baustelle",
+      "Autor": "Ing. Muster",
+      "Vorbemerkung": "Folgeprotokoll zu Nr. 4",
+      "Nachbemerkung": ""
+    },
+    "Elemente": [
+      {
+        "Aktion": "CREATE",
+        "DfElementId": null,
+        "Position": "5.1",
+        "Positionstitel": "Rohbau",
+        "Positionstext": "Bewehrungsabnahme Decke über EG am Donnerstag.",
+        "Thema": "Rohbau",
+        "Status": 10,
+        "Termin": "2026-09-24T00:00:00",
+        "Verweise": [],
+        "ThemaTermId": "6f1c3a52-0f0e-4d7e-9a61-0d7f3b1e2c11",
+        "BemerkungNeu": "",
+        "VerantwortlicherFirmaOidNeu": "v-lokal-1",
+        "MobileDaten": {
+          "GeoLat": null,
+          "GeoLon": null,
+          "GeoAccuracy": null,
+          "GeoText": "",
+          "GeoHeading": null,
+          "GeoAltitude": null,
+          "Fotos": [],
+          "FotoAnzahl": 0,
+          "FotoPfad": "",
+          "MobilErfasst": false,
+          "MobilDatum": "",
+          "MobilUser": "",
+          "Notiz": "",
+          "Info": ""
+        }
+      }
+    ]
+  },
+  {
+    "ProtokollgruppeId": "lokal-g1",
+    "ProtokollIdAlt": "lokal-bt",
+    "AktionProtokoll": "APPEND",
+    "ProtokollMeta": null,
+    "Elemente": [
+      {
+        "Aktion": "CREATE",
+        "DfElementId": null,
+        "Position": "12",
+        "Positionstitel": "",
+        "Positionstext": "Wetter: sonnig, 18 °C. Betonage Decke über EG.",
+        "Thema": "Bautagebuch",
+        "Status": 0,
+        "Termin": "",
+        "Verweise": [],
+        "ThemaTermId": "",
+        "BemerkungNeu": "",
+        "VerantwortlicherFirmaOidNeu": null,
+        "MobileDaten": {
+          "GeoLat": 50.1,
+          "GeoLon": 11.2,
+          "GeoAccuracy": null,
+          "GeoText": "",
+          "GeoHeading": null,
+          "GeoAltitude": null,
+          "Fotos": [],
+          "FotoAnzahl": 0,
+          "FotoPfad": "",
+          "MobilErfasst": false,
+          "MobilDatum": "",
+          "MobilUser": "",
+          "Notiz": "",
+          "Info": ""
+        }
+      }
+    ]
+  }
+]

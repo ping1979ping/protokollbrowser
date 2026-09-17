@@ -6,6 +6,8 @@ import { sendeExport, meldungGelesen, nochZuSenden } from '../uploadAblauf';
 import { uploadAblaufDeps } from '../uploadAblaufDb';
 import UploadMeldung from './UploadMeldung';
 import { fetchWeather } from '../weatherService';
+import { buildV5cExportJson, buildClassicExportJson, type ExportFormat } from '../dfExport';
+import { baueHubPakete } from '../hubPaket';
 import JSZip from 'jszip';
 
 interface Props {
@@ -14,210 +16,15 @@ interface Props {
   onBack: () => void;
 }
 
-type ExportFormat = 'classic' | 'v5c';
-
-// ISO -> DOCUframe Datumsformat "DD.MM.YYYY HH:MM:SS"
-function formatDfDatum(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
-function buildV5cExportJson(
-  gruppe: Protokollgruppe,
-  prots: Protokoll[],
-  relevante: Protokollelement[],
-  _protokoll: Protokoll,
-  datum: string,
-  autor: string,
-  vorbemerkung: string,
-  verantwortlicheMap?: Map<string, string>,
-): unknown[] {
-  const exportArray: unknown[] = [];
-
-  // Manifest (wird vom Import-Makro als Element[0] gelesen)
-  exportArray.push({
-    timestamp: formatDfDatum(new Date().toISOString()),
-    version: 'hub',
-    gruppe_id: gruppe.legacy_id || gruppe.id,
-    gruppe_name: gruppe.name,
-    // Abwaertskompatibel
-    GruppeId: gruppe.legacy_id || gruppe.id,
-    GruppeName: gruppe.name,
-  });
-
-  // Elemente nach Quell-Protokoll gruppieren
-  const byProtokoll = new Map<string, Protokollelement[]>();
-  for (const e of relevante) {
-    const list = byProtokoll.get(e.protokoll_id) || [];
-    list.push(e);
-    byProtokoll.set(e.protokoll_id, list);
-  }
-
-  // Protokolle (fuer jeden betroffenen Protokoll)
-  for (const [protId] of byProtokoll) {
-    const prot = prots.find(p => p.id === protId);
-    if (!prot) continue;
-    const isAnhang = prot.nummer < 0;
-
-    exportArray.push({
-      object_type: 'protokoll',
-      id: prot.id,
-      legacy_id: prot.legacy_id || '',
-      _ProtokollgruppeOid: gruppe.legacy_id || gruppe.id,
-      Name: prot.name,
-      Datum: isAnhang ? formatDfDatum(prot.datum) : formatDfDatum(datum + 'T09:00:00'),
-      Ort: prot.ort,
-      Autor: isAnhang ? prot.autor : autor,
-      Vorbemerkung: isAnhang ? prot.vorbemerkung : vorbemerkung,
-      Nachbemerkung: prot.nachbemerkung || '',
-      Signatur: prot.signatur || '',
-      Erledigt: prot.erledigt,
-      Erstellt: prot.erstellt,
-      Verteilt: false,
-      TeilnehmerAnmerkung: '',
-      _TeilnehmerOids: prot.teilnehmer?.map(t => t.oid).filter(Boolean) || [],
-      _VerteilerOids: prot.verteiler?.map(t => t.oid).filter(Boolean) || [],
-    });
-  }
-
-  // Elemente (nur geaenderte/neue)
-  for (const elem of relevante) {
-    const geo = elem.mobile_erfassung || { geo_lat: null, geo_lon: null, geo_accuracy: null, geo_text: null, geo_heading: null, geo_altitude: null };
-    exportArray.push({
-      object_type: 'protokollelement',
-      id: elem.id,
-      legacy_id: elem.legacy_id || '',
-      is_new: elem.is_new || false,
-      is_modified: elem.is_modified || false,
-      protokoll_id: elem.protokoll_id,
-      position: elem.position,
-      positionstitel: elem.positionstitel,
-      positionstext: elem.positionstext,
-      thema: elem.thema,
-      status: elem.status,
-      bemerkung: elem.bemerkung,
-      erinnerung: elem.erinnerung,
-      wert: elem.wert,
-      termin: formatDfDatum(elem.termin),
-      verantwortlicher_id: elem.verantwortlicher_id,
-      verantwortlicher_legacy_id: (elem.verantwortlicher_id && verantwortlicheMap?.get(elem.verantwortlicher_id)) || '',
-      mobile_erfassung: {
-        geo_lat: geo.geo_lat ?? 0,
-        geo_lon: geo.geo_lon ?? 0,
-        geo_accuracy: geo.geo_accuracy ?? 0,
-        geo_heading: geo.geo_heading ?? 0,
-        geo_text: geo.geo_text || '',
-        geo_altitude: geo.geo_altitude ?? 0,
-      },
-      foto_anzahl: elem.foto_anzahl ?? 0,
-      foto_pfad: elem.foto_pfad ?? '',
-      mobil_erfasst: elem.mobil_erfasst ?? true,
-      mobil_user: elem.mobil_user ?? '',
-      notiz: elem.notiz ?? '',
-      info: elem.info ?? '',
-      mobil_datum: elem.mobil_datum ? formatDfDatum(elem.mobil_datum) : '',
-      verweise: elem.verweise || [],
-    });
-  }
-
-  return exportArray;
-}
-
-function buildClassicExportJson(
-  gruppe: Protokollgruppe,
-  prots: Protokoll[],
-  relevante: Protokollelement[],
-  protokoll: Protokoll,
-  datum: string,
-  autor: string,
-  vorbemerkung: string,
-): unknown[] {
-  function buildExportElement(e: Protokollelement) {
-    const isNeu = e.is_new;
-    const base: Record<string, unknown> = {
-      Aktion: isNeu ? 'CREATE' : 'UPDATE',
-      DfElementId: isNeu ? null : e.id,
-    };
-
-    if (isNeu) {
-      base.Position = e.position;
-      base.Positionstitel = e.positionstitel;
-      base.Positionstext = e.positionstext;
-      base.Thema = e.thema;
-      base.Status = e.status;
-      base.Termin = e.termin;
-      base.Verweise = e.verweise || [];
-      // 06.5-09: kanonische/Client-UUID des Themas (Hub loest sie via term_remap auf).
-      base.ThemaTermId = e.thema_term_id ?? '';
-    } else {
-      base.StatusNeu = e.status;
-      base.TerminNeu = e.termin;
-    }
-
-    base.BemerkungNeu = e.bemerkung;
-    base.VerantwortlicherFirmaOidNeu = e.verantwortlicher_id;
-    base.MobileDaten = {
-      GeoLat: e.mobile_erfassung.geo_lat,
-      GeoLon: e.mobile_erfassung.geo_lon,
-      GeoAccuracy: e.mobile_erfassung.geo_accuracy,
-      GeoText: e.mobile_erfassung.geo_text || '',
-      GeoHeading: e.mobile_erfassung.geo_heading,
-      GeoAltitude: e.mobile_erfassung.geo_altitude,
-      Fotos: e.mobile_erfassung.fotos,
-      FotoAnzahl: e.foto_anzahl ?? 0,
-      FotoPfad: e.foto_pfad ?? '',
-      MobilErfasst: e.mobil_erfasst ?? false,
-      MobilDatum: e.mobil_datum ?? '',
-      MobilUser: e.mobil_user ?? '',
-      Notiz: e.notiz ?? '',
-      Info: e.info ?? '',
-    };
-
-    return base;
-  }
-
-  const byProtokoll = new Map<string, Protokollelement[]>();
-  for (const e of relevante) {
-    const list = byProtokoll.get(e.protokoll_id) || [];
-    list.push(e);
-    byProtokoll.set(e.protokoll_id, list);
-  }
-
-  const exportJson: unknown[] = [];
-  for (const [protId, elems] of byProtokoll) {
-    const prot = prots.find(p => p.id === protId);
-    const isAnhang = prot && prot.nummer < 0;
-
-    if (isAnhang) {
-      exportJson.push({
-        ProtokollgruppeId: gruppe.id,
-        ProtokollIdAlt: protId,
-        AktionProtokoll: 'APPEND',
-        ProtokollMeta: null,
-        Elemente: elems.map(buildExportElement),
-      });
-    } else {
-      exportJson.push({
-        ProtokollgruppeId: gruppe.id,
-        ProtokollIdAlt: protokoll.id,
-        AktionProtokoll: 'CREATE',
-        ProtokollMeta: {
-          Name: `${protokoll.name.replace(/\d+$/, '')}${protokoll.nummer + 1}`,
-          Datum: datum + 'T09:00:00',
-          Ort: protokoll.ort,
-          Autor: autor,
-          Vorbemerkung: vorbemerkung,
-          Nachbemerkung: '',
-        },
-        Elemente: elems.map(buildExportElement),
-      });
+/** Fotos der gesendeten Punkte in den Ordner `photos/` des ZIP legen. */
+async function legeFotosAb(zip: JSZip, elemente: readonly Protokollelement[]): Promise<void> {
+  const photosFolder = zip.folder('photos')!;
+  for (const elem of elemente) {
+    const elemFotos = await getFotos(elem.id);
+    for (const foto of elemFotos) {
+      photosFolder.file(foto.fileName, foto.blob);
     }
   }
-
-  return exportJson;
 }
 
 export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
@@ -295,48 +102,47 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         setWetterStatus(null);
       }
 
-      // Verantwortliche-Lookup (UUID → legacy_id) fuer Hub-Format
-      const verantwortliche = await getVerantwortliche();
-      const verantwortlicheMap = new Map(verantwortliche.map(v => [v.id, v.legacy_id]));
+      // 06.5-09 (§6.8): offline angelegte Themen. Die Hub-Reconciliation (06.5-06) upsertet sie
+      // auf name_norm und liefert ``term_remap`` zurueck (uploadZip wendet es still an).
+      const termsPaket = gruppe.projekt_id ? await collectOfflineTermsPaket(gruppe.projekt_id) : null;
 
-      // JSON bauen je nach Format
-      const exportJson = exportFormat === 'v5c'
-        ? buildV5cExportJson(gruppe, prots, relevante, protokoll, datum, autor, vorbemerkung, verantwortlicheMap)
-        : buildClassicExportJson(gruppe, prots, relevante, protokoll, datum, autor, vorbemerkung);
-
-      const jsonFilename = exportFormat === 'v5c' ? 'protokolle.json' : 'protocol_export.json';
-
-      // 06.5-09 (§6.8): Offline-Ad-hoc-Terms als hubToDf-Paket-Addon anhaengen.
-      // Die Hub-Reconciliation (06.5-06) upsertet sie auf name_norm und liefert
-      // ``term_remap`` zurueck (uploadZip wendet es still an). Kein neuer Endpunkt.
-      if (gruppe.projekt_id) {
-        const termsPaket = await collectOfflineTermsPaket(gruppe.projekt_id);
-        if (termsPaket) exportJson.push(termsPaket);
-      }
-
-      // ZIP bauen
-      const zip = new JSZip();
-      zip.file(jsonFilename, JSON.stringify(exportJson, null, 2));
-      const photosFolder = zip.folder('photos')!;
-
-      for (const elem of relevante) {
-        const elemFotos = await getFotos(elem.id);
-        for (const foto of elemFotos) {
-          photosFolder.file(foto.fileName, foto.blob);
-        }
-      }
-
-      const content = await zip.generateAsync({ type: 'blob' });
+      // Sicherungsdatei für DOCUframe: Format nach Schalter, Inhalt unverändert (dfExport.ts).
+      // Gebaut vor dem Senden wie bisher, heruntergeladen danach.
+      let datei: { blob: Blob; name: string } | null = null;
       const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const filename = `protocol_export_${ts}.zip`;
-      const elementIds = relevante.map(e => e.id);
+      if (localStorage.getItem('autoBackup') !== 'false') {
+        // Verantwortliche-Lookup (UUID → legacy_id)
+        const verantwortliche = await getVerantwortliche();
+        const verantwortlicheMap = new Map(verantwortliche.map(v => [v.id, v.legacy_id]));
+        const exportJson = exportFormat === 'v5c'
+          ? buildV5cExportJson(gruppe, prots, relevante, protokoll, datum, autor, vorbemerkung, verantwortlicheMap)
+          : buildClassicExportJson(gruppe, prots, relevante, protokoll, datum, autor, vorbemerkung);
+        const jsonFilename = exportFormat === 'v5c' ? 'protokolle.json' : 'protocol_export.json';
+        if (termsPaket) exportJson.push(termsPaket);
+        const zip = new JSZip();
+        zip.file(jsonFilename, JSON.stringify(exportJson, null, 2));
+        await legeFotosAb(zip, relevante);
+        datei = { blob: await zip.generateAsync({ type: 'blob' }), name: `protocol_export_${ts}.zip` };
+      }
 
-      // ZIP in IndexedDB speichern
+      // An den Hub: IMMER die Hub-Pakete (hubPaket.ts, Vertrag protokoll_app_vertrag_v1) —
+      // unabhängig vom Formatschalter. Themen reiten als `terms` am ersten Paket mit.
+      const { pakete, elementIds } = baueHubPakete({
+        protokolle: prots,
+        elemente: relevante,
+        terms: (termsPaket?.terms as unknown[] | undefined) ?? null,
+      });
+      const hubZip = new JSZip();
+      hubZip.file('upload.json', JSON.stringify(pakete));
+      await legeFotosAb(hubZip, relevante.filter(e => elementIds.includes(e.id)));
+      const hubBlob = await hubZip.generateAsync({ type: 'blob' });
+
+      // Hub-ZIP in IndexedDB speichern (wartet dort, bis der Hub geantwortet hat)
       const ausstehend: PendingExport = {
         id: `export-${Date.now()}`,
         gruppeId: gruppe.id,
-        blob: content,
-        filename,
+        blob: hubBlob,
+        filename: `hub_upload_${ts}.zip`,
         elementIds,
         createdAt: new Date().toISOString(),
       };
@@ -361,12 +167,12 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         setExported(true);
       }
 
-      // Lokaler Download als Backup
-      if (localStorage.getItem('autoBackup') !== 'false') {
-        const url = URL.createObjectURL(content);
+      // Lokaler Download als Backup (DOCUframe-Format)
+      if (datei) {
+        const url = URL.createObjectURL(datei.blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = datei.name;
         a.click();
         URL.revokeObjectURL(url);
       }
@@ -389,11 +195,14 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         <div className="bg-white rounded-xl p-4 border border-gray-100">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-medium text-gray-900 text-sm">Export-Format</h2>
+              <h2 className="font-medium text-gray-900 text-sm">Format der Sicherungsdatei</h2>
               <p className="text-xs text-gray-500 mt-0.5">
                 {exportFormat === 'v5c'
                   ? 'DOCUframe V5c — direkt importierbar'
-                  : 'Klassisch — Server-kompatibel'}
+                  : 'Klassisch — älteres DOCUframe-Format'}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Gilt nur für die heruntergeladene Datei. An den Server wird immer im Hub-Format gesendet.
               </p>
             </div>
             <button
@@ -431,7 +240,8 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
           </div>
         )}
 
-        {/* Protokoll-Metadaten */}
+        {/* Protokoll-Metadaten — gehen nur in die DOCUframe-Datei (Folgeprotokoll), nicht an den Hub */}
+        <p className="text-xs text-gray-500 px-1">Angaben für die DOCUframe-Datei:</p>
         <div className="bg-white rounded-xl p-3 border border-gray-100">
           <label className="text-xs text-gray-400 font-medium block mb-1">Neues Protokoll-Datum</label>
           <input
@@ -467,7 +277,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
           disabled={exporting || exported}
           className="w-full bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 active:bg-green-800 transition disabled:opacity-50"
         >
-          {exporting ? (wetterStatus || 'Exportiere...') : exported ? 'Exportiert' : 'ZIP exportieren'}
+          {exporting ? (wetterStatus || 'Sende …') : exported ? (uploadResult ? 'Gesendet' : 'Zum Senden gespeichert') : 'An Server senden'}
         </button>
 
         {uploadResult === 'ok' && (

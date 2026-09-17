@@ -1,0 +1,115 @@
+{
+  "vertrag": "protokoll-app-upload",
+  "version": 1,
+  "stand": "2026-09-17",
+  "bezug": "999.1750, E-259",
+  "beschreibung": [
+    "Vertragsprobe für den Datenweg Protokoll-App -> Hub. Die Hub-Tests laufen gegen genau diese Datei (tests/routers/test_protokoll_sync.py); die App kopiert sie und prüft ihren Serialisierer dagegen.",
+    "bestand: was der Hub vor dem Hochladen hält und das Gerät zuvor per Export geladen hat (Schlüssel wie im Export, HubId/IsNew zusätzlich).",
+    "upload: der Inhalt der JSON-Datei im ZIP (Name siehe zip_datei), gesendet an ziel mit der HubId der Gruppe.",
+    "Paket 1 legt offline ein neues Protokoll mit zwei Punkten an. Das Gerät hat die Nummer 1 gewählt, die im Hub schon das versendete Protokoll trägt; der Hub vergibt deshalb die nächste freie Nummer und meldet sie in antwort.nummern.",
+    "Paket 2 ist ein Teilpaket: am Punkt des versendeten (gesperrten) Protokolls ändern sich nur Status und Positionstext. Nicht gesendete Schlüssel lassen den Bestand stehen, darum lehnt der Hub kein Feld ab.",
+    "antwort: die Felder, die der Hub in data zurückgeben muss (weitere Felder wie files/photos dürfen daneben stehen)."
+  ],
+  "ziel": "POST /api/protokoll-sync/projects/{bestand.gruppe.HubId}/upload-zip",
+  "zip_datei": "upload.json",
+  "bestand": {
+    "gruppe": {
+      "HubId": "be831e46-592c-434e-934c-b4ae747e0c54",
+      "IsNew": true,
+      "Id": "",
+      "Name": "Vertragsprobe Baubesprechungen",
+      "ProjektName": "Vertragsprobe Neubau Werkhalle"
+    },
+    "protokolle": [
+      {
+        "HubId": "20ca094e-d3eb-4db5-a895-6447d9631a6b",
+        "IsNew": false,
+        "Id": "",
+        "Name": "Baubesprechung 1",
+        "Nummer": 1,
+        "Datum": "03.09.2026 10:00:00",
+        "Elemente": [
+          {
+            "HubId": "1e767151-da61-4b45-90a9-03abce09a3a6",
+            "IsNew": false,
+            "Id": "",
+            "Position": "1",
+            "Positionstitel": "Rohbau",
+            "Positionstext": "Schalung der Decke über EG prüfen",
+            "Thema": "Rohbau",
+            "Status": 10,
+            "Termin": "10.09.2026 00:00:00",
+            "VerantwortlicherName": "Rohbau Muster GmbH",
+            "Bemerkung": "vor dem Betonieren"
+          }
+        ]
+      }
+    ]
+  },
+  "upload": [
+    {
+      "ProtokollMeta": {
+        "Name": "Baubesprechung 2",
+        "Nummer": 1,
+        "Datum": "17.09.2026 09:30:00"
+      },
+      "Elemente": [
+        {
+          "Id": "4ea1c363-6ed5-4863-9bc1-4e3f5073a211",
+          "ProtokollId": "c85c840b-32f3-4b6f-9625-363af177b5d4",
+          "Position": "1",
+          "Positionstitel": "Baustelleneinrichtung",
+          "Positionstext": "Kran steht, Abnahme durch den Prüfer ist erfolgt.",
+          "Thema": "Baustelleneinrichtung",
+          "Status": 20,
+          "Termin": "",
+          "VerantwortlicherOid": "",
+          "VerantwortlicherName": "",
+          "Bemerkung": "",
+          "MobileErfassung": {
+            "Fotos": []
+          }
+        },
+        {
+          "Id": "db70ff31-69a5-45ad-972d-218aed37fe70",
+          "ProtokollId": "c85c840b-32f3-4b6f-9625-363af177b5d4",
+          "Position": "2",
+          "Positionstitel": "Rohbau",
+          "Positionstext": "Bewehrungsabnahme Decke über EG am Donnerstag.",
+          "Thema": "Rohbau",
+          "Status": 10,
+          "Termin": "24.09.2026 00:00:00",
+          "VerantwortlicherOid": "",
+          "VerantwortlicherName": "Rohbau Muster GmbH",
+          "Bemerkung": "Statiker informieren",
+          "MobileErfassung": {
+            "Fotos": []
+          }
+        }
+      ]
+    },
+    {
+      "Elemente": [
+        {
+          "Id": "1e767151-da61-4b45-90a9-03abce09a3a6",
+          "ProtokollId": "20ca094e-d3eb-4db5-a895-6447d9631a6b",
+          "Status": 25,
+          "Positionstext": "Schalung der Decke über EG geprüft"
+        }
+      ]
+    }
+  ],
+  "antwort": {
+    "status": "ok",
+    "written": 3,
+    "skipped": 0,
+    "felder_abgelehnt": 0,
+    "skipped_oids": [],
+    "term_remap": {},
+    "nummern": {
+      "c85c840b-32f3-4b6f-9625-363af177b5d4": 2,
+      "20ca094e-d3eb-4db5-a895-6447d9631a6b": 1
+    }
+  }
+}

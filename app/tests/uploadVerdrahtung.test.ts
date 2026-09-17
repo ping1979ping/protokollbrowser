@@ -42,6 +42,25 @@ test('ExportScreen sendet über sendeExport und zeigt die gemeinsame Meldung', (
   assert.match(q, /<UploadMeldung\b/);
 });
 
+test('ExportScreen: „An Server senden" speichert und sendet das Hub-Paket-ZIP, die DOCUframe-Bauer nur im Datei-Zweig (999.1750)', () => {
+  const q = quelle('components/ExportScreen.tsx');
+  assert.match(q, /\bbaueHubPakete\(/);
+  // Der ausstehende Export (gesendet über sendeExport) trägt das ZIP aus den Hub-Paketen
+  assert.match(q, /hubZip\.file\('upload\.json', JSON\.stringify\(pakete\)\)/);
+  assert.match(q, /const hubBlob = await hubZip\.generateAsync\(/);
+  assert.match(q, /blob:\s*hubBlob,/);
+  // Die DOCUframe-Bauer kommen nur im Datei-Zweig (autoBackup) vor dem Paketbau vor
+  const beginn = q.indexOf("if (localStorage.getItem('autoBackup') !== 'false')");
+  const ende = q.indexOf('baueHubPakete(');
+  assert.ok(beginn > 0 && ende > beginn, 'Datei-Zweig nicht vor dem Paketbau gefunden');
+  const dateiZweig = q.slice(beginn, ende);
+  const rest = q.slice(0, beginn) + q.slice(ende);
+  for (const name of ['buildV5cExportJson(', 'buildClassicExportJson(']) {
+    assert.ok(dateiZweig.includes(name), `${name} fehlt im Datei-Zweig`);
+    assert.equal(rest.includes(name), false, `${name} außerhalb des Datei-Zweigs`);
+  }
+});
+
 test('useSyncStatus sendet über sendeAusstehende und liefert ungelesene Meldungen', () => {
   const q = quelle('useSyncStatus.ts');
   assert.match(q, /\bsendeAusstehende\(/);

@@ -59,6 +59,8 @@ export interface Protokollelement extends HubEntity {
   info?: string;
   is_modified?: boolean;
   is_new?: boolean;
+  /** 999.1750: Kennung des Punkts im Hub (UUID), sobald bekannt. */
+  hub_id?: string;
 }
 
 export interface Protokoll extends HubEntity {
@@ -78,6 +80,8 @@ export interface Protokoll extends HubEntity {
   teilnehmer: Teilnehmer[];
   verteiler: Teilnehmer[];
   is_new?: boolean;
+  /** 999.1750: Kennung des Protokolls im Hub (UUID), sobald bekannt. */
+  hub_id?: string;
 }
 
 export interface Protokollgruppe extends HubEntity {
