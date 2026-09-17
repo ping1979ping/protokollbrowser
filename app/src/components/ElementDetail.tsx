@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { updateElement, deleteElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
 import type { Verantwortlicher, ProtokollMitGruppe } from '../db';
-import { istVerteilt } from '../protokollRegeln';
+import { istVerteilt, freieFelder, type PunktFeld } from '../protokollRegeln';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord, formatLatLon } from '../map-core/format';
 import BautagebuchWizard from './BautagebuchWizard';
@@ -31,6 +31,20 @@ interface Props {
 
 const HAUPT_STATUS = [0, 10, 20];
 const WEITERE_STATUS = [19, 11, 25, 17, 21];
+
+// Welcher Bereich (PunktFeld) ein Element-Schlüssel beim Schreiben berührt
+const SCHLUESSEL_FELD: Partial<Record<keyof Protokollelement, PunktFeld>> = {
+  status: 'status',
+  positionstext: 'positionstext',
+  termin: 'termin',
+  verantwortlicher_id: 'verantwortlicher',
+  verantwortlicher_name: 'verantwortlicher',
+  thema: 'thema',
+  thema_term_id: 'thema',
+  position: 'position',
+  positionstitel: 'positionstitel',
+  bemerkung: 'bemerkung',
+};
 
 function useSwipe(onLeft: () => void, onRight: () => void, enabled: boolean) {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -77,17 +91,20 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   const istNeu = !!elem.is_new;
   const istBautagebuch = elem.thema === 'Bautagebuch';
 
-  // Handoff-Regel (protokollweit, nicht je Punkt): Ein Punkt eines verteilten
-  // Protokolls ist nur lesbar. Solange die Gruppenprotokolle laden, entscheidet
-  // allein ein vom Hub gelieferter is_new-Wert; fehlt er, bleibt der Punkt bis
-  // zur Entscheidung gesperrt (null = noch unbekannt, ohne Hinweisleiste).
+  // Sperre protokollweit (nicht je Punkt): Ob das Protokoll verteilt ist, entscheidet
+  // istVerteilt. Solange die Gruppenprotokolle laden, zählt allein ein vom Hub
+  // gelieferter is_new-Wert; fehlt er, bleibt der Punkt bis zur Entscheidung
+  // gesperrt (null = noch unbekannt, ohne Hinweisleiste).
   const eigenesProt = gruppenProts?.find(p => p.id === elem.protokoll_id) ?? protokoll;
   const verteilt: boolean | null = gruppenProts
     ? istVerteilt(eigenesProt, gruppenProts)
     : typeof protokoll.is_new === 'boolean' ? !protokoll.is_new : null;
   const bearbeitbar = verteilt === false;
-  // Inhaltsfelder bleiben wie bisher lokal neu erfassten Punkten vorbehalten.
+  // Punktbestand (Verschieben, Löschen) bleibt lokal neu erfassten Punkten offener Protokolle vorbehalten.
   const inhaltEditierbar = bearbeitbar && istNeu;
+  // Freie Felder nach der Sperrregel des Hub: verteilt -> nur Status und Positionstext.
+  const frei = freieFelder(verteilt, istNeu);
+  const feldFrei = (f: PunktFeld) => frei.has(f);
 
   const swipe = useSwipe(
     () => nextElem && onNavigate(nextElem),
@@ -219,20 +236,22 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   function markDirty() { setDirty(true); setGespeichert(false); }
 
   function updateStatus(status: number) {
-    if (!bearbeitbar) return;
+    if (!feldFrei('status')) return;
     setElem(prev => ({ ...prev, status: status, is_modified: true }));
     markDirty();
     setShowWeitereStatus(false);
   }
 
   function update(patch: Partial<Protokollelement>) {
-    if (!inhaltEditierbar) return;
+    // Jeder geschriebene Schlüssel muss zu einem freien Feld gehören
+    const felder = (Object.keys(patch) as (keyof Protokollelement)[]).map(k => SCHLUESSEL_FELD[k]);
+    if (felder.some(f => !f || !feldFrei(f))) return;
     setElem(prev => ({ ...prev, ...patch, is_modified: true }));
     markDirty();
   }
 
   function updateMobile(patch: Partial<Protokollelement['mobile_erfassung']>) {
-    if (!bearbeitbar) return;
+    if (!feldFrei('verortung') && !feldFrei('fotos')) return;
     setElem(prev => ({
       ...prev, is_modified: true,
       mobile_erfassung: { ...prev.mobile_erfassung, ...patch },
@@ -342,7 +361,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             </span>
           )}
           <span className={`shrink-0 text-[10.5px] ${inhaltEditierbar ? 'text-green-200' : 'text-ping-blue-light'}`}>
-            {verteilt !== false ? 'nur lesen' : inhaltEditierbar ? 'editierbar' : 'Status/GPS'}
+            {verteilt === null ? 'nur lesen' : verteilt ? 'Status/Text' : inhaltEditierbar ? 'editierbar' : 'Status/Text/GPS'}
           </span>
         </div>
       </header>
@@ -350,11 +369,11 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
       {/* Inhalt — im Panel-Modus eigener Scroll-Container, sonst Seiten-Scroll (ScrollToTopFab) */}
       <div className={`px-3 pt-3 ${dirty ? 'pb-28' : 'pb-8'} space-y-2.5 ${embedded ? 'ping-scroll min-h-0 flex-1 overflow-y-auto' : ''}`}>
 
-        {/* Hinweisleiste: Protokoll verteilt -> Punkt nur lesen (Tablet-Handoff, Abschnitt 3) */}
+        {/* Hinweisleiste: Protokoll verteilt -> nur die Felder der Hub-Sperrregel frei */}
         {verteilt === true && (
           <div role="status" className="flex items-center gap-2 rounded-xl border border-black/10 bg-ping-bg px-3 py-2.5 text-[12px] font-semibold text-ping-text-mid">
             <IconLock size={14} className="shrink-0" />
-            Protokoll bereits verteilt — Punkt nicht mehr bearbeitbar
+            Protokoll bereits verteilt — nur Status und Positionstext änderbar
           </div>
         )}
 
@@ -392,8 +411,8 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             <span className="text-[11px] font-semibold uppercase tracking-wide text-ping-text-light">Status</span>
             <StatusBadge status={elem.status} />
           </div>
-          {/* Statuswahl nur bei nicht verteiltem Protokoll — sonst genügt das Badge oben */}
-          {bearbeitbar && (
+          {/* Statuswahl, solange der Status frei ist — sonst genügt das Badge oben */}
+          {feldFrei('status') && (
             <>
               <div className="mt-2.5 flex gap-2">
                 <button onClick={() => updateStatus(10)}
@@ -430,7 +449,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         {/* Positionstext */}
         <Card className="p-3">
           <SectionLabel>Positionstext</SectionLabel>
-          {inhaltEditierbar ? (
+          {feldFrei('positionstext') ? (
             <textarea value={elem.positionstext} onChange={(e) => update({ positionstext: e.target.value })}
               onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
               ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
@@ -444,7 +463,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         <div className="flex gap-2">
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel><span className="inline-flex items-center gap-1"><IconCalendar size={12} /> Termin</span></SectionLabel>
-            {inhaltEditierbar ? (
+            {feldFrei('termin') ? (
               <input type="date" value={elem.termin ? elem.termin.slice(0, 10) : ''}
                 onChange={(e) => update({ termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
                 className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
@@ -454,7 +473,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </Card>
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel><span className="inline-flex items-center gap-1"><IconUser size={12} /> Verantw.</span></SectionLabel>
-            {inhaltEditierbar ? (
+            {feldFrei('verantwortlicher') ? (
               <select value={elem.verantwortlicher_id || ''}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -473,7 +492,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </Card>
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel>Thema</SectionLabel>
-            {inhaltEditierbar ? (
+            {feldFrei('thema') ? (
               <div className="flex flex-col gap-1.5">
                 {/* Kaskaden-Vorschlag: sichtbar, 1 Tap, NIE auto-gespeichert (W-4). */}
                 {vorschlag && (
@@ -520,7 +539,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         <div className="flex gap-2">
           <Card className="w-28 shrink-0 p-2.5">
             <SectionLabel>Position</SectionLabel>
-            {inhaltEditierbar ? (
+            {feldFrei('position') ? (
               <input type="text" value={elem.position} onChange={(e) => update({ position: e.target.value })}
                 placeholder="Position"
                 className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 font-mono text-[13px] outline-none focus:border-ping-blue" />
@@ -530,7 +549,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </Card>
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel>Titel</SectionLabel>
-            {inhaltEditierbar ? (
+            {feldFrei('positionstitel') ? (
               <input type="text" value={elem.positionstitel} onChange={(e) => update({ positionstitel: e.target.value })}
                 placeholder="optional"
                 className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
@@ -543,7 +562,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         {/* Bemerkung */}
         <Card className="p-2.5">
           <SectionLabel>Bemerkung (intern)</SectionLabel>
-          {inhaltEditierbar ? (
+          {feldFrei('bemerkung') ? (
             <textarea value={elem.bemerkung} onChange={(e) => update({ bemerkung: e.target.value })} rows={2}
               placeholder="Optionale Bemerkung (intern)"
               className="w-full resize-none rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
@@ -558,7 +577,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             {/* Standort */}
             <div className="flex-1">
               <SectionLabel><span className="inline-flex items-center gap-1"><IconMapPin size={12} /> Standort</span></SectionLabel>
-              {bearbeitbar && (
+              {feldFrei('verortung') && (
                 <div className="flex flex-wrap gap-1.5">
                   <button onClick={gpsErfassen} className="rounded-lg bg-ping-blue px-3 py-2 text-[12px] font-semibold text-white">GPS</button>
                   <button onClick={() => setKarteOffen(true)} className="rounded-lg bg-ping-blue-light px-3 py-2 text-[12px] font-semibold text-ping-blue">Karte</button>
@@ -573,7 +592,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             <div className="flex-1">
               <SectionLabel><span className="inline-flex items-center gap-1"><IconCamera size={12} /> Fotos</span></SectionLabel>
               <div className="flex flex-wrap items-center gap-1.5">
-                {inhaltEditierbar && (
+                {feldFrei('fotos') && (
                   <>
                     <button onClick={() => fotoRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg bg-ping-blue px-3 py-2 text-[12px] font-semibold text-white">
                       <IconCamera size={14} /> Kamera
@@ -603,7 +622,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               {fotos.map(f => (
                 <div key={f.fotoId} className="relative h-12 w-12">
                   <img src={f.url} alt="" className="h-full w-full rounded-lg object-cover" />
-                  {inhaltEditierbar && (
+                  {feldFrei('fotos') && (
                     <button onClick={() => fotoLoeschen(f.fotoId)}
                       className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-white"
                       style={{ background: 'var(--color-ping-danger)' }} aria-label="Foto löschen"><IconX size={10} /></button>

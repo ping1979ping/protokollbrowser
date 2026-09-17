@@ -12,7 +12,9 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { istVerteilt, neuanlageErlaubt, obersterPunkt } from '../src/protokollRegeln.ts';
+import {
+  istVerteilt, neuanlageErlaubt, obersterPunkt, bearbeitbareFelderNachVersand, freieFelder, ALLE_PUNKTFELDER,
+} from '../src/protokollRegeln.ts';
 
 const p = (id: string, nummer: number, is_new?: boolean | null) => ({ id, nummer, is_new });
 
@@ -111,6 +113,42 @@ test('oberster Punkt: numerisch sortiert (4.2 vor 4.10)', () => {
   const punkte = [{ id: 'c', position: '4.10' }, { id: 'b', position: '4.2' }, { id: 'a', position: '4.1' }];
   assert.equal(obersterPunkt(punkte)?.id, 'a');
   assert.equal(obersterPunkt(punkte.slice(0, 2))?.id, 'b');
+});
+
+// --- Felder nach dem Versand (Sperrregel des Hub) ---------------------------------
+// Spiegel von ALLOWED_ON_LOCKED in hub-server backend/app/services/protokoll_sperre.py:33,
+// angewandt im Sync-Upload der App (routers/protokoll_sync.py:708).
+
+const sortiert = (xs: Iterable<string>) => [...xs].sort();
+
+test('nach Versand: genau Status und Positionstext', () => {
+  assert.deepEqual(sortiert(bearbeitbareFelderNachVersand()), ['positionstext', 'status']);
+});
+
+test('nach Versand: Verortung, Termin, Verantwortlich, Thema, Position, Titel, Bemerkung, Fotos gesperrt', () => {
+  const frei = new Set<string>(bearbeitbareFelderNachVersand());
+  for (const f of ['verortung', 'termin', 'verantwortlicher', 'thema', 'position', 'positionstitel', 'bemerkung', 'fotos']) {
+    assert.equal(frei.has(f), false, f);
+  }
+});
+
+test('freie Felder: verteiltes Protokoll -> nur die Hub-Liste, auch für lokal neue Punkte', () => {
+  assert.deepEqual(sortiert(freieFelder(true, false)), ['positionstext', 'status']);
+  assert.deepEqual(sortiert(freieFelder(true, true)), ['positionstext', 'status']);
+});
+
+test('freie Felder: Verteilt-Status unbekannt -> nichts frei', () => {
+  assert.equal(freieFelder(null, true).size, 0);
+  assert.equal(freieFelder(null, false).size, 0);
+});
+
+test('freie Felder: nicht verteilt, lokal neu -> alle Felder', () => {
+  assert.deepEqual(sortiert(freieFelder(false, true)), sortiert(ALLE_PUNKTFELDER));
+  assert.equal(ALLE_PUNKTFELDER.length, 10);
+});
+
+test('freie Felder: nicht verteilt, übernommener Punkt -> Status, Positionstext, Verortung', () => {
+  assert.deepEqual(sortiert(freieFelder(false, false)), ['positionstext', 'status', 'verortung']);
 });
 
 test('oberster Punkt: Eingabeliste bleibt unverändert', () => {

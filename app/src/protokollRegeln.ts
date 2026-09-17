@@ -54,3 +54,46 @@ export function obersterPunkt<T extends Pick<Protokollelement, 'position'>>(punk
   if (punkte.length === 0) return null;
   return [...punkte].sort((a, b) => a.position.localeCompare(b.position, undefined, { numeric: true }))[0];
 }
+
+/** Bearbeitbare Bereiche im Punkt-Detail. `verortung` = GPS/Karte, `fotos` = Kamera/Galerie. */
+export type PunktFeld =
+  | 'status' | 'positionstext' | 'termin' | 'verantwortlicher' | 'thema'
+  | 'position' | 'positionstitel' | 'bemerkung' | 'verortung' | 'fotos';
+
+export const ALLE_PUNKTFELDER: readonly PunktFeld[] = [
+  'status', 'positionstext', 'termin', 'verantwortlicher', 'thema',
+  'position', 'positionstitel', 'bemerkung', 'verortung', 'fotos',
+];
+
+/**
+ * Felder, die der Hub an einem Punkt eines versendeten Protokolls über den
+ * Sync-Upload der App noch annimmt — Spiegel von `ALLOWED_ON_LOCKED` in
+ * hub-server `backend/app/services/protokoll_sperre.py` (E7a Statuswanderung,
+ * E7b Schreibfehler-Korrektur), angewandt in `routers/protokoll_sync.py`.
+ *
+ * Die Verortung (`GEO_FELDER`) erlaubt der Hub auf versendeten Protokollen nur
+ * über die eigene Handlung `POST /api/protokoll-elemente/{id}/verorten`; der
+ * Sync-Upload verwirft `mobile_erfassung` dort. Solange die App diesen Weg nicht
+ * nutzt, bliebe eine Verortung in der App ohne Wirkung — sie steht deshalb
+ * nicht in der Liste.
+ */
+const FELDER_NACH_VERSAND: readonly PunktFeld[] = ['status', 'positionstext'];
+
+export function bearbeitbareFelderNachVersand(): readonly PunktFeld[] {
+  return FELDER_NACH_VERSAND;
+}
+
+/**
+ * Welche Bereiche eines Punkts sind frei?
+ * - Verteilt-Status unbekannt (`null`): nichts, bis entschieden ist.
+ * - Protokoll verteilt: nur die Felder nach dem Versand (Hub-Regel), auch für lokal neue Punkte.
+ * - Protokoll nicht verteilt, lokal neu erfasster Punkt: alles.
+ * - Protokoll nicht verteilt, übernommener Punkt: Status, Positionstext (Hub-Regel gilt
+ *   ohnehin) und Verortung — Inhaltsfelder bleiben wie bisher unverändert.
+ */
+export function freieFelder(verteilt: boolean | null, lokalNeu: boolean): ReadonlySet<PunktFeld> {
+  if (verteilt === null) return new Set();
+  if (verteilt) return new Set(bearbeitbareFelderNachVersand());
+  if (lokalNeu) return new Set(ALLE_PUNKTFELDER);
+  return new Set<PunktFeld>(['status', 'positionstext', 'verortung']);
+}
