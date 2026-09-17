@@ -51,3 +51,27 @@ export function splitAnsicht(ff: Pick<FormFactor, 'isTablet' | 'orientation'>): 
 export function obersterPunktAutomatisch(ff: Pick<FormFactor, 'isTablet' | 'orientation'>, detailAktiv: boolean): boolean {
   return splitAnsicht(ff) && !detailAktiv;
 }
+
+/**
+ * Tablet unabhängig von der Drehung (B9): dasselbe Gerät quer und hoch. Ein iPad mini ist hoch
+ * nur 744 px breit und fiele sonst beim Drehen aus dem Tablet-Aufbau — mit ihm ginge der
+ * geöffnete Punkt samt ungespeicherter Eingabe verloren.
+ */
+export function tabletBeiDrehung(ff: Pick<FormFactor, 'width' | 'height'>): boolean {
+  return leiteFormFaktorAb(Math.max(ff.width, ff.height), Math.min(ff.width, ff.height)).isTablet;
+}
+
+export type BrowserSpalte = 'halb' | 'voll' | null;
+
+/**
+ * Aufteilung des Protokoll-Browsers auf dem Tablet (Handoff tablet/README.md Abschnitt 1):
+ * quer Liste | Detail je 50 %, hoch ersetzt der geöffnete Punkt die Liste (volle Breite).
+ * Liste und Detail behalten in beiden Lagen ihre Plätze; `null` heißt „nicht angezeigt".
+ */
+export function browserAufteilung(
+  ff: Pick<FormFactor, 'isTablet' | 'orientation'>,
+  detailOffen: boolean,
+): { liste: BrowserSpalte; detail: BrowserSpalte } {
+  if (splitAnsicht(ff)) return { liste: 'halb', detail: 'halb' };
+  return detailOffen ? { liste: null, detail: 'voll' } : { liste: 'voll', detail: null };
+}

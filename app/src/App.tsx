@@ -13,7 +13,7 @@ import SyncSettings from './components/SyncSettings';
 import LoginScreen from './components/LoginScreen';
 import { isLoggedIn } from './authService';
 import { useFormFactor } from './hooks/useFormFactor';
-import { splitAnsicht, obersterPunktAutomatisch } from './hooks/formFaktor';
+import { obersterPunktAutomatisch, tabletBeiDrehung, browserAufteilung, type BrowserSpalte } from './hooks/formFaktor';
 // Redesign-Screens (PING Protokoll Design System, Smartphone + Tablet)
 import AboHome from './components/redesign/AboHome';
 import ProjektAuswahlNeu from './components/redesign/ProjektAuswahlNeu';
@@ -92,11 +92,14 @@ export default function App() {
         onBack={opts.onBack}
         onNachfolger={async (vorgaenger) => {
           const prot = await draftProt(sel);
+          // Nach der Anlage zurück zur Liste, nicht in den alten Punkt (dessen Stand wäre veraltet)
+          setTabletDetail(null);
           setScreen({ name: 'neu', protokoll: prot, gruppe: sel.gruppe, vorgaenger });
         }}
         onNavigate={opts.onNavigate}
         onClone={async (clone) => {
           const prot = await draftProt(sel);
+          setTabletDetail(null);
           setScreen({ name: 'neu', protokoll: prot, gruppe: sel.gruppe, clone });
         }}
       />
@@ -200,29 +203,37 @@ export default function App() {
       case 'sync-settings':
         return <SyncSettings onBack={() => setScreen({ name: 'abos' })} />;
       case 'uebersicht': {
-        // Tablet + Querformat: Master-Detail-Split (Liste links, Punkt-Detail rechts).
-        // Ist noch kein Punkt aktiv, aktiviert das Öffnen den obersten Punkt (Handoff).
-        // Beide Entscheidungen stehen in hooks/formFaktor (Telefon quer bleibt Einspalter, H2).
+        // Tablet (quer UND hoch, B9): Liste und Punkt-Detail in festen Plätzen — quer nebeneinander
+        // (50/50), hoch ersetzt der geöffnete Punkt die Liste (Handoff tablet/README.md:22). Beim
+        // Drehen bleibt der Punkt samt ungespeicherter Eingabe offen; die Liste sichert Filter und
+        // Tab bei jeder Änderung. Ist quer noch kein Punkt aktiv, aktiviert das Öffnen den obersten.
+        // Alle Entscheidungen stehen in hooks/formFaktor (Telefon quer bleibt Einspalter, H2).
         const autoAuswahl = obersterPunktAutomatisch(formFaktor, !!tabletDetail);
-        if (splitAnsicht(formFaktor)) {
+        if (tabletBeiDrehung(formFaktor)) {
+          const aufteilung = browserAufteilung(formFaktor, !!tabletDetail);
+          const breite = (s: BrowserSpalte) => (s === 'halb' ? 'w-1/2' : 'w-full');
           return (
             <div className="flex h-[100dvh] overflow-hidden bg-ping-surface">
-              <div className="relative w-1/2 min-w-0 border-r border-black/10">
-                {browserNode(screen.gruppeId, true, (elem, prot, grp, ids) => setTabletDetail({ element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }), autoAuswahl)}
-              </div>
-              <div className="relative w-1/2 min-w-0 bg-white">
-                {tabletDetail
-                  ? elementDetailNode(tabletDetail, {
-                      embedded: true,
-                      onBack: () => setTabletDetail(null),
-                      onNavigate: (elem) => { void navigateTabletDetail(elem, tabletDetail); },
-                    })
-                  : <div className="flex h-full items-center justify-center px-6 text-center text-sm text-ping-text-light">Punkt aus der Liste auswählen</div>}
-              </div>
+              {aufteilung.liste && (
+                <div className={`relative ${breite(aufteilung.liste)} min-w-0 ${aufteilung.detail ? 'border-r border-black/10' : ''}`}>
+                  {browserNode(screen.gruppeId, aufteilung.liste === 'halb', (elem, prot, grp, ids) => setTabletDetail({ element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }), autoAuswahl)}
+                </div>
+              )}
+              {aufteilung.detail && (
+                <div className={`relative ${breite(aufteilung.detail)} min-w-0 bg-white`}>
+                  {tabletDetail
+                    ? elementDetailNode(tabletDetail, {
+                        embedded: true,
+                        onBack: () => setTabletDetail(null),
+                        onNavigate: (elem) => { void navigateTabletDetail(elem, tabletDetail); },
+                      })
+                    : <div className="flex h-full items-center justify-center px-6 text-center text-sm text-ping-text-light">Punkt aus der Liste auswählen</div>}
+                </div>
+              )}
             </div>
           );
         }
-        // Phone / Hochformat: Liste als Vollseite, Detail per Navigation
+        // Telefon: Liste als Vollseite, Detail per Navigation
         return browserNode(screen.gruppeId, false, (elem, prot, grp, ids) => setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }), autoAuswahl);
       }
       case 'detail':

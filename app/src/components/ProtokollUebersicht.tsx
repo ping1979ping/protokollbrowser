@@ -83,6 +83,12 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
     });
   }
 
+  // B9: Ansicht, Filter und Tab bei jeder Änderung sichern — blendet das Tablet die Liste beim
+  // Drehen oder für den geöffneten Punkt (hoch) aus, kehrt sie im selben Zustand zurück.
+  useEffect(() => {
+    onStateChange?.({ ansicht, filter, statusFilter, gewaehlteProtId: gewaehltesProt?.id ?? restoredProtId.current });
+  }, [onStateChange, ansicht, filter, statusFilter, gewaehltesProt?.id]);
+
   // Navigations-Wrapper: State synchron sichern, dann weiterleiten
   function handleSelectElement(elem: Protokollelement, prot: Protokoll, grp: Protokollgruppe, filteredIds?: string[]) {
     saveState();
@@ -188,9 +194,11 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
   const neuErlaubt = neuanlageErlaubt(ansicht, aktivProt, protokolle);
 
   // Tablet quer: Protokoll öffnen aktiviert sofort den obersten Punkt (einmal je Öffnen)
+  // Entschieden wird nur beim ersten Laden: ein späteres Drehen nach quer oder „Übersicht" wählt nicht neu (B9)
   useEffect(() => {
-    if (!autoAuswahlOberster || autoAuswahlErledigt.current || !geladen || !gruppe) return;
+    if (autoAuswahlErledigt.current || !geladen || !gruppe) return;
     autoAuswahlErledigt.current = true;
+    if (!autoAuswahlOberster) return;
     const erster = obersterPunkt(aktuelleElemente);
     if (!erster) return;
     const prot = protokolle.find(p => p.id === erster.protokoll_id) || aktivProt;

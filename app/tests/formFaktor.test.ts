@@ -11,7 +11,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { leiteFormFaktorAb, splitAnsicht, obersterPunktAutomatisch } from '../src/hooks/formFaktor.ts';
+import { leiteFormFaktorAb, splitAnsicht, obersterPunktAutomatisch, tabletBeiDrehung, browserAufteilung } from '../src/hooks/formFaktor.ts';
 
 test('Telefon hoch 390×844 -> Telefon, kein Split', () => {
   const ff = leiteFormFaktorAb(390, 844);
@@ -61,4 +61,33 @@ test('oberster Punkt automatisch: nie im Hochformat (Z1)', () => {
 test('oberster Punkt automatisch: nie auf dem Telefon, auch nicht quer (Z1, H2)', () => {
   assert.equal(obersterPunktAutomatisch(leiteFormFaktorAb(390, 844), false), false);
   assert.equal(obersterPunktAutomatisch(leiteFormFaktorAb(844, 390), false), false);
+});
+
+// B9: Drehen des Tablets mit geöffnetem Punkt darf weder den Punkt (samt ungespeicherter
+// Eingabe) noch Suchfilter und Tab verlieren. Der Browser nutzt dafür auf dem Tablet in BEIDEN
+// Lagen dieselben festen Plätze; nur die Aufteilung wechselt (Handoff tablet/README.md:22).
+
+test('Tablet bei Drehung: dasselbe Gerät quer und hoch, auch wenn hoch schmaler als 768 px', () => {
+  assert.equal(tabletBeiDrehung(leiteFormFaktorAb(1194, 834)), true);
+  assert.equal(tabletBeiDrehung(leiteFormFaktorAb(834, 1194)), true);
+  assert.equal(tabletBeiDrehung(leiteFormFaktorAb(744, 1133)), true, 'iPad mini hoch');
+  assert.equal(tabletBeiDrehung(leiteFormFaktorAb(1133, 744)), true, 'iPad mini quer');
+});
+
+test('Tablet bei Drehung: Telefone nie, auch nicht quer', () => {
+  assert.equal(tabletBeiDrehung(leiteFormFaktorAb(390, 844)), false);
+  assert.equal(tabletBeiDrehung(leiteFormFaktorAb(844, 390)), false);
+  assert.equal(tabletBeiDrehung(leiteFormFaktorAb(932, 430)), false);
+});
+
+test('Aufteilung quer: Liste und Detail je zur Hälfte, mit und ohne geöffneten Punkt', () => {
+  const quer = leiteFormFaktorAb(1194, 834);
+  assert.deepEqual(browserAufteilung(quer, true), { liste: 'halb', detail: 'halb' });
+  assert.deepEqual(browserAufteilung(quer, false), { liste: 'halb', detail: 'halb' });
+});
+
+test('Aufteilung hoch: der geöffnete Punkt ersetzt die Liste, ohne Punkt nur die Liste', () => {
+  const hoch = leiteFormFaktorAb(834, 1194);
+  assert.deepEqual(browserAufteilung(hoch, true), { liste: null, detail: 'voll' });
+  assert.deepEqual(browserAufteilung(hoch, false), { liste: 'voll', detail: null });
 });
