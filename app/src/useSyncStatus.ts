@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { checkConnectivity, getServerUrl, syncProject, uploadZip } from './syncService';
-import { getPendingChangesCount, setSyncMeta, getPendingExports, deletePendingExport, clearSyncFlags, getElement } from './db';
-import { werteUploadAus } from './uploadAuswertung';
-import type { Protokollelement } from './types';
+import { checkConnectivity, getServerUrl, syncProject } from './syncService';
+import { getPendingChangesCount, setSyncMeta, getPendingExports, type PendingExport } from './db';
+import { sendeAusstehende, ungeleseneMeldungen, meldungGelesen, raeumeErledigteAuf } from './uploadAblauf';
+import { uploadAblaufDeps } from './uploadAblaufDb';
 
 const CHECK_INTERVAL_MS = 30_000;
 
@@ -14,6 +14,12 @@ export interface SyncStatus {
   pendingCount: number;
   isSyncing: boolean;
   syncNow: () => Promise<void>;
+  /** B4: ausgewertete Exporte dieser Gruppe, deren Meldung noch nicht gelesen ist. */
+  uploadMeldungen: PendingExport[];
+  /** Meldung bestätigen (Export bleibt, solange Marken offen sind). */
+  meldungGelesen: (id: string) => Promise<void>;
+  /** Steigt nach jedem Hintergrundversand — Listen mit Änderungsmarken neu laden. */
+  hintergrundStand: number;
 }
 
 export function useSyncStatus(gruppeId: string): SyncStatus {
@@ -23,6 +29,8 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [uploadMeldungen, setUploadMeldungen] = useState<PendingExport[]>([]);
+  const [hintergrundStand, setHintergrundStand] = useState(0);
   const wasReachable = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
@@ -31,6 +39,16 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
     setPendingCount(count);
     return count;
   }, [gruppeId]);
+
+  const ladeMeldungen = useCallback(async () => {
+    setUploadMeldungen(ungeleseneMeldungen(await getPendingExports(), gruppeId));
+  }, [gruppeId]);
+
+  const bestaetigeMeldung = useCallback(async (id: string) => {
+    const exp = (await getPendingExports()).find(e => e.id === id);
+    if (exp) await meldungGelesen(exp, uploadAblaufDeps);
+    await ladeMeldungen();
+  }, [ladeMeldungen]);
 
   const doSync = useCallback(async () => {
     if (isSyncing || !getServerUrl()) return;
@@ -80,23 +98,17 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
       setServerReachable(reachable);
 
       if (reachable && !wasReachable.current) {
-        // Pending exports (ZIPs) hochladen — User hat manuell exportiert, Upload war offline
+        // Ausstehende Exporte (ZIPs) hochladen — manuell exportiert, Upload war offline.
+        // B4: derselbe Ablauf wie im Export (uploadAblauf.ts); was der Hub nicht übernimmt,
+        // bleibt als Export mit Auswertung liegen und erscheint als Meldung im Browser.
         try {
-          const pendingExps = await getPendingExports();
-          for (const exp of pendingExps) {
-            const bericht = await uploadZip(exp.gruppeId, exp.blob, exp.filename);
-            // H1: Marken nur für belegt übernommene Punkte löschen (gleiche Auswertung wie im Export)
-            const elemente = (await Promise.all(exp.elementIds.map(id => getElement(id))))
-              .filter((e): e is Protokollelement => !!e);
-            const ausw = werteUploadAus(bericht, elemente);
-            await clearSyncFlags(ausw.markenLoeschen);
-            await deletePendingExport(exp.id);
-            if (ausw.vollstaendig) console.log('[Sync] Pending export hochgeladen:', exp.filename);
-            else console.warn('[Sync] Hub hat nicht alles übernommen, Änderungsmarken bleiben:', exp.filename, ausw);
-          }
+          const ergebnis = await sendeAusstehende(await getPendingExports(), uploadAblaufDeps);
+          await raeumeErledigteAuf(await getPendingExports(), uploadAblaufDeps);
+          if (ergebnis.gesendet > 0) setHintergrundStand(n => n + 1);
         } catch (err) {
-          console.warn('[Sync] Pending export Upload fehlgeschlagen:', err);
+          console.warn('[Sync] Ausstehende Exporte nicht verarbeitet:', err);
         }
+        await ladeMeldungen();
 
         // Pending count aktualisieren
         await refreshPending();
@@ -107,10 +119,11 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
     check();
     intervalRef.current = setInterval(check, CHECK_INTERVAL_MS);
     return () => clearInterval(intervalRef.current);
-  }, [gruppeId, refreshPending, doSync]);
+  }, [gruppeId, refreshPending, doSync, ladeMeldungen]);
 
-  // Pending Count bei Mount laden
+  // Pending Count und ungelesene Meldungen bei Mount laden (Meldungen auch ohne Server)
   useEffect(() => { refreshPending(); }, [refreshPending]);
+  useEffect(() => { ladeMeldungen(); }, [ladeMeldungen]);
 
   return {
     isOnline,
@@ -120,5 +133,8 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
     pendingCount,
     isSyncing,
     syncNow: doSync,
+    uploadMeldungen,
+    meldungGelesen: bestaetigeMeldung,
+    hintergrundStand,
   };
 }

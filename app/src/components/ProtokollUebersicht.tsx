@@ -5,6 +5,7 @@ import MapOverview from './map/MapOverview';
 import ScrollToTopFab from './ScrollToTopFab';
 import SyncIndicator from './SyncIndicator';
 import StatusBadge from './StatusBadge';
+import UploadMeldung from './UploadMeldung';
 import { useSyncStatus } from '../useSyncStatus';
 import { EmptyState } from '../ui/primitives';
 import { IconSearch, IconX, IconPlus, IconLock, IconKebab, IconChevronLeft, IconCamera } from '../ui/icons';
@@ -105,7 +106,8 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
     }
   }, [gewaehltesProt?.id, ansicht]);
 
-  useEffect(() => { laden(); }, []);
+  // Laden beim Öffnen und nach jedem Versand im Hintergrund (B4: Änderungsmarken neu einlesen, gewählter Tab bleibt)
+  useEffect(() => { laden(); }, [sync.hintergrundStand]);
 
   useEffect(() => {
     getVerantwortliche().then(firmen => {
@@ -125,8 +127,9 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
     prots.sort((a, b) => b.nummer - a.nummer);
     setProtokolle(prots);
 
-    // Protokoll-Tab wiederherstellen: gespeichertes > aktuelles Protokoll > erstes
-    const restored = restoredProtId.current ? prots.find(p => p.id === restoredProtId.current) : null;
+    // Protokoll-Tab wiederherstellen: gerade gewählter > gespeicherter > aktuelles Protokoll > erstes
+    const gewaehltId = gewaehlteProtRef.current?.id ?? restoredProtId.current;
+    const restored = gewaehltId ? prots.find(p => p.id === gewaehltId) : null;
     const selectProt = restored || aktuellesProtokoll(prots) || prots[0];
     if (selectProt) {
       await ladeElemente(selectProt);
@@ -338,6 +341,20 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         <div className="shrink-0 border-b border-black/5 bg-ping-blue-light px-3 py-1.5 text-xs text-ping-text-mid">
           <span className="font-semibold text-ping-text">{aktivProt.name}</span> · {new Date(aktivProt.datum).toLocaleDateString('de-DE')} · {aktivProt.ort} · {aktivProt.autor}
           {aktivProt.erledigt && <span className="ml-2 font-semibold" style={{ color: 'var(--color-ping-success-dark)' }}>erledigt</span>}
+        </div>
+      )}
+
+      {/* B4: Meldungen des Hintergrundwegs (und nicht bestätigte aus dem Export) — bleiben bis „Gelesen" */}
+      {sync.uploadMeldungen.length > 0 && (
+        <div className="shrink-0 max-h-[45vh] space-y-2 overflow-auto border-b border-black/5 px-3 py-2">
+          {sync.uploadMeldungen.map(m => m.auswertung && (
+            <UploadMeldung
+              key={m.id}
+              auswertung={m.auswertung}
+              punkte={m.punkte}
+              onGelesen={() => { void sync.meldungGelesen(m.id); }}
+            />
+          ))}
         </div>
       )}
 

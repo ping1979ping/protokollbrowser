@@ -2,6 +2,7 @@ import { openDB } from 'idb';
 import { nameNorm } from './termNorm';
 import { zielProtokollFuerNeuanlage } from './protokollRegeln';
 import type { IDBPDatabase } from 'idb';
+import type { AusstehenderExport } from './uploadAblauf';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste, Adresse, Ansprechpartner } from './types';
 
 const DB_NAME = 'protokoll-app';
@@ -410,14 +411,8 @@ export async function setSyncMeta(meta: SyncMeta): Promise<void> {
 
 // --- Pending Exports (ZIP-Blobs die auf Upload warten) ---
 
-export interface PendingExport {
-  id: string;
-  gruppeId: string;
-  blob: Blob;
-  filename: string;
-  elementIds: string[];
-  createdAt: string;
-}
+/** Felder und Lebenslauf (ausstehend, ausgewertet, gelesen) in uploadAblauf.ts. */
+export type PendingExport = AusstehenderExport;
 
 export async function savePendingExport(exp: PendingExport): Promise<void> {
   const db = await getDb();

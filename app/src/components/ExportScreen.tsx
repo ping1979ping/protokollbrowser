@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import type { Protokoll, Protokollgruppe, Protokollelement } from '../types';
-import { getElemente, getFotos, clearSyncFlags, getProtokolleByGruppe, savePendingExport, getPendingExports, deletePendingExport, updateElement, getVerantwortliche } from '../db';
-import { checkConnectivity, uploadZip, collectOfflineTermsPaket } from '../syncService';
-import { werteUploadAus, type UploadAuswertung } from '../uploadAuswertung';
+import { getElemente, getFotos, getProtokolleByGruppe, savePendingExport, getPendingExports, updateElement, getVerantwortliche, type PendingExport } from '../db';
+import { checkConnectivity, collectOfflineTermsPaket } from '../syncService';
+import { sendeExport, meldungGelesen, nochZuSenden } from '../uploadAblauf';
+import { uploadAblaufDeps } from '../uploadAblaufDb';
+import UploadMeldung from './UploadMeldung';
 import { fetchWeather } from '../weatherService';
 import JSZip from 'jszip';
 
@@ -224,9 +226,9 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   const [vorbemerkung, setVorbemerkung] = useState(`Folgeprotokoll zu Nr. ${protokoll.nummer}`);
   const [exporting, setExporting] = useState(false);
   const [uploadResult, setUploadResult] = useState<'ok' | 'teilweise' | null>(null);
-  // H1: Auswertung der Hub-Antwort und die gesendeten Punkte (für die benannte Anzeige)
-  const [auswertung, setAuswertung] = useState<UploadAuswertung | null>(null);
-  const [gesendet, setGesendet] = useState<{ elemente: Protokollelement[]; prots: Protokoll[] }>({ elemente: [], prots: [] });
+  // B4: nicht vollständig übernommener Export (liegt mit Auswertung, bis die Meldung gelesen ist)
+  const [liegenGeblieben, setLiegenGeblieben] = useState<PendingExport | null>(null);
+  const [meldungBestaetigt, setMeldungBestaetigt] = useState(false);
   const [stats, setStats] = useState<{ geaendert: number; neu: number } | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [exported, setExported] = useState(false);
@@ -244,7 +246,8 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
       });
     });
     getPendingExports().then(exps => {
-      setPendingCount(exps.filter(e => e.gruppeId === gruppe.id).length);
+      // Ausgewertete Exporte warten nicht mehr auf den Upload (B4)
+      setPendingCount(nochZuSenden(exps).filter(e => e.gruppeId === gruppe.id).length);
     });
   }, [gruppe.id]);
 
@@ -329,31 +332,25 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
       const elementIds = relevante.map(e => e.id);
 
       // ZIP in IndexedDB speichern
-      await savePendingExport({
+      const ausstehend: PendingExport = {
         id: `export-${Date.now()}`,
         gruppeId: gruppe.id,
         blob: content,
         filename,
         elementIds,
         createdAt: new Date().toISOString(),
-      });
+      };
+      await savePendingExport(ausstehend);
 
       // Sofort versuchen hochzuladen
       const online = await checkConnectivity();
       if (online) {
         try {
-          const bericht = await uploadZip(gruppe.id, content, filename);
-          // H1: Änderungsmarken nur für belegt übernommene Punkte löschen; Erfolg nur,
-          // wenn der Hub nichts abgelehnt oder übersprungen hat.
-          const ausw = werteUploadAus(bericht, relevante);
-          await clearSyncFlags(ausw.markenLoeschen);
-          // Der Hub hat die ZIP verarbeitet (Exactly-Once) — ein erneuter Upload brächte nur „duplicate"
-          const exps = await getPendingExports();
-          const latest = exps.find(e => e.filename === filename);
-          if (latest) await deletePendingExport(latest.id);
-          setGesendet({ elemente: relevante, prots });
-          setAuswertung(ausw);
-          setUploadResult(ausw.vollstaendig ? 'ok' : 'teilweise');
+          // B4: derselbe Ablauf wie im Hintergrund (uploadAblauf.ts) — Marken nur für belegt
+          // übernommene Punkte löschen; bei Abweichungen bleibt der Export mit Auswertung liegen.
+          const { auswertung, datensatz } = await sendeExport(ausstehend, uploadAblaufDeps);
+          setLiegenGeblieben(datensatz);
+          setUploadResult(auswertung.vollstaendig ? 'ok' : 'teilweise');
           setExported(true);
         } catch {
           setPendingCount(prev => prev + 1);
@@ -477,58 +474,17 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
           <p className="text-green-600 text-sm font-medium text-center">Erfolgreich an Server gesendet!</p>
         )}
 
-        {/* H1: Ablehnungen und Übersprungenes benannt anzeigen — kein stiller Verlust */}
-        {uploadResult === 'teilweise' && auswertung && (
-          <div
-            data-bereich="upload-auswertung"
-            role="alert"
-            className="rounded-xl border p-3 text-sm"
-            style={{ background: 'var(--color-ping-gold-bg)', borderColor: 'var(--color-ping-gold-light)' }}
-          >
-            <p className="font-semibold text-ping-gold-dark">Nicht alles vom Hub übernommen</p>
-            <ul className="mt-1.5 list-disc space-y-1 pl-4 text-ping-text">
-              {auswertung.duplikat && (
-                <li>Dieser Export wurde bereits früher übertragen — der Hub liefert dazu keine neue Auswertung.</li>
-              )}
-              {auswertung.antwortUnvollstaendig && (
-                <li>Die Antwort des Hub enthält keine Auswertung (Zähler fehlen).</li>
-              )}
-              {auswertung.abgelehnteFelder > 0 && (
-                <li>
-                  {auswertung.abgelehnteFelder} {auswertung.abgelehnteFelder === 1 ? 'Feldänderung' : 'Feldänderungen'} abgelehnt:
-                  Das Protokoll ist im Hub bereits versendet, dort sind nur Status und Positionstext änderbar.
-                  Welche Punkte und Felder betroffen sind, meldet der Hub nicht.
-                </li>
-              )}
-              {auswertung.uebersprungen.map(id => {
-                const e = gesendet.elemente.find(x => x.id === id);
-                const p = e ? gesendet.prots.find(x => x.id === e.protokoll_id) : undefined;
-                const text = e ? (e.positionstext || e.positionstitel || '').slice(0, 60) : '';
-                return (
-                  <li key={id}>
-                    Pos. {e?.position ?? '?'} „{text}“{p ? ` (${p.name})` : ''} nicht angelegt:
-                    vom Hub übersprungen — neuer Punkt auf einem versendeten Protokoll, dessen Punktbestand eingefroren ist.
-                  </li>
-                );
-              })}
-              {auswertung.uebersprungenOhneZuordnung.length > 0 && (
-                <li>
-                  {auswertung.uebersprungenOhneZuordnung.length} übersprungene Punkte ohne zuordenbare Kennung
-                  ({auswertung.uebersprungenOhneZuordnung.join(', ')}).
-                </li>
-              )}
-              {auswertung.nichtVerarbeitet > 0 && (
-                <li>
-                  {auswertung.nichtVerarbeitet} von {auswertung.gesendet} Punkten meldet der Hub weder als übernommen noch als abgelehnt.
-                </li>
-              )}
-            </ul>
-            <p className="mt-1.5 text-xs text-ping-text-mid">
-              {auswertung.markenLoeschen.length > 0
-                ? 'Die Änderungsmarken der nicht übernommenen Punkte bleiben erhalten.'
-                : 'Alle Änderungsmarken bleiben erhalten.'}
-            </p>
-          </div>
+        {/* H1/B4: Ablehnungen und Übersprungenes benannt anzeigen — dieselbe Meldung wie im Browser,
+            bis der Nutzer sie als gelesen bestätigt (sonst erscheint sie dort erneut). */}
+        {uploadResult === 'teilweise' && liegenGeblieben?.auswertung && !meldungBestaetigt && (
+          <UploadMeldung
+            auswertung={liegenGeblieben.auswertung}
+            punkte={liegenGeblieben.punkte}
+            onGelesen={async () => {
+              await meldungGelesen(liegenGeblieben, uploadAblaufDeps);
+              setMeldungBestaetigt(true);
+            }}
+          />
         )}
 
         {exported && uploadResult === null && (
