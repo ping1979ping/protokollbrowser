@@ -61,10 +61,12 @@ export default defineConfig({
         name: 'Protokoll-App',
         short_name: 'Protokoll',
         description: `Mobile Protokollerfassung für DOCUframe — Build ${BUILD_DATE} ${BUILD_CODE}`,
-        theme_color: '#1e40af',
+        // PING-Blau (--color-ping-blue); Ausrichtung frei, damit das Tablet-Querformat
+        // (Master-Detail-Split) auch in der installierten App erreichbar ist.
+        theme_color: '#004899',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         icons: [
           { src: 'icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
         ],
