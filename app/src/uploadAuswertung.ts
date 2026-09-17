@@ -42,6 +42,17 @@ export interface UploadAuswertung {
   markenLoeschen: string[];
 }
 
+/**
+ * Meldungszeile für übersprungene neue Punkte, die keinem gesendeten Punkt zugeordnet werden
+ * konnten. Der Hub überspringt neue Punkte auf versendeten Protokollen (s. o.); welche es sind,
+ * lässt sich dann aus der Antwort nicht ablesen — das sagt die Zeile, statt Kennungen zu zeigen.
+ */
+export function textUebersprungenOhneZuordnung(anzahl: number): string {
+  return anzahl === 1
+    ? '1 neuer Punkt wurde vom Hub nicht angelegt, weil das Protokoll dort bereits versendet ist. Welcher Punkt es ist, geht aus der Antwort des Hub nicht hervor.'
+    : `${anzahl} neue Punkte wurden vom Hub nicht angelegt, weil das Protokoll dort bereits versendet ist. Welche Punkte es sind, geht aus der Antwort des Hub nicht hervor.`;
+}
+
 export function werteUploadAus(
   bericht: UploadBericht,
   elemente: readonly { id: string; legacy_id?: string }[],

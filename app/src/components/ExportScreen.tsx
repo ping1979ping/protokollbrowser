@@ -265,7 +265,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
       const relevante = alleElemente.filter(e => e.is_modified || e.is_new);
 
       if (relevante.length === 0) {
-        alert('Keine Aenderungen zum Exportieren vorhanden.');
+        alert('Keine Änderungen zum Exportieren vorhanden.');
         setExporting(false);
         return;
       }
@@ -277,7 +277,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
         e.mobile_erfassung?.geo_lat != null
       );
       if (btOhneWetter.length > 0) {
-        setWetterStatus(`Wetter fuer ${btOhneWetter.length} Eintrag/Eintraege nachladen...`);
+        setWetterStatus(`Wetter für ${btOhneWetter.length} ${btOhneWetter.length === 1 ? 'Eintrag' : 'Einträge'} nachladen …`);
         for (const btElem of btOhneWetter) {
           try {
             const datumMatch = btElem.termin?.slice(0, 10);
@@ -380,7 +380,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   return (
     <div className="min-h-screen bg-ping-bg">
       <div className="bg-ping-blue text-white p-4">
-        <button onClick={onBack} className="text-ping-blue-light hover:text-white text-sm">&larr; Zurueck</button>
+        <button onClick={onBack} className="text-ping-blue-light hover:text-white text-sm">&larr; Zurück</button>
         <h1 className="text-lg font-bold mt-1">Export</h1>
       </div>
 
@@ -414,7 +414,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
           <h2 className="font-medium text-gray-900 mb-2">Zusammenfassung</h2>
           {stats && (
             <div className="text-sm text-gray-600 space-y-1">
-              <p><span className="font-medium text-orange-600">{stats.geaendert}</span> geaenderte Elemente</p>
+              <p><span className="font-medium text-orange-600">{stats.geaendert}</span> geänderte Elemente</p>
               <p><span className="font-medium text-green-600">{stats.neu}</span> neue Elemente</p>
             </div>
           )}

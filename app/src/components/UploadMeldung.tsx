@@ -1,4 +1,4 @@
-import type { UploadAuswertung } from '../uploadAuswertung';
+import { textUebersprungenOhneZuordnung, type UploadAuswertung } from '../uploadAuswertung';
 import type { UploadPunkt } from '../uploadAblauf';
 
 interface Props {
@@ -46,10 +46,7 @@ export default function UploadMeldung({ auswertung, punkte = [], onGelesen }: Pr
           );
         })}
         {auswertung.uebersprungenOhneZuordnung.length > 0 && (
-          <li>
-            {auswertung.uebersprungenOhneZuordnung.length} übersprungene Punkte ohne zuordenbare Kennung
-            ({auswertung.uebersprungenOhneZuordnung.join(', ')}).
-          </li>
+          <li>{textUebersprungenOhneZuordnung(auswertung.uebersprungenOhneZuordnung.length)}</li>
         )}
         {auswertung.nichtVerarbeitet > 0 && (
           <li>

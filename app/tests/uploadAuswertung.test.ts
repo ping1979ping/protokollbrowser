@@ -11,7 +11,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { werteUploadAus } from '../src/uploadAuswertung.ts';
+import { werteUploadAus, textUebersprungenOhneZuordnung } from '../src/uploadAuswertung.ts';
 
 const elemente = [
   { id: 'e1', legacy_id: 'L1' },
@@ -63,6 +63,20 @@ test('Duplikat: keine neue Auswertung -> kein Erfolg, Marken bleiben', () => {
   assert.equal(a.duplikat, true);
   assert.equal(a.vollstaendig, false);
   assert.deepEqual(a.markenLoeschen, []);
+});
+
+// Texte (Prüfwelle): „1 übersprungene Punkte ohne zuordenbare Kennung (?)" — falsche Mehrzahl,
+// und „Kennung (?)" sagt einem Bauleiter nichts.
+test('Meldungstext übersprungen ohne Zuordnung: Einzahl, verständlich, ohne Kennung', () => {
+  const t = textUebersprungenOhneZuordnung(1);
+  assert.match(t, /^1 neuer Punkt wurde vom Hub nicht angelegt/);
+  assert.doesNotMatch(t, /Kennung|\?|Punkte/);
+});
+
+test('Meldungstext übersprungen ohne Zuordnung: Mehrzahl', () => {
+  const t = textUebersprungenOhneZuordnung(3);
+  assert.match(t, /^3 neue Punkte wurden vom Hub nicht angelegt/);
+  assert.doesNotMatch(t, /Kennung|\?/);
 });
 
 test('Antwort ohne Zähler -> keine Aussage, Marken bleiben', () => {

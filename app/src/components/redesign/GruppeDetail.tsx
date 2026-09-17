@@ -13,6 +13,7 @@ import {
 } from '../../ui/primitives';
 import { IconPlus, IconList, IconCheck } from '../../ui/icons';
 import { useFormFactor } from '../../hooks/useFormFactor';
+import { splitAnsicht } from '../../hooks/formFaktor';
 import { getProtokollgruppe, getProtokolleByGruppe, getElemente } from '../../db';
 import type { ProtokollMitGruppe } from '../../db';
 import type { Protokollgruppe } from '../../types';
@@ -122,7 +123,8 @@ export default function GruppeDetail({
   // Protokoll, ein vom Hub bestätigtes vor einem liegengebliebenen Entwurf, nie ein Anhang.
   // Ohne offenes Protokoll gibt es nichts „Aktuelles"; dann bleibt „Neues Protokoll".
   const aktuelles = aktuellesProtokoll(protokolle);
-  const zweiSpalten = ff.orientation === 'quer';
+  // B8: zwei Spalten nur auf dem Tablet quer — Telefon quer bleibt einspaltig (H2, hooks/formFaktor)
+  const zweiSpalten = splitAnsicht(ff);
   const projektZeile = [gruppe.projekt_name, gruppe.projekt_nummer].filter(Boolean).join(' · ');
 
   const header = (

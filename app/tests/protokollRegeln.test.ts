@@ -155,6 +155,19 @@ test('Ziel Neuanlage: Tab eines offenen Entwurfs -> der Entwurf', () => {
   assert.equal(zielProtokollFuerNeuanlage('einzeln', d5, [...gruppe, d5])?.id, 'd5');
 });
 
+// Z (Prüfwelle): ohne die Verteilt-Prüfung im Tab-Zweig blieb die Suite grün — die Oberfläche
+// schützt zwar über neuanlageErlaubt, die Regel selbst muss aber auch allein stimmen.
+test('Ziel Neuanlage: Tab eines verteilten Protokolls -> nie dieses, sondern das aktuelle', () => {
+  assert.equal(zielProtokollFuerNeuanlage('einzeln', nr3, gruppe)?.id, 'p4');
+});
+
+test('Ziel Neuanlage: Tab eines vom Hub als verteilt gemeldeten Protokolls -> kein Ziel in diesem Protokoll', () => {
+  const importiert = [p('i1', 1, false), p('i2', 2, false)];
+  assert.equal(zielProtokollFuerNeuanlage('einzeln', importiert[1], importiert), null);
+  const mitEntwurf = [...importiert, p('d3', 3, true)];
+  assert.equal(zielProtokollFuerNeuanlage('einzeln', importiert[1], mitEntwurf)?.id, 'd3');
+});
+
 test('Ziel Neuanlage: kein offenes Protokoll -> null (Aufrufer bildet einen Entwurf erst beim Speichern)', () => {
   const importiert = [p('i1', 1, false), p('i2', 2, false), p('ibt', -1, false)];
   assert.equal(zielProtokollFuerNeuanlage('alle', importiert[1], importiert), null);

@@ -16,6 +16,12 @@ const quelle = readFileSync(new URL('../src/components/redesign/GruppeDetail.tsx
   .replace(/\/\*[\s\S]*?\*\//g, '')
   .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
+test('B8: zwei Spalten nur nach der Formfaktor-Regel (Tablet quer), nicht nach der bloßen Lage', () => {
+  assert.match(quelle, /import\s*\{[^}]*\bsplitAnsicht\b[^}]*\}\s*from\s*'\.\.\/\.\.\/hooks\/formFaktor'/);
+  assert.match(quelle, /const zweiSpalten = splitAnsicht\(ff\);/);
+  assert.equal(/orientation\s*===\s*'quer'/.test(quelle), false, 'Telefon quer würde zweispaltig');
+});
+
 test('B1: Gruppen-Detail bestimmt das aktuelle Protokoll mit aktuellesProtokoll aus protokollRegeln', () => {
   assert.match(quelle, /import\s*\{[^}]*\baktuellesProtokoll\b[^}]*\}\s*from\s*'\.\.\/\.\.\/protokollRegeln'/);
   assert.match(quelle, /=\s*aktuellesProtokoll\(protokolle\)/);
