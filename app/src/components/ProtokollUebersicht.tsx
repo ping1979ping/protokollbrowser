@@ -352,6 +352,26 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         </div>
       )}
 
+      {/* 999.1750: Laden vom Server hat Punkte mit ungesendeten Änderungen nicht überschrieben */}
+      {sync.syncHinweis && (
+        <div className="shrink-0 border-b border-black/5 px-3 py-2">
+          <div
+            data-bereich="sync-hinweis"
+            role="status"
+            className="flex items-start gap-2 rounded-xl border p-3 text-sm text-ping-text"
+            style={{ background: 'var(--color-ping-gold-bg)', borderColor: 'var(--color-ping-gold-light)' }}
+          >
+            <p className="min-w-0 flex-1">{sync.syncHinweis}</p>
+            <button
+              onClick={sync.hinweisGelesen}
+              className="shrink-0 rounded-lg bg-white/70 px-2.5 py-1 text-xs font-semibold text-ping-gold-dark transition hover:bg-white"
+            >
+              Gelesen
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* B4: Meldungen des Hintergrundwegs (und nicht bestätigte aus dem Export) — bleiben bis „Gelesen" */}
       {sync.uploadMeldungen.length > 0 && (
         <div className="shrink-0 max-h-[45vh] space-y-2 overflow-auto border-b border-black/5 px-3 py-2">

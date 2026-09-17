@@ -1,6 +1,7 @@
 import { openDB } from 'idb';
 import { nameNorm } from './termNorm';
 import { zielProtokollFuerNeuanlage } from './protokollRegeln';
+import { planeAbgleich } from './ladeAbgleich';
 import type { IDBPDatabase } from 'idb';
 import type { AusstehenderExport } from './uploadAblauf';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste, Adresse, Ansprechpartner } from './types';
@@ -104,45 +105,24 @@ async function getDb(): Promise<IDBPDatabase> {
   });
 }
 
-export async function importPakete(pakete: ProtokollPaket[]): Promise<void> {
+/**
+ * Geladene Pakete (Server oder Datei) übernehmen. Lesen, Abgleich (ladeAbgleich.ts) und Schreiben
+ * in EINER Transaktion: Punkte mit ungesendeter Änderung werden nicht überschrieben (999.1750).
+ * Liefert die lokale id der Gruppe und die Zahl der so geschützten Punkte.
+ */
+export async function importPakete(pakete: ProtokollPaket[]): Promise<{ gruppeId: string | null; geschuetzt: number }> {
   const db = await getDb();
-
-  // Dedup: legacy_id → bestehende UUID Mappings laden
-  const gruppenMap = await buildLegacyIdMap(db, 'protokollgruppen');
-  const protMap = await buildLegacyIdMap(db, 'protokolle');
-  const elemMap = await buildLegacyIdMap(db, 'elemente');
-
   const tx = db.transaction(['protokollgruppen', 'protokolle', 'elemente'], 'readwrite');
-  for (const paket of pakete) {
-    // Gruppe: bestehende UUID wiederverwenden
-    const existingGruppeId = gruppenMap.get(paket.protokollgruppe.legacy_id);
-    if (existingGruppeId) paket.protokollgruppe.id = existingGruppeId;
-
-    await tx.objectStore('protokollgruppen').put(paket.protokollgruppe);
-
-    // Protokoll: bestehende UUID wiederverwenden
-    const existingProtId = protMap.get(paket.protokoll.legacy_id);
-    if (existingProtId) paket.protokoll.id = existingProtId;
-
-    const protMitGruppe: ProtokollMitGruppe = { ...paket.protokoll, gruppe_id: paket.protokollgruppe.id };
-    await tx.objectStore('protokolle').put(protMitGruppe);
-
-    for (const elem of paket.protokollelemente) {
-      // Element: bestehende UUID wiederverwenden
-      const existingElemId = elemMap.get(elem.legacy_id);
-      if (existingElemId) {
-        // Lokale Flags bewahren
-        const existing = await tx.objectStore('elemente').get(existingElemId);
-        if (existing?.is_modified) elem.is_modified = true;
-        if (existing?.is_new) elem.is_new = true;
-        elem.id = existingElemId;
-      }
-      // protokoll_id auf (evtl. korrigierte) Protokoll-UUID setzen
-      elem.protokoll_id = paket.protokoll.id;
-      await tx.objectStore('elemente').put(elem);
-    }
-  }
+  const plan = planeAbgleich({
+    gruppen: await tx.objectStore('protokollgruppen').getAll(),
+    protokolle: await tx.objectStore('protokolle').getAll(),
+    elemente: await tx.objectStore('elemente').getAll(),
+  }, pakete);
+  for (const g of plan.gruppen) await tx.objectStore('protokollgruppen').put(g);
+  for (const p of plan.protokolle) await tx.objectStore('protokolle').put(p);
+  for (const e of plan.elemente) await tx.objectStore('elemente').put(e);
   await tx.done;
+  return { gruppeId: plan.gruppeId, geschuetzt: plan.geschuetzt.length };
 }
 
 async function buildLegacyIdMap(db: IDBPDatabase, storeName: string): Promise<Map<string, string>> {

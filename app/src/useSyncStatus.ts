@@ -3,6 +3,7 @@ import { checkConnectivity, getServerUrl, syncProject } from './syncService';
 import { getPendingChangesCount, setSyncMeta, getPendingExports, type PendingExport } from './db';
 import { sendeAusstehende, ungeleseneMeldungen, meldungGelesen, raeumeErledigteAuf } from './uploadAblauf';
 import { uploadAblaufDeps } from './uploadAblaufDb';
+import { textGeschuetzt } from './ladeAbgleich';
 
 const CHECK_INTERVAL_MS = 30_000;
 
@@ -18,8 +19,11 @@ export interface SyncStatus {
   uploadMeldungen: PendingExport[];
   /** Meldung bestätigen (Export bleibt, solange Marken offen sind). */
   meldungGelesen: (id: string) => Promise<void>;
-  /** Steigt nach jedem Hintergrundversand — Listen mit Änderungsmarken neu laden. */
+  /** Steigt nach jedem Hintergrundversand und jedem Laden vom Server — Listen neu laden. */
   hintergrundStand: number;
+  /** 999.1750: Hinweis nach dem Laden, z. B. dass Punkte mit ungesendeten Änderungen nicht überschrieben wurden. */
+  syncHinweis: string | null;
+  hinweisGelesen: () => void;
 }
 
 export function useSyncStatus(gruppeId: string): SyncStatus {
@@ -31,6 +35,7 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
   const [isSyncing, setIsSyncing] = useState(false);
   const [uploadMeldungen, setUploadMeldungen] = useState<PendingExport[]>([]);
   const [hintergrundStand, setHintergrundStand] = useState(0);
+  const [syncHinweis, setSyncHinweis] = useState<string | null>(null);
   const wasReachable = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
@@ -55,11 +60,14 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
     setIsSyncing(true);
     setSyncError(null);
     try {
-      await syncProject(gruppeId);
+      const { geschuetzt } = await syncProject(gruppeId);
       const now = new Date().toISOString();
       setLastSync(now);
       await setSyncMeta({ gruppeId, serverUrl: getServerUrl(), lastSync: now, autoSync: true });
       await refreshPending();
+      // 999.1750: geschützte Punkte benennen; Liste mit dem geladenen Stand neu einlesen
+      setSyncHinweis(textGeschuetzt(geschuetzt));
+      setHintergrundStand(n => n + 1);
     } catch (err) {
       // quick-260720-m4x: Fehler sichtbar machen — KEIN lastSync (kein falsches
       // 'gerade eben'). Pending neu einlesen, damit es korrekt pending bleibt.
@@ -145,5 +153,7 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
     uploadMeldungen,
     meldungGelesen: bestaetigeMeldung,
     hintergrundStand,
+    syncHinweis,
+    hinweisGelesen: () => setSyncHinweis(null),
   };
 }

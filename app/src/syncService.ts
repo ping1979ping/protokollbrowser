@@ -7,7 +7,7 @@
  * abgefangen; bleibt es beim 401 -> sauberer Logout (T-06-06-02).
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, getAllGruppen, getProtokollgruppe, setSyncMeta, getPendingExports, deletePendingExport, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner, upsertProjektThemen, getAdhocProjektThemen, remapThemaTermIds, updateGruppeRefs } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, getAllGruppen, getProtokollgruppe, setSyncMeta, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner, upsertProjektThemen, getAdhocProjektThemen, remapThemaTermIds, updateGruppeRefs } from './db';
 import { parseDfJson } from './dfimport';
 import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { parseAdressenJson } from './adressenimport';
@@ -147,25 +147,22 @@ export async function resolveGruppenKennung(projectId: string): Promise<string> 
   return waehleGruppenKennung(projectId, treffer ?? null, alle);
 }
 
-/** Projekt vom Server herunterladen und in IndexedDB importieren */
-export async function downloadProject(projectId: string): Promise<void> {
+/**
+ * Projekt vom Server herunterladen und in IndexedDB importieren.
+ * 999.1750: Punkte mit ungesendeter Änderung werden nicht überschrieben (Zahl in `geschuetzt`),
+ * und ausstehende Exporte bleiben liegen — sie gehen weiter über den Upload-Ablauf
+ * (uploadAblauf.ts) an den Hub; bis dahin sind ihre Daten NICHT im Server.
+ */
+export async function downloadProject(projectId: string): Promise<{ geschuetzt: number }> {
   const kennung = await resolveGruppenKennung(projectId);
   const resp = await fetchApi(`${SYNC}/projects/${encodeURIComponent(kennung)}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
   const { pakete, verantwortliche } = parseDfJson(raw);
   if (pakete.length === 0) throw new Error('Keine Protokolle in den Server-Daten');
 
-  await importPakete(pakete);
+  const { gruppeId: geladeneGruppe, geschuetzt } = await importPakete(pakete);
   if (verantwortliche.length > 0) await importVerantwortliche(verantwortliche);
-
-  // Alte PendingExports dieser Gruppe aufräumen (Daten sind jetzt im Server)
-  const gruppeId = pakete[0].protokollgruppe.id;
-  try {
-    const pending = await getPendingExports();
-    for (const exp of pending) {
-      if (exp.gruppeId === gruppeId) await deletePendingExport(exp.id);
-    }
-  } catch { /* ignore */ }
+  const gruppeId = geladeneGruppe ?? pakete[0].protokollgruppe.id;
 
   // Sync-Meta aktualisieren
   await setSyncMeta({
@@ -187,6 +184,7 @@ export async function downloadProject(projectId: string): Promise<void> {
   } catch (e) {
     console.warn('[06.5-09] Woerterbuch-Sync uebersprungen:', e);
   }
+  return { geschuetzt };
 }
 
 /**
@@ -456,11 +454,11 @@ export async function reorderUserAbos(gruppeIds: string[]): Promise<void> {
 }
 
 /** Sync: Nur Download vom Server (Upload nur über manuellen ZIP-Export) */
-export async function syncProject(gruppeId: string): Promise<{ downloaded: boolean }> {
+export async function syncProject(gruppeId: string): Promise<{ downloaded: boolean; geschuetzt: number }> {
   // quick-260720-m4x: Fehler NICHT mehr schlucken. Der Aufrufer (useSyncStatus)
   // braucht ihn, um syncError zu setzen und lastSync NICHT faelschlich zu
   // aktualisieren. downloadProject setzt bei Erfolg bereits die Sync-Meta.
-  await downloadProject(gruppeId);
+  const { geschuetzt } = await downloadProject(gruppeId);
 
   await setSyncMeta({
     gruppeId,
@@ -469,7 +467,7 @@ export async function syncProject(gruppeId: string): Promise<{ downloaded: boole
     autoSync: true,
   });
 
-  return { downloaded: true };
+  return { downloaded: true, geschuetzt };
 }
 
 /** Projekt-Katalog vom Server laden, filtern und in IndexedDB importieren */

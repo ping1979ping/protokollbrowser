@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { getServerUrl, listRemoteProjects, downloadProject, checkConnectivity, getSubscriptions, saveSubscriptions, downloadAddressCatalog } from '../syncService';
+import { textGeschuetzt } from '../ladeAbgleich';
 
 interface RemoteProject {
   id: string;
@@ -112,11 +113,15 @@ export default function ServerImportScreen({ onImported, onZurueck, onSettings }
 
       // Projekte nacheinander laden
       const ids = [...selected];
+      let geschuetzt = 0;
       for (let i = 0; i < ids.length; i++) {
         const p = projekte.find(p => p.id === ids[i]);
         setProgress(`Lade ${p?.projektName || ids[i]} (${i + 1}/${ids.length})...`);
-        await downloadProject(ids[i]);
+        geschuetzt += (await downloadProject(ids[i])).geschuetzt;
       }
+      // 999.1750: Punkte mit ungesendeten Änderungen wurden nicht überschrieben — sagen, bevor es weitergeht
+      const hinweis = textGeschuetzt(geschuetzt);
+      if (hinweis) alert(hinweis);
 
       // Adressen-Katalog laden (optional — Fehler nicht blockierend)
       try {
