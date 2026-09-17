@@ -2,6 +2,7 @@ import { openDB } from 'idb';
 import { nameNorm } from './termNorm';
 import { zielProtokollFuerNeuanlage } from './protokollRegeln';
 import { planeAbgleich } from './ladeAbgleich';
+import { nachUebernahme } from './hubPaket';
 import type { IDBPDatabase } from 'idb';
 import type { AusstehenderExport } from './uploadAblauf';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste, Adresse, Ansprechpartner } from './types';
@@ -359,15 +360,14 @@ export interface SyncMeta {
   autoSync?: boolean;
 }
 
+/** Änderungsmarken belegt übernommener Punkte löschen; neue Punkte behalten ihre UUID als hub_id (999.1750). */
 export async function clearSyncFlags(elementIds: string[]): Promise<void> {
   const db = await getDb();
   const tx = db.transaction('elemente', 'readwrite');
   for (const id of elementIds) {
     const elem = await tx.objectStore('elemente').get(id);
     if (elem) {
-      elem.is_modified = false;
-      elem.is_new = false;
-      await tx.objectStore('elemente').put(elem);
+      await tx.objectStore('elemente').put(nachUebernahme(elem));
     }
   }
   await tx.done;

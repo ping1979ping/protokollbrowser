@@ -89,6 +89,103 @@ test('Hinweistext nennt die Zahl', () => {
   assert.match(textGeschuetzt(1) ?? '', /^1 Punkt hat ungesendete Änderungen und wurde nicht überschrieben\./);
 });
 
+// --- Umstieg auf Hub-Kennungen (999.1750, Punkt 3) -----------------------------------------------
+
+/** Gerät vor dem Umstieg: alles mit geräte-lokalen Zufalls-UUIDs, Hub-Protokoll Nr. 5 ohne OID. */
+function geraetVorUmstieg(mitAenderungen: boolean): LokalerStand {
+  return {
+    gruppen: [gruppe('alt-g', { legacy_id: 'OID-G' })],
+    protokolle: [
+      prot('alt-p4', 'alt-g', { legacy_id: 'OID-P4', nummer: 4 }),
+      prot('alt-p5', 'alt-g', { legacy_id: '', nummer: 5, name: 'Baubesprechung 5 - 2026' }),
+    ],
+    elemente: [
+      punkt('alt-e1', 'alt-p4', { legacy_id: 'OID-E1', position: '4.1', positionstext: mitAenderungen ? 'LOKAL: Kran geprüft' : 'Kran', is_modified: mitAenderungen }),
+      punkt('alt-e51', 'alt-p5', { position: '5.1', positionstext: mitAenderungen ? 'LOKAL: Dach dicht' : 'Dach', is_modified: mitAenderungen }),
+      punkt('alt-e52', 'alt-p5', { position: '5.2', positionstext: 'Fassade' }),
+    ],
+  };
+}
+
+/** Hub-Export nach dem Umstieg: HubId an allem, Protokoll 5 und seine Punkte ohne OID. */
+function hubExport(): ProtokollPaket[] {
+  const g = gruppe('hub-g', { legacy_id: 'OID-G', hub_id: 'hub-g' });
+  return [
+    { protokollgruppe: g, protokoll: prot('hub-p4', 'hub-g', { legacy_id: 'OID-P4', hub_id: 'hub-p4', nummer: 4, is_new: false }),
+      protokollelemente: [punkt('hub-e1', 'hub-p4', { legacy_id: 'OID-E1', hub_id: 'hub-e1', position: '4.1', positionstext: 'SERVER: Kran' })] },
+    { protokollgruppe: g, protokoll: prot('hub-p5', 'hub-g', { legacy_id: '', hub_id: 'hub-p5', nummer: 5, is_new: true, name: 'Baubesprechung 5 - 2026' }),
+      protokollelemente: [
+        punkt('hub-e51', 'hub-p5', { hub_id: 'hub-e51', position: '5.1', positionstext: 'SERVER: Dach' }),
+        punkt('hub-e52', 'hub-p5', { hub_id: 'hub-e52', position: '5.2', positionstext: 'SERVER: Fassade' }),
+      ] },
+  ];
+}
+
+/** Plan auf den lokalen Stand anwenden (wie db.importPakete). */
+function anwenden(lokal: LokalerStand, plan: ReturnType<typeof planeAbgleich>): LokalerStand {
+  const ersetze = <T extends { id: string }>(alt: readonly T[], neu: readonly T[]) => {
+    const m = new Map(alt.map(x => [x.id, x]));
+    for (const x of neu) m.set(x.id, x);
+    return [...m.values()];
+  };
+  return { gruppen: ersetze(lokal.gruppen, plan.gruppen), protokolle: ersetze(lokal.protokolle, plan.protokolle), elemente: ersetze(lokal.elemente, plan.elemente) };
+}
+
+test('Umstieg, Gerät ohne Änderungen: einmal laden — lokale ids bleiben, hub_id gelernt, keine Dubletten; zweites Laden ändert nichts', () => {
+  const vorher = geraetVorUmstieg(false);
+  const eins = anwenden(vorher, planeAbgleich(vorher, hubExport()));
+  assert.deepEqual(eins.gruppen.map(g => [g.id, g.hub_id]), [['alt-g', 'hub-g']]);
+  assert.deepEqual(eins.protokolle.map(p => [p.id, p.hub_id, p.is_new]), [['alt-p4', 'hub-p4', false], ['alt-p5', 'hub-p5', true]]);
+  assert.deepEqual(eins.elemente.map(e => [e.id, e.hub_id, e.protokoll_id, e.positionstext]), [
+    ['alt-e1', 'hub-e1', 'alt-p4', 'SERVER: Kran'],
+    ['alt-e51', 'hub-e51', 'alt-p5', 'SERVER: Dach'],
+    ['alt-e52', 'hub-e52', 'alt-p5', 'SERVER: Fassade'],
+  ]);
+  const zwei = anwenden(eins, planeAbgleich(eins, hubExport()));
+  assert.deepEqual(zwei, eins);
+});
+
+test('Umstieg, Gerät mit Änderungen: nichts verloren — Inhalt und Marke bleiben, hub_id wird trotzdem gelernt', () => {
+  const vorher = geraetVorUmstieg(true);
+  const plan = planeAbgleich(vorher, hubExport());
+  const nachher = anwenden(vorher, plan);
+  assert.deepEqual(plan.geschuetzt.map(e => e.id).sort(), ['alt-e1', 'alt-e51']);
+  assert.deepEqual(nachher.elemente.map(e => [e.id, e.hub_id, e.positionstext, !!e.is_modified]), [
+    ['alt-e1', 'hub-e1', 'LOKAL: Kran geprüft', true],
+    ['alt-e51', 'hub-e51', 'LOKAL: Dach dicht', true],
+    ['alt-e52', 'hub-e52', 'SERVER: Fassade', false],
+  ]);
+  assert.equal(nachher.elemente.length, 3, 'keine Dublette');
+});
+
+test('Umstieg: nicht eindeutige Position wird nicht geraten — Serverpunkt neu, lokale Punkte unberührt', () => {
+  const vorher = geraetVorUmstieg(false);
+  vorher.elemente.push(punkt('alt-e51b', 'alt-p5', { position: '5.1', positionstext: 'Dach (Dublette aus altem Ladestand)' }));
+  const nachher = anwenden(vorher, planeAbgleich(vorher, hubExport()));
+  const auf51 = nachher.elemente.filter(e => e.position === '5.1').map(e => [e.id, e.hub_id ?? null]).sort();
+  assert.deepEqual(auf51, [['alt-e51', null], ['alt-e51b', null], ['hub-e51', 'hub-e51']]);
+});
+
+test('Umstieg: lokaler Entwurf (is_new) mit gleicher Nummer wird keinem Hub-Protokoll zugeordnet', () => {
+  const vorher = geraetVorUmstieg(false);
+  vorher.protokolle[1] = { ...vorher.protokolle[1], is_new: true };
+  const nachher = anwenden(vorher, planeAbgleich(vorher, hubExport()));
+  assert.deepEqual(nachher.protokolle.map(p => [p.id, p.hub_id ?? null]).sort(), [['alt-p4', 'hub-p4'], ['alt-p5', null], ['hub-p5', 'hub-p5']]);
+});
+
+test('Nach dem Umstieg: neu geladene Objekte tragen die Hub-UUID als id; gesendete lokale Neuanlage wird über ihre UUID erkannt', () => {
+  const leer: LokalerStand = { gruppen: [], protokolle: [], elemente: [] };
+  const plan = planeAbgleich(leer, hubExport());
+  assert.equal(plan.gruppeId, 'hub-g');
+  // lokal angelegter Punkt, gesendet (Hub übernahm die UUID), danach geändert
+  const lokal = anwenden(leer, plan);
+  lokal.elemente.push(punkt('neu-uuid', 'hub-p5', { position: '5.3', positionstext: 'LOKAL: nachgetragen', hub_id: 'neu-uuid', is_modified: true }));
+  const server = hubExport();
+  server[1].protokollelemente.push(punkt('neu-uuid', 'hub-p5', { hub_id: 'neu-uuid', position: '5.3', positionstext: 'SERVER: alt' }));
+  const zwei = planeAbgleich(lokal, server);
+  assert.deepEqual(zwei.geschuetzt.map(e => [e.id, e.positionstext]), [['neu-uuid', 'LOKAL: nachgetragen']]);
+});
+
 test('Verdrahtung: Laden löscht keine ausstehenden Exporte, Sync-Knopf und „Vom Server laden" zeigen den Hinweis', () => {
   const quelle = (pfad: string) => readFileSync(new URL(`../src/${pfad}`, import.meta.url), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');

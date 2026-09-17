@@ -15,11 +15,11 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { baueHubPakete, hubKennung, zuDfDatum, type HubElement } from '../src/hubPaket.ts';
+import { baueHubPakete, hubKennung, kennungGesichert, nachUebernahme, textZurueckgehalten, zuDfDatum, type HubElement } from '../src/hubPaket.ts';
+import { parseDfJson } from '../src/dfimport.ts';
+import { planeAbgleich } from '../src/ladeAbgleich.ts';
 import type { Protokoll, Protokollelement } from '../src/types.ts';
-
-const vertrag = JSON.parse(readFileSync(new URL('./fixtures/protokoll_app_vertrag_v1.json', import.meta.url), 'utf8'));
+import { vertrag, exportAusBestand } from './fixtures/vertrag.ts';
 const T = '2026-09-17T07:00:00.000Z';
 
 function prot(p: Partial<Protokoll> & Pick<Protokoll, 'id' | 'name' | 'nummer' | 'datum'>): Protokoll {
@@ -180,6 +180,61 @@ test('Punkt ohne Protokoll wird nicht gepackt', () => {
   const { pakete, elementIds } = baueHubPakete({ protokolle: [], elemente: [punkt({ id: 'w', protokoll_id: 'fehlt', is_new: true })] });
   assert.deepEqual(pakete, []);
   assert.deepEqual(elementIds, []);
+});
+
+// --- 999.1750 Punkt 3: Kennungen aus dem Hub ---------------------------------------------------
+
+test('Ende zu Ende: Bestand der Probe laden (Parser + Abgleich), ändern, packen -> `upload` der Probe', () => {
+  const { pakete: geladen } = parseDfJson(exportAusBestand(vertrag.bestand));
+  const plan = planeAbgleich({ gruppen: [], protokolle: [], elemente: [] }, geladen);
+  const b = vertrag.bestand.protokolle[0];
+  const [n1, n2] = vertrag.upload[0].Elemente;
+  const neuProtId = n1.ProtokollId;
+  // Gerät: Status/Text am Punkt des versendeten Protokolls geändert, offline Protokoll mit zwei Punkten angelegt
+  const protokolle = [
+    ...plan.protokolle,
+    prot({ id: neuProtId, name: 'Baubesprechung 2', nummer: 1, datum: '2026-09-17T09:30:00', is_new: true }),
+  ];
+  const e0 = plan.elemente.find(e => e.hub_id === b.Elemente[0].HubId)!;
+  const elemente = [
+    { ...e0, status: 25, positionstext: 'Schalung der Decke über EG geprüft', is_modified: true },
+    punkt({ id: n1.Id, protokoll_id: neuProtId, position: '1', positionstitel: 'Baustelleneinrichtung', positionstext: n1.Positionstext, thema: 'Baustelleneinrichtung', status: 20, is_new: true }),
+    punkt({ id: n2.Id, protokoll_id: neuProtId, position: '2', positionstitel: 'Rohbau', positionstext: n2.Positionstext, thema: 'Rohbau', status: 10, termin: '2026-09-24T00:00:00', verantwortlicher_name: 'Rohbau Muster GmbH', bemerkung: 'Statiker informieren', is_new: true }),
+  ];
+  const { pakete, zurueckgehalten } = baueHubPakete({ protokolle, elemente });
+  assert.deepEqual(zurueckgehalten, []);
+  assert.equal(pakete.length, 2);
+  assert.deepEqual(pakete[0].ProtokollMeta, vertrag.upload[0].ProtokollMeta);
+  vertrag.upload[0].Elemente.forEach((soll: Record<string, unknown>, i: number) => vergleicheMitProbe(pakete[0].Elemente[i], soll, `Paket 1 Punkt ${i + 1}`));
+  assert.deepEqual(pakete[1], vertrag.upload[1]);
+});
+
+test('Umstieg: Punkte mit dem Hub unbekannter Kennung werden zurückgehalten, nicht mit Zufalls-UUID gesendet', () => {
+  // Bestand vor dem Umstieg: Hub-Protokoll ohne OID mit lokaler Zufalls-UUID, Punkt ebenso
+  const alt = prot({ id: 'alt-p5', name: 'Baubesprechung 5', nummer: 5, datum: '2026-09-10T10:00:00' });
+  const df = prot({ id: 'alt-p4', legacy_id: 'OID-P4', name: 'Baubesprechung 4', nummer: 4, datum: '2026-09-03T10:00:00' });
+  const r = baueHubPakete({
+    protokolle: [alt, df],
+    elemente: [
+      punkt({ id: 'alt-e51', protokoll_id: 'alt-p5', position: '5.1', is_modified: true }),     // Protokoll und Punkt unbekannt
+      punkt({ id: 'neu-1', protokoll_id: 'alt-p5', position: '5.2', is_new: true }),            // neu, aber Protokoll unbekannt
+      punkt({ id: 'alt-e4x', protokoll_id: 'alt-p4', position: '4.9', is_modified: true }),     // Protokoll mit OID, Punkt unbekannt
+      punkt({ id: 'alt-e41', legacy_id: 'OID-E41', protokoll_id: 'alt-p4', position: '4.1', is_modified: true }),
+    ],
+  });
+  assert.deepEqual(r.zurueckgehalten, ['alt-e51', 'neu-1', 'alt-e4x']);
+  assert.deepEqual(r.pakete.flatMap(p => p.Elemente.map(e => e.Id)), ['OID-E41']);
+  assert.match(textZurueckgehalten(3) ?? '', /^3 Punkte stammen aus einem Ladestand vor der Umstellung/);
+});
+
+test('Nach belegter Übernahme: neuer Punkt ohne OID behält seine UUID als hub_id (sonst beim nächsten Senden zurückgehalten)', () => {
+  const neu = nachUebernahme(punkt({ id: 'u1', protokoll_id: 'p', is_new: true }));
+  assert.deepEqual([neu.hub_id, neu.is_new, neu.is_modified], ['u1', false, false]);
+  const df = nachUebernahme(punkt({ id: 'lokal', legacy_id: 'OID', protokoll_id: 'p', is_modified: true }));
+  assert.equal(df.hub_id, undefined, 'DocuFrame-Punkt: lokale id ist nicht die Hub-UUID');
+  const hub = nachUebernahme(punkt({ id: 'lokal2', hub_id: 'h2', protokoll_id: 'p', is_modified: true }));
+  assert.equal(hub.hub_id, 'h2');
+  assert.equal(kennungGesichert({ ...neu, is_new: false }), true);
 });
 
 test('Datum für den Hub (DocuFrame-Form, wie df_to_iso sie liest)', () => {

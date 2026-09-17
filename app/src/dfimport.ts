@@ -2,8 +2,19 @@
 // Gibt Hub-konforme Objekte aus (snake_case, UUID, legacy_id)
 
 import type { ProtokollPaket, Protokollgruppe, Protokoll, Protokollelement, Teilnehmer, MobileErfassung } from './types';
-import { emptyMobileErfassung } from './types';
+import { emptyMobileErfassung } from './types.ts';
 import type { Verantwortlicher } from './db';
+
+/**
+ * 999.1750: Hub-Kennung eines Export-Blocks. Der Hub-Export trägt an Gruppe, Protokoll und Punkt
+ * zusätzlich `HubId` (UUID) und `IsNew` (hub-server services/protokoll_dfjson.py `_hub_kennung`
+ * :780-791); `Id` bleibt die OID (bei im Hub angelegten Objekten leer). Die Hub-UUID wird die
+ * lokale id eines neu geladenen Objekts und als `hub_id` festgehalten.
+ */
+function hubIdVon(raw: Record<string, unknown>): string | undefined {
+  const v = raw['HubId'];
+  return typeof v === 'string' && v ? v : undefined;
+}
 
 // DOCUframe Datumsformat: "DD.MM.YYYY HH:MM:SS" -> ISO
 function parseDfDatum(s: string): string {
@@ -274,8 +285,12 @@ function parseDfJsonHierarchical(raw: unknown[]): { pakete: ProtokollPaket[]; ve
     if (obj['Protokollgruppe']) {
       const grpArr = obj['Protokollgruppe'] as Record<string, unknown>[];
       for (const grpRaw of grpArr) {
+        const grpHubId = hubIdVon(grpRaw);
         const gruppe: Protokollgruppe = {
           ...hubDefaults(),
+          ...(grpHubId ? { id: grpHubId, hub_id: grpHubId } : {}),
+          // IsNew der Gruppe heißt im Hub „ohne DocuFrame-OID"
+          ...(typeof grpRaw['IsNew'] === 'boolean' ? { is_new: grpRaw['IsNew'] } : {}),
           object_type: 'protokollgruppe',
           legacy_id: grpRaw['Id'] as string || '',
           name: grpRaw['Name'] as string || '',
@@ -295,7 +310,8 @@ function parseDfJsonHierarchical(raw: unknown[]): { pakete: ProtokollPaket[]; ve
         const protArr = grpRaw['Protokoll'] as Record<string, unknown>[] || [];
         for (const protRaw of protArr) {
           const legacyId = protRaw['Id'] as string || '';
-          const newProtId = newUUID();
+          const protHubId = hubIdVon(protRaw);
+          const newProtId = protHubId ?? newUUID();
           protokollIdMap.set(legacyId, newProtId);
 
           const now = nowISO();
@@ -319,6 +335,9 @@ function parseDfJsonHierarchical(raw: unknown[]): { pakete: ProtokollPaket[]; ve
             signatur: protRaw['Signatur'] as string || '',
             teilnehmer: parseTeilnehmer(protRaw['Teilnehmer']),
             verteiler: parseTeilnehmer(protRaw['Verteiler']),
+            ...(protHubId ? { hub_id: protHubId } : {}),
+            // Hub-Wahrheit „offen/versendet" (protokollRegeln.istVerteilt liest is_new)
+            ...(typeof protRaw['IsNew'] === 'boolean' ? { is_new: protRaw['IsNew'] } : {}),
           };
 
           const elemente: Protokollelement[] = [];
@@ -328,8 +347,12 @@ function parseDfJsonHierarchical(raw: unknown[]): { pakete: ProtokollPaket[]; ve
               const elemArr = (Array.isArray(inner) ? inner : [inner]) as Record<string, unknown>[];
               for (const eRaw of elemArr) {
                 const elemNow = nowISO();
+                const elemHubId = hubIdVon(eRaw);
                 elemente.push({
-                  id: newUUID(),
+                  // IsNew am Punkt wird bewusst NICHT übernommen: lokal ist is_new die Marke
+                  // „neu, noch nicht gesendet" — der Hub-Wert machte jeden im Hub neuen Punkt zur Änderung.
+                  id: elemHubId ?? newUUID(),
+                  ...(elemHubId ? { hub_id: elemHubId } : {}),
                   created_at: elemNow,
                   updated_at: elemNow,
                   created_by: null,

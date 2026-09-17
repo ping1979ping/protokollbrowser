@@ -7,7 +7,7 @@ import { uploadAblaufDeps } from '../uploadAblaufDb';
 import UploadMeldung from './UploadMeldung';
 import { fetchWeather } from '../weatherService';
 import { buildV5cExportJson, buildClassicExportJson, type ExportFormat } from '../dfExport';
-import { baueHubPakete } from '../hubPaket';
+import { baueHubPakete, textZurueckgehalten } from '../hubPaket';
 import JSZip from 'jszip';
 
 interface Props {
@@ -40,6 +40,9 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
   const [pendingCount, setPendingCount] = useState(0);
   const [exported, setExported] = useState(false);
   const [wetterStatus, setWetterStatus] = useState<string | null>(null);
+  // 999.1750: zurückgehaltene Punkte (Kennung dem Hub unbekannt) und „nichts zu senden"
+  const [zurueckgehalten, setZurueckgehalten] = useState(0);
+  const [ohneVersand, setOhneVersand] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>(
     () => (localStorage.getItem('exportFormat') as ExportFormat) || 'v5c'
   );
@@ -127,44 +130,52 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
 
       // An den Hub: IMMER die Hub-Pakete (hubPaket.ts, Vertrag protokoll_app_vertrag_v1) —
       // unabhängig vom Formatschalter. Themen reiten als `terms` am ersten Paket mit.
-      const { pakete, elementIds } = baueHubPakete({
+      const { pakete, elementIds, zurueckgehalten: halten } = baueHubPakete({
         protokolle: prots,
         elemente: relevante,
         terms: (termsPaket?.terms as unknown[] | undefined) ?? null,
       });
-      const hubZip = new JSZip();
-      hubZip.file('upload.json', JSON.stringify(pakete));
-      await legeFotosAb(hubZip, relevante.filter(e => elementIds.includes(e.id)));
-      const hubBlob = await hubZip.generateAsync({ type: 'blob' });
+      // Umstieg (999.1750): Punkte mit einer dem Hub unbekannten Kennung gehen erst nach dem Laden mit
+      setZurueckgehalten(halten.length);
 
-      // Hub-ZIP in IndexedDB speichern (wartet dort, bis der Hub geantwortet hat)
-      const ausstehend: PendingExport = {
-        id: `export-${Date.now()}`,
-        gruppeId: gruppe.id,
-        blob: hubBlob,
-        filename: `hub_upload_${ts}.zip`,
-        elementIds,
-        createdAt: new Date().toISOString(),
-      };
-      await savePendingExport(ausstehend);
+      if (pakete.length === 0) {
+        setOhneVersand(true);
+        setExported(true);
+      } else {
+        const hubZip = new JSZip();
+        hubZip.file('upload.json', JSON.stringify(pakete));
+        await legeFotosAb(hubZip, relevante.filter(e => elementIds.includes(e.id)));
+        const hubBlob = await hubZip.generateAsync({ type: 'blob' });
 
-      // Sofort versuchen hochzuladen
-      const online = await checkConnectivity();
-      if (online) {
-        try {
-          // B4: derselbe Ablauf wie im Hintergrund (uploadAblauf.ts) — Marken nur für belegt
-          // übernommene Punkte löschen; bei Abweichungen bleibt der Export mit Auswertung liegen.
-          const { auswertung, datensatz } = await sendeExport(ausstehend, uploadAblaufDeps);
-          setLiegenGeblieben(datensatz);
-          setUploadResult(auswertung.vollstaendig ? 'ok' : 'teilweise');
-          setExported(true);
-        } catch {
+        // Hub-ZIP in IndexedDB speichern (wartet dort, bis der Hub geantwortet hat)
+        const ausstehend: PendingExport = {
+          id: `export-${Date.now()}`,
+          gruppeId: gruppe.id,
+          blob: hubBlob,
+          filename: `hub_upload_${ts}.zip`,
+          elementIds,
+          createdAt: new Date().toISOString(),
+        };
+        await savePendingExport(ausstehend);
+
+        // Sofort versuchen hochzuladen
+        const online = await checkConnectivity();
+        if (online) {
+          try {
+            // B4: derselbe Ablauf wie im Hintergrund (uploadAblauf.ts) — Marken nur für belegt
+            // übernommene Punkte löschen; bei Abweichungen bleibt der Export mit Auswertung liegen.
+            const { auswertung, datensatz } = await sendeExport(ausstehend, uploadAblaufDeps);
+            setLiegenGeblieben(datensatz);
+            setUploadResult(auswertung.vollstaendig ? 'ok' : 'teilweise');
+            setExported(true);
+          } catch {
+            setPendingCount(prev => prev + 1);
+            setExported(true);
+          }
+        } else {
           setPendingCount(prev => prev + 1);
           setExported(true);
         }
-      } else {
-        setPendingCount(prev => prev + 1);
-        setExported(true);
       }
 
       // Lokaler Download als Backup (DOCUframe-Format)
@@ -277,7 +288,7 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
           disabled={exporting || exported}
           className="w-full bg-green-600 text-white py-3 rounded-xl font-medium hover:bg-green-700 active:bg-green-800 transition disabled:opacity-50"
         >
-          {exporting ? (wetterStatus || 'Sende …') : exported ? (uploadResult ? 'Gesendet' : 'Zum Senden gespeichert') : 'An Server senden'}
+          {exporting ? (wetterStatus || 'Sende …') : exported ? (uploadResult ? 'Gesendet' : ohneVersand ? 'Nichts gesendet' : 'Zum Senden gespeichert') : 'An Server senden'}
         </button>
 
         {uploadResult === 'ok' && (
@@ -297,9 +308,15 @@ export default function ExportScreen({ protokoll, gruppe, onBack }: Props) {
           />
         )}
 
-        {exported && uploadResult === null && (
+        {exported && uploadResult === null && !ohneVersand && (
           <p className="text-yellow-600 text-sm font-medium text-center">
             Export gespeichert. Wird automatisch an Server gesendet sobald erreichbar.
+          </p>
+        )}
+
+        {zurueckgehalten > 0 && (
+          <p data-bereich="export-zurueckgehalten" role="status" className="text-yellow-700 text-sm font-medium text-center">
+            {textZurueckgehalten(zurueckgehalten)}
           </p>
         )}
 

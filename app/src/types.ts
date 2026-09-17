@@ -99,6 +99,8 @@ export interface Protokollgruppe extends HubEntity {
   /** 06.5-09: waehrend des Downloads aufgeloest (Hub-Projekt-UUID / Hub-Gruppen-UUID). */
   projekt_id?: string;
   hub_id?: string;
+  /** 999.1750: `IsNew` aus dem Hub-Export — Gruppe ohne DocuFrame-OID. */
+  is_new?: boolean;
 }
 
 export interface ProtokollPaket {

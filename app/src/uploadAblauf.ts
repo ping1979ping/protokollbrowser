@@ -47,6 +47,7 @@ export interface AusstehenderExport {
 export interface UploadElement {
   id: string;
   legacy_id?: string;
+  hub_id?: string;
   position?: string;
   positionstext?: string;
   positionstitel?: string;

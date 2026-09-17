@@ -55,7 +55,7 @@ export function textUebersprungenOhneZuordnung(anzahl: number): string {
 
 export function werteUploadAus(
   bericht: UploadBericht,
-  elemente: readonly { id: string; legacy_id?: string }[],
+  elemente: readonly { id: string; legacy_id?: string; hub_id?: string }[],
 ): UploadAuswertung {
   const ids = elemente.map(e => e.id);
   const basis: UploadAuswertung = {
@@ -80,7 +80,8 @@ export function werteUploadAus(
   const uebersprungen: string[] = [];
   const ohneZuordnung: string[] = [];
   for (const oid of bericht.skipped_oids ?? []) {
-    const treffer = elemente.find(e => e.id === oid || (!!e.legacy_id && e.legacy_id === oid));
+    // Gesendet wurde die Hub-Kennung (hubPaket.hubKennung): Hub-UUID, OID oder lokale UUID
+    const treffer = elemente.find(e => e.id === oid || (!!e.legacy_id && e.legacy_id === oid) || (!!e.hub_id && e.hub_id === oid));
     if (treffer) uebersprungen.push(treffer.id);
     else ohneZuordnung.push(oid);
   }

@@ -45,6 +45,14 @@ test('übersprungene Punkte auch über die legacy_id zuordenbar', () => {
   assert.deepEqual(a.markenLoeschen, ['e2', 'e3']);
 });
 
+test('übersprungene Punkte auch über die Hub-UUID zuordenbar (gesendete Kennung, 999.1750)', () => {
+  const mitHub = [{ id: 'lokal-1', legacy_id: '', hub_id: 'hub-1' }, { id: 'lokal-2', legacy_id: 'OID-2', hub_id: 'hub-2' }];
+  const a = werteUploadAus({ status: 'ok', written: 1, skipped: 1, felder_abgelehnt: 0, skipped_oids: ['hub-1'] }, mitHub);
+  assert.deepEqual(a.uebersprungen, ['lokal-1']);
+  assert.deepEqual(a.uebersprungenOhneZuordnung, []);
+  assert.deepEqual(a.markenLoeschen, ['lokal-2']);
+});
+
 test('übersprungen ohne zuordenbare Kennung ("?") -> keine Marke löschen', () => {
   const a = werteUploadAus({ status: 'ok', written: 2, skipped: 1, felder_abgelehnt: 0, skipped_oids: ['?'] }, elemente);
   assert.deepEqual(a.uebersprungenOhneZuordnung, ['?']);
