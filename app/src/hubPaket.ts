@@ -210,6 +210,40 @@ export function baueHubPakete(eingabe: {
   return { pakete, elementIds, zurueckgehalten };
 }
 
+// --- Nummern aus der Upload-Antwort (999.1750, Punkt 4) ----------------------------------------
+
+/**
+ * Nummer im Protokollnamen ersetzen, wenn der Name sie trägt: „Baubesprechung 3 - 2026" (Form der
+ * Entwürfe, db.bildeEntwurfProtokoll) oder „Baubesprechung 3". Sonst bleibt der Name, wie er ist.
+ */
+export function nummerImNamen(name: string, alt: number, neu: number): string {
+  const mitJahr = /^(.*?)(\d+)(\s*[-–]\s*\d{4})$/.exec(name);
+  if (mitJahr && Number(mitJahr[2]) === alt) return `${mitJahr[1]}${neu}${mitJahr[3]}`;
+  const amEnde = /^(.*\D)(\d+)$/.exec(name);
+  if (amEnde && Number(amEnde[2]) === alt) return `${amEnde[1]}${neu}`;
+  return name;
+}
+
+/**
+ * Antwort `nummern` {Protokoll-Kennung wie gesendet -> Nummer im Hub} auf die lokalen Protokolle
+ * anwenden (hub-server protokoll_sync.py :925-928, :1005-1006, :1045-1047). Die Kennung kann die
+ * lokale id, die hub_id oder die OID sein (hubKennung beim Senden). Liefert nur geänderte
+ * Protokolle — mit Hub-Nummer und angepasstem Namen; die Listen sortieren danach nach Nummer.
+ */
+export function planeNummern<T extends Pick<Protokoll, 'id' | 'name' | 'nummer'> & { hub_id?: string; legacy_id?: string }>(
+  protokolle: readonly T[],
+  nummern: Record<string, unknown> | null | undefined,
+): T[] {
+  const geaendert: T[] = [];
+  for (const [kennung, wert] of Object.entries(nummern ?? {})) {
+    if (typeof wert !== 'number' || !Number.isInteger(wert)) continue;
+    const p = protokolle.find(x => x.id === kennung || x.hub_id === kennung || (!!x.legacy_id && x.legacy_id === kennung));
+    if (!p || p.nummer === wert) continue;
+    geaendert.push({ ...p, nummer: wert, name: nummerImNamen(p.name, p.nummer, wert) });
+  }
+  return geaendert;
+}
+
 /** Meldung im Export, wenn Punkte aus einem Ladestand vor dem Umstieg zurückgehalten wurden. */
 export function textZurueckgehalten(anzahl: number): string | null {
   if (anzahl <= 0) return null;

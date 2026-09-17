@@ -2,7 +2,7 @@ import { openDB } from 'idb';
 import { nameNorm } from './termNorm';
 import { zielProtokollFuerNeuanlage } from './protokollRegeln';
 import { planeAbgleich } from './ladeAbgleich';
-import { nachUebernahme } from './hubPaket';
+import { nachUebernahme, planeNummern } from './hubPaket';
 import type { IDBPDatabase } from 'idb';
 import type { AusstehenderExport } from './uploadAblauf';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste, Adresse, Ansprechpartner } from './types';
@@ -358,6 +358,19 @@ export interface SyncMeta {
   serverUrl?: string;
   lastSync?: string;
   autoSync?: boolean;
+}
+
+/**
+ * Vom Hub vergebene Protokollnummern übernehmen (Upload-Antwort `nummern`, 999.1750): vorläufige
+ * lokale Nummer -> Hub-Nummer, Name mit. Liefert die Zahl geänderter Protokolle.
+ */
+export async function uebernehmeNummern(nummern: Record<string, unknown>): Promise<number> {
+  const db = await getDb();
+  const tx = db.transaction('protokolle', 'readwrite');
+  const geaendert = planeNummern(await tx.objectStore('protokolle').getAll() as ProtokollMitGruppe[], nummern);
+  for (const p of geaendert) await tx.objectStore('protokolle').put(p);
+  await tx.done;
+  return geaendert.length;
 }
 
 /** Änderungsmarken belegt übernommener Punkte löschen; neue Punkte behalten ihre UUID als hub_id (999.1750). */

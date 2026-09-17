@@ -7,7 +7,7 @@
  * abgefangen; bleibt es beim 401 -> sauberer Logout (T-06-06-02).
  */
 
-import { importPakete, importVerantwortliche, getAllElemente, getAllGruppen, getProtokollgruppe, setSyncMeta, importProjekte, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner, upsertProjektThemen, getAdhocProjektThemen, remapThemaTermIds, updateGruppeRefs } from './db';
+import { importPakete, importVerantwortliche, getAllElemente, getAllGruppen, getProtokollgruppe, setSyncMeta, importProjekte, uebernehmeNummern, importWertelisten, getWerteliste, importAdressen, importAnsprechpartner, upsertProjektThemen, getAdhocProjektThemen, remapThemaTermIds, updateGruppeRefs } from './db';
 import { parseDfJson } from './dfimport';
 import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { parseAdressenJson } from './adressenimport';
@@ -298,6 +298,8 @@ export interface UploadReport {
   /** Kennungen der übersprungenen neuen Punkte. */
   skipped_oids?: string[];
   term_remap?: Record<string, string>;
+  /** 999.1750: {Protokoll-Kennung wie gesendet -> Nummer im Hub}. */
+  nummern?: Record<string, number>;
   [k: string]: unknown;
 }
 
@@ -328,6 +330,15 @@ export async function uploadZip(gruppeId: string, zipBlob: Blob, filename: strin
     }
   } catch (e) {
     console.warn('[06.5-09] term_remap uebersprungen:', e);
+  }
+  // 999.1750: vom Hub vergebene Protokollnummern übernehmen (vorläufige lokale Nummer -> Hub-Nummer).
+  // Gilt für Vordergrund und Hintergrund, weil beide über diese Funktion senden (uploadAblaufDb).
+  try {
+    if (report.nummern && Object.keys(report.nummern).length > 0) {
+      await uebernehmeNummern(report.nummern);
+    }
+  } catch (e) {
+    console.warn('[999.1750] nummern nicht übernommen:', e);
   }
   return report;
 }
