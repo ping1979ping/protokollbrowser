@@ -175,6 +175,20 @@ test('Aufräumen: gelesener Export ohne offene Marken wird gelöscht, ungelesene
   assert.equal(w.exporte.has('x2'), true, 'ungelesene Meldung bleibt, auch ohne Marken');
 });
 
+test('Aufräumen: ein Fehler an einem Export hält die übrigen nicht auf (999.1750)', async () => {
+  const w = welt([ok({ felder_abgelehnt: 1 }), ok({ felder_abgelehnt: 1 })]);
+  await sendeExport(w.exp('x1', ['e1']), w.deps);
+  await sendeExport(w.exp('x2', ['e2']), w.deps);
+  for (const id of ['x1', 'x2']) await meldungGelesen(w.exporte.get(id)!, w.deps);
+  await w.deps.loescheMarken(['e1', 'e2']);
+  // Lesen der Punkte des ersten Exports scheitert (z. B. IndexedDB-Fehler)
+  const ladeElement = w.deps.ladeElement;
+  const deps = { ...w.deps, ladeElement: async (id: string) => { if (id === 'e1') throw new Error('IndexedDB weg'); return ladeElement(id); } };
+  await raeumeErledigteAuf([...w.exporte.values()], deps);
+  assert.equal(w.exporte.has('x1'), true, 'fehlerhafter Export bleibt');
+  assert.equal(w.exporte.has('x2'), false, 'der zweite wird trotzdem aufgeräumt');
+});
+
 function werteDummy() {
   return {
     vollstaendig: false, duplikat: false, antwortUnvollstaendig: false, gesendet: 1, geschrieben: 1,

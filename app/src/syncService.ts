@@ -13,7 +13,7 @@ import { parseProjekteJson, filterProjekteByStatus } from './projektimport';
 import { parseAdressenJson } from './adressenimport';
 import { getDeviceId, getDeviceName, getUserName } from './deviceIdentity';
 import { getAccessToken, refresh, logout } from './authService';
-import { waehleLegacyId } from './gruppenLegacyId';
+import { waehleGruppenKennung } from './gruppenLegacyId';
 
 const TIMEOUT_MS = 5000;
 const UPLOAD_TIMEOUT_MS = 30000;
@@ -121,22 +121,22 @@ export async function listRemoteProjects(): Promise<{
 }
 
 /**
- * Lokale PWA-Gruppen-UUID -> Hub-legacy_id (DF-OID) fuer die Export-/Sync-Pfade.
- * Der Hub loest {id} in /projects/{id}/export ueber Protokollgruppe.legacy_id auf
- * (quick-260720-m4x): eine geraetelokale UUID ergaebe sonst 404. PK-Lookup zuerst,
- * dann Voll-Scan als Fallback; ist der Wert bereits eine legacy_id (ServerImport-
- * Pfad), bleibt er unveraendert (Passthrough).
+ * Lokale PWA-Gruppen-UUID -> Kennung der Gruppe im Hub fuer Export, Status und Upload.
+ * 999.1750: der Hub loest {id} ueber die Hub-UUID ODER die legacy_id (DF-OID) auf; im Hub
+ * angelegte Gruppen haben keine OID. Deshalb hub_id vor legacy_id; eine geraetelokale UUID
+ * ergaebe 404. PK-Lookup zuerst, dann Voll-Scan; ist der Wert bereits eine Hub-Kennung
+ * (ServerImport-Pfad), bleibt er unveraendert (Passthrough).
  */
-export async function resolveGruppenLegacyId(projectId: string): Promise<string> {
+export async function resolveGruppenKennung(projectId: string): Promise<string> {
   let treffer;
   try {
     treffer = await getProtokollgruppe(projectId);
   } catch {
     treffer = undefined;
   }
-  // Voll-Scan nur, wenn der PK-Lookup keine legacy_id lieferte.
+  // Voll-Scan nur, wenn der PK-Lookup keine Hub-Kennung lieferte.
   let alle: Awaited<ReturnType<typeof getAllGruppen>> = [];
-  if (!treffer || !treffer.legacy_id) {
+  if (!treffer || !(treffer.hub_id || treffer.legacy_id)) {
     try {
       alle = await getAllGruppen();
     } catch {
@@ -144,13 +144,13 @@ export async function resolveGruppenLegacyId(projectId: string): Promise<string>
     }
   }
   // Reine Entscheidungskette (06.3-Review IN-04, testbar ohne IndexedDB).
-  return waehleLegacyId(projectId, treffer ?? null, alle);
+  return waehleGruppenKennung(projectId, treffer ?? null, alle);
 }
 
 /** Projekt vom Server herunterladen und in IndexedDB importieren */
 export async function downloadProject(projectId: string): Promise<void> {
-  const legacyId = await resolveGruppenLegacyId(projectId);
-  const resp = await fetchApi(`${SYNC}/projects/${encodeURIComponent(legacyId)}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
+  const kennung = await resolveGruppenKennung(projectId);
+  const resp = await fetchApi(`${SYNC}/projects/${encodeURIComponent(kennung)}/export`, { timeoutMs: UPLOAD_TIMEOUT_MS });
   const raw = await resp.json();
   const { pakete, verantwortliche } = parseDfJson(raw);
   if (pakete.length === 0) throw new Error('Keine Protokolle in den Server-Daten');
@@ -179,7 +179,7 @@ export async function downloadProject(projectId: string): Promise<void> {
   // Term-Sync-Fehler darf den Protokoll-Download NICHT abbrechen (die
   // Erfassung degradiert dann auf "kein Picker", nicht auf einen kaputten Sync).
   try {
-    const refs = await resolveHubGruppeRefs(pakete[0].protokollgruppe.legacy_id);
+    const refs = await resolveHubGruppeRefs(pakete[0].protokollgruppe.legacy_id, pakete[0].protokollgruppe.hub_id);
     if (refs?.projekt_id) {
       await updateGruppeRefs(gruppeId, refs.projekt_id, refs.hub_id);
       await syncProjektThemen(refs.projekt_id);
@@ -224,7 +224,8 @@ export async function getRemoteStatus(projectId: string): Promise<{
   pendingChanges: number;
   lastUpload?: string;
 }> {
-  const resp = await fetchApi(`${SYNC}/projects/${projectId}/status`);
+  const kennung = await resolveGruppenKennung(projectId);
+  const resp = await fetchApi(`${SYNC}/projects/${encodeURIComponent(kennung)}/status`);
   const json = await resp.json();
   return json.data ?? json;
 }
@@ -248,16 +249,18 @@ export async function syncProjektThemen(projektId: string): Promise<void> {
 }
 
 /**
- * Hub-Referenzen einer Gruppe (Projekt-UUID + Gruppen-UUID) ueber die
- * legacy_id aufloesen. Der /api/protokollgruppen-Katalog traegt ``projekt_id``
- * bereits (ProtokollgruppeRead) — rein clientseitige Bruecke, KEIN neuer Endpunkt.
+ * Hub-Referenzen einer Gruppe (Projekt-UUID + Gruppen-UUID) ueber die Hub-UUID
+ * oder die legacy_id aufloesen (999.1750: im Hub angelegte Gruppen haben keine OID).
+ * Der /api/protokollgruppen-Katalog traegt ``projekt_id`` bereits
+ * (ProtokollgruppeRead) — rein clientseitige Bruecke, KEIN neuer Endpunkt.
  */
 export async function resolveHubGruppeRefs(
   legacyId: string,
+  hubId?: string,
 ): Promise<{ projekt_id?: string; hub_id: string } | null> {
-  if (!legacyId) return null;
+  if (!legacyId && !hubId) return null;
   const alle = await listHubGruppen();
-  const treffer = alle.find(g => g.legacy_id === legacyId);
+  const treffer = alle.find(g => (!!hubId && g.id === hubId) || (!!legacyId && g.legacy_id === legacyId));
   if (!treffer) return null;
   return { projekt_id: treffer.projekt_id, hub_id: treffer.id };
 }
@@ -305,7 +308,10 @@ export interface UploadReport {
 export async function uploadZip(gruppeId: string, zipBlob: Blob, filename: string): Promise<UploadReport> {
   const formData = new FormData();
   formData.append('file', zipBlob, filename);
-  const resp = await fetchApi(`${SYNC}/projects/${gruppeId}/upload-zip`, {
+  // 999.1750: der ausstehende Export traegt die LOKALE Gruppen-id; die Hub-Kennung wird erst beim
+  // Senden bestimmt — so greift eine spaeter bekannt gewordene Hub-UUID auch fuer aeltere Exporte.
+  const kennung = await resolveGruppenKennung(gruppeId);
+  const resp = await fetchApi(`${SYNC}/projects/${encodeURIComponent(kennung)}/upload-zip`, {
     method: 'POST',
     body: formData,
     timeoutMs: UPLOAD_TIMEOUT_MS,

@@ -144,11 +144,18 @@ export async function meldungGelesen(exp: AusstehenderExport, deps: UploadAblauf
   await raeumeErledigteAuf([gelesen], deps);
 }
 
-/** Gelesene, ausgewertete Exporte löschen, deren Punkte keine Änderungsmarke mehr tragen. Ungelesene bleiben. */
+/**
+ * Gelesene, ausgewertete Exporte löschen, deren Punkte keine Änderungsmarke mehr tragen. Ungelesene bleiben.
+ * Ein Fehler an einem Export (Lesen der Punkte, Löschen) hält die übrigen nicht auf (999.1750).
+ */
 export async function raeumeErledigteAuf(exps: readonly AusstehenderExport[], deps: UploadAblaufDeps): Promise<void> {
   for (const exp of exps) {
     if (!exp.auswertung || !exp.gelesenAm) continue;
-    const elemente = await ladeElemente(exp.elementIds, deps);
-    if (!elemente.some(e => e.is_new || e.is_modified)) await deps.loescheExport(exp.id);
+    try {
+      const elemente = await ladeElemente(exp.elementIds, deps);
+      if (!elemente.some(e => e.is_new || e.is_modified)) await deps.loescheExport(exp.id);
+    } catch (err) {
+      console.warn('[Sync] Export nicht aufgeräumt:', exp.filename, err);
+    }
   }
 }

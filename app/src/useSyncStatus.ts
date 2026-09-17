@@ -101,17 +101,26 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
         // Ausstehende Exporte (ZIPs) hochladen — manuell exportiert, Upload war offline.
         // B4: derselbe Ablauf wie im Export (uploadAblauf.ts); was der Hub nicht übernimmt,
         // bleibt als Export mit Auswertung liegen und erscheint als Meldung im Browser.
+        // 999.1750: Senden, Aufräumen und Neuladen einzeln abgesichert — ein Fehler in einem Schritt
+        // (oder an einem Export, s. sendeAusstehende/raeumeErledigteAuf) hält die übrigen nicht auf.
         try {
           const ergebnis = await sendeAusstehende(await getPendingExports(), uploadAblaufDeps);
-          await raeumeErledigteAuf(await getPendingExports(), uploadAblaufDeps);
           if (ergebnis.gesendet > 0) setHintergrundStand(n => n + 1);
         } catch (err) {
-          console.warn('[Sync] Ausstehende Exporte nicht verarbeitet:', err);
+          console.warn('[Sync] Ausstehende Exporte nicht gesendet:', err);
         }
-        await ladeMeldungen();
-
-        // Pending count aktualisieren
-        await refreshPending();
+        try {
+          await raeumeErledigteAuf(await getPendingExports(), uploadAblaufDeps);
+        } catch (err) {
+          console.warn('[Sync] Erledigte Exporte nicht aufgeräumt:', err);
+        }
+        try {
+          await ladeMeldungen();
+          // Pending count aktualisieren
+          await refreshPending();
+        } catch (err) {
+          console.warn('[Sync] Meldungen/Änderungszähler nicht neu geladen:', err);
+        }
       }
       wasReachable.current = reachable;
     }
