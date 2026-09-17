@@ -133,7 +133,9 @@ export default function App() {
         }}
         onSchnellErstellung={(prot, grp) => setScreen({ name: 'schnell', protokoll: prot, gruppe: grp })}
         onExport={(prot, grp) => setScreen({ name: 'export', protokoll: prot, gruppe: grp })}
-        onZurueck={() => setScreen({ name: 'gruppeDetail', gruppeId })}
+        // Handoff: Zurück führt zu „Meine Protokolle", ⋮ zum Gruppen-Detail
+        onZurueck={() => setScreen({ name: 'abos' })}
+        onEinstellungen={() => setScreen({ name: 'gruppeDetail', gruppeId })}
       />
     );
   }

@@ -6,8 +6,8 @@ import ScrollToTopFab from './ScrollToTopFab';
 import SyncIndicator from './SyncIndicator';
 import StatusBadge from './StatusBadge';
 import { useSyncStatus } from '../useSyncStatus';
-import { ScreenHeader, EmptyState } from '../ui/primitives';
-import { IconSearch, IconX, IconPlus, IconLock } from '../ui/icons';
+import { EmptyState } from '../ui/primitives';
+import { IconSearch, IconX, IconPlus, IconLock, IconKebab, IconChevronLeft, IconCamera } from '../ui/icons';
 import { neuanlageErlaubt, obersterPunkt } from '../protokollRegeln';
 
 export interface UebersichtState {
@@ -16,6 +16,11 @@ export interface UebersichtState {
   statusFilter: number | null;
   gewaehlteProtId: string | null;
 }
+
+// Tab-Stile im blauen Kopf (Handoff: inaktiv weiß, aktiv PING-Blau mit weißer Schrift)
+const TAB_BASIS = 'shrink-0 whitespace-nowrap rounded-[9px] px-3 py-2 text-[12.5px] font-semibold transition';
+const TAB_AKTIV = 'bg-ping-blue-dark text-white shadow-[inset_0_0_0_1.5px_rgba(255,255,255,0.55)]';
+const TAB_INAKTIV = 'bg-white text-ping-text-mid hover:bg-ping-blue-light';
 
 interface Props {
   gruppeId: string;
@@ -26,14 +31,17 @@ interface Props {
   onBautagebuch?: (gruppe: Protokollgruppe) => void;
   onSchnellErstellung?: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
   onExport: (protokoll: Protokoll, gruppe: Protokollgruppe) => void;
+  /** Zurück „Meine Protokolle" (Handoff). */
   onZurueck: () => void;
-  /** Docking-Variante: Wurzel fuellt den Container (h-full) und FABs positionieren absolut statt fixed. Aendert keine Logik. */
+  /** ⋮ im Kopf: Einstellungen der Protokollgruppe (Gruppen-Detail). */
+  onEinstellungen?: () => void;
+  /** Docking-Variante: Wurzel füllt den Container (h-full), Aktionsleiste rechtsbündig. Ändert keine Logik. */
   embedded?: boolean;
   /** Tablet quer: nach dem Laden einmalig den obersten Punkt der Liste aktivieren (Tablet-Handoff, Abschnitt 1). Ohne Punkte bleibt nur die Liste. */
   autoAuswahlOberster?: boolean;
 }
 
-export default function ProtokollUebersicht({ gruppeId, initialState, onStateChange, onSelectElement, onNeuesElement, onBautagebuch, onSchnellErstellung, onExport, onZurueck, embedded = false, autoAuswahlOberster = false }: Props) {
+export default function ProtokollUebersicht({ gruppeId, initialState, onStateChange, onSelectElement, onNeuesElement, onBautagebuch, onSchnellErstellung, onExport, onZurueck, onEinstellungen, embedded = false, autoAuswahlOberster = false }: Props) {
   const [gruppe, setGruppe] = useState<Protokollgruppe | null>(null);
   const [protokolle, setProtokolle] = useState<Protokoll[]>([]);
   const [gewaehltesProt, setGewaehltesProt] = useState<Protokoll | null>(null);
@@ -44,7 +52,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
   const [statusFilter, setStatusFilter] = useState<number | null>(initialState?.statusFilter ?? null);
   const restoredProtId = useRef(initialState?.gewaehlteProtId ?? null);
   const sync = useSyncStatus(gruppeId);
-  const [hatBautagebuch, setHatBautagebuch] = useState(false);
+  const [btProt, setBtProt] = useState<Protokoll | null>(null);
   const [hatAenderungen, setHatAenderungen] = useState(false);
   const [anzahlGeaendert, setAnzahlGeaendert] = useState(0);
   const [anzahlNeu, setAnzahlNeu] = useState(0);
@@ -136,9 +144,8 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
     alle.sort((a, b) => a.position.localeCompare(b.position, undefined, { numeric: true }));
     setAlleElemente(alle);
 
-    // Bautagebuch-Protokoll pruefen
-    const btProt = await findBautagebuchProtokoll(gruppeId);
-    setHatBautagebuch(!!btProt);
+    // Bautagebuch-Protokoll (Anhang) — eigener Tab „Bautagebuch" und BT-Knopf
+    setBtProt(await findBautagebuchProtokoll(gruppeId));
 
     // Exportierbare Aenderungen pruefen
     const geaendert = alle.filter(e => e.is_modified && !e.is_new).length;
@@ -192,20 +199,25 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
 
   return (
     <div className={`flex flex-col overflow-hidden bg-ping-surface ${embedded ? 'relative h-full' : 'h-[100dvh]'}`}>
-      {/* Header — blau, Projektname gross + Gruppenname klein, rechts Sync/Aenderungen/Export als Pills */}
-      <ScreenHeader
-        title={gruppe.projekt_name}
-        subtitle={gruppe.name}
-        onBack={onZurueck}
-        backLabel="Projekte"
-        right={
-          <>
+      {/* Kopf nach Handoff: Zeile 1 Zurück „Meine Protokolle" + Sync/Änderungen/Export,
+          Zeile 2 Gruppenname · Projekt + ⋮ (Einstellungen der Protokollgruppe), darunter die Tabs */}
+      <header className="shrink-0 bg-ping-blue px-4 pb-3 pt-1.5 text-white">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onZurueck}
+            className="flex min-h-[36px] min-w-0 items-center gap-1 text-[14px] text-white/85 transition hover:text-white"
+          >
+            <IconChevronLeft size={16} className="shrink-0" />
+            <span className="truncate">Meine Protokolle</span>
+          </button>
+          <span className="flex-1" />
+          <div className="flex shrink-0 items-center gap-1.5">
             <SyncIndicator sync={sync} />
             {hatAenderungen && (
               <button
                 onClick={() => setZeigeAenderungen(!zeigeAenderungen)}
-                className="flex h-7 items-center gap-0.5 rounded-full px-3 text-[11px] font-bold text-white transition hover:brightness-95"
-                style={{ background: 'var(--color-ping-gold)' }}
+                className="flex h-8 items-center gap-0.5 rounded-full bg-ping-gold px-3 text-[11px] font-semibold text-white transition hover:brightness-95"
+                title="Geänderte und neue Punkte anzeigen"
               >
                 {anzahlGeaendert > 0 && <span>{anzahlGeaendert}*</span>}
                 {anzahlGeaendert > 0 && anzahlNeu > 0 && ' '}
@@ -215,57 +227,73 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
             {aktivProt && (
               <button
                 onClick={() => handleExport(aktivProt, gruppe)}
-                className="flex h-7 items-center rounded-full bg-white/15 px-3 text-xs font-semibold text-white transition hover:bg-white/25"
+                className="flex h-8 items-center rounded-full bg-white/15 px-3 text-xs font-semibold text-white transition hover:bg-white/25"
               >
                 Export
               </button>
             )}
-          </>
-        }
-      />
+          </div>
+        </div>
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          <h1 className="min-w-0 shrink truncate text-[18px] font-bold leading-tight">{gruppe.name}</h1>
+          <p className="min-w-0 flex-1 truncate text-[12px] text-white/75">
+            {[gruppe.projekt_nummer, gruppe.projekt_name].filter(Boolean).join(' · ')}
+          </p>
+          {onEinstellungen && (
+            <button
+              onClick={() => { saveState(); onEinstellungen(); }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-white/15 text-white transition hover:bg-white/25"
+              title="Einstellungen der Protokollgruppe"
+              aria-label="Einstellungen der Protokollgruppe"
+            >
+              <IconKebab size={18} />
+            </button>
+          )}
+        </div>
 
-      {/* Protokoll-Tabs — horizontal scrollbar, Gesamt gold-akzentuiert, aktiv PING-gefuellt */}
-      <div className="shrink-0 overflow-x-auto border-b border-black/5 bg-white">
-        <div className="flex gap-1 px-2 py-2">
+        {/* Tabs Gesamt | Karte | Nr. … | Bautagebuch — horizontal scrollbar */}
+        <div className="-mx-4 mt-2.5 flex gap-1.5 overflow-x-auto px-4">
           <button
             onClick={() => setAnsicht('alle')}
-            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition ${
-              ansicht === 'alle' ? 'bg-ping-gold-dark text-white' : 'bg-ping-gold-light text-ping-gold-dark'
-            }`}
+            className={`${TAB_BASIS} ${ansicht === 'alle' ? TAB_AKTIV : TAB_INAKTIV}`}
           >
             Gesamt
           </button>
           <button
             onClick={() => setAnsicht('karte')}
-            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition ${
-              ansicht === 'karte' ? 'bg-ping-blue text-white' : 'bg-ping-blue-light text-ping-blue'
-            }`}
+            className={`${TAB_BASIS} ${ansicht === 'karte' ? TAB_AKTIV : TAB_INAKTIV}`}
           >
             Karte
           </button>
-          {protokolle.map(p => {
-            const isDraft = (p as typeof p & { is_new?: boolean }).is_new;
+          {protokolle.filter(p => p.id !== btProt?.id).map(p => {
+            const isDraft = p.is_new;
+            const aktiv = ansicht === 'einzeln' && gewaehltesProt?.id === p.id;
             return (
               <button
                 key={p.id}
-                ref={ansicht === 'einzeln' && gewaehltesProt?.id === p.id ? activeTabRef : undefined}
+                ref={aktiv ? activeTabRef : undefined}
                 onClick={() => { setAnsicht('einzeln'); ladeElemente(p); }}
-                className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition ${
-                  ansicht === 'einzeln' && gewaehltesProt?.id === p.id
-                    ? isDraft ? 'bg-green-600 text-white' : 'bg-ping-blue text-white'
-                    : isDraft ? 'bg-green-50 text-green-700' : 'bg-ping-bg text-ping-text-mid'
-                }`}
+                className={`${TAB_BASIS} ${aktiv ? TAB_AKTIV : TAB_INAKTIV}`}
               >
                 {p.nummer < 0
                   ? p.name.replace(/\s*-?\d+\s*[-–]\s*\d+$/, '').trim() || p.name
                   : <>Nr. {p.nummer}<span className="ml-1 opacity-70">{new Date(p.datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</span></>
                 }
-                {isDraft && <span className="ml-0.5">*</span>}
+                {isDraft && <span className={`ml-0.5 ${aktiv ? '' : 'text-ping-gold-dark'}`} title="Entwurf">*</span>}
               </button>
             );
           })}
+          {btProt && (
+            <button
+              ref={ansicht === 'einzeln' && gewaehltesProt?.id === btProt.id ? activeTabRef : undefined}
+              onClick={() => { setAnsicht('einzeln'); ladeElemente(btProt); }}
+              className={`${TAB_BASIS} ${ansicht === 'einzeln' && gewaehltesProt?.id === btProt.id ? 'bg-ping-gold text-white' : 'bg-ping-gold-light text-ping-gold-dark'}`}
+            >
+              Bautagebuch
+            </button>
+          )}
         </div>
-      </div>
+      </header>
 
       {/* Filterzeile — dunkelgrau, helles Suchfeld mit Loeschen, Status-Chips */}
       <div className="shrink-0 flex items-center gap-1.5 bg-ping-filter px-2 py-2">
@@ -411,57 +439,66 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         </div>
       )}
 
-      {/* Tab eines verteilten Protokolls: keine Neuanlage, stattdessen Hinweis (Tablet-Handoff, Abschnitt 3) */}
-      {aktivProt && gruppe && !neuErlaubt && (
+      {/* Feste Aktionsleiste unten (Handoff): BT gold, Schnell hellblau, Neuer Punkt PING-Blau.
+          Eigene Zeile außerhalb des Scrollbereichs — bleibt beim Scrollen der Liste stehen.
+          Im Tab eines verteilten Protokolls stattdessen der Hinweis (Tablet-Handoff, Abschnitt 3). */}
+      {aktivProt && gruppe && (
         <div
-          role="status"
-          className={`${embedded ? 'absolute' : 'fixed'} bottom-4 right-4 flex items-center gap-2 rounded-xl border border-black/10 bg-ping-bg px-3.5 py-2.5 text-[12px] font-semibold text-ping-text-mid shadow-lg`}
+          className="shrink-0 border-t border-black/5 bg-ping-surface px-3 pt-2.5"
+          style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}
         >
-          <IconLock size={13} className="shrink-0" />
-          Protokoll abgeschlossen — keine neuen Punkte
-        </div>
-      )}
-
-      {/* FABs — rund mit Schatten: + blau, BT gold, Schnell violett */}
-      {aktivProt && gruppe && neuErlaubt && (
-        <div className={`${embedded ? 'absolute' : 'fixed'} bottom-4 right-4 flex flex-row items-center gap-2`}>
-          {hatBautagebuch && onBautagebuch && (
-            <button
-              onClick={() => {
-                saveState();
-                onBautagebuch(gruppe);
-              }}
-              className="flex h-14 w-14 items-center justify-center rounded-full text-sm font-bold text-white shadow-lg transition hover:brightness-95 active:scale-95"
-              style={{ background: 'var(--color-ping-gold)' }}
+          {neuErlaubt ? (
+            <div className={`flex items-center gap-2 ${embedded ? 'justify-end' : ''}`}>
+              {btProt && onBautagebuch && (
+                <button
+                  onClick={() => {
+                    saveState();
+                    onBautagebuch(gruppe);
+                  }}
+                  className="flex min-h-[46px] shrink-0 items-center justify-center rounded-[13px] bg-ping-gold px-4 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(138,90,20,0.35)] transition hover:bg-ping-gold-dark active:scale-[.98]"
+                  title="Bautagebuch-Eintrag"
+                >
+                  BT
+                </button>
+              )}
+              {onSchnellErstellung && (
+                <button
+                  onClick={async () => {
+                    const prot = aktivProt.nummer < 0 ? aktivProt : await getOrCreateDraftProtokoll(gruppe.id, {
+                      name: aktivProt.name, ort: aktivProt.ort, autor: aktivProt.autor,
+                    });
+                    saveState();
+                    onSchnellErstellung(prot, gruppe);
+                  }}
+                  className={`flex min-h-[46px] items-center justify-center gap-1.5 rounded-[13px] bg-ping-blue-light px-4 text-[13.5px] font-semibold text-ping-blue shadow-[0_8px_18px_rgba(15,23,42,0.15)] transition hover:brightness-95 active:scale-[.98] ${embedded ? '' : 'flex-1'}`}
+                  title="Schnellerstellung: Punkte aus Fotos"
+                >
+                  <IconCamera size={16} />
+                  Schnell
+                </button>
+              )}
+              <button
+                onClick={async () => {
+                  const prot = aktivProt.nummer < 0 ? aktivProt : await getOrCreateDraftProtokoll(gruppe.id, {
+                    name: aktivProt.name, ort: aktivProt.ort, autor: aktivProt.autor,
+                  });
+                  handleNeuesElement(prot, gruppe);
+                }}
+                className={`flex min-h-[46px] items-center justify-center gap-1.5 rounded-[13px] bg-ping-blue px-5 text-[13.5px] font-semibold text-white shadow-[0_8px_22px_rgba(0,72,153,0.4)] transition hover:bg-ping-blue-dark active:scale-[.98] ${embedded ? '' : 'flex-[1.5]'}`}
+              >
+                <IconPlus size={16} />
+                Neuer Punkt
+              </button>
+            </div>
+          ) : (
+            <div
+              role="status"
+              className={`flex items-center justify-center gap-2 rounded-xl border border-black/10 bg-ping-bg px-3.5 py-3 text-[12px] font-semibold text-ping-text-mid ${embedded ? 'ml-auto w-fit' : ''}`}
             >
-              BT
-            </button>
+              <IconLock size={13} className="shrink-0" />
+              Protokoll abgeschlossen — keine neuen Punkte
+            </div>
           )}
-          {onSchnellErstellung && (
-            <button
-              onClick={async () => {
-                const prot = aktivProt.nummer < 0 ? aktivProt : await getOrCreateDraftProtokoll(gruppe.id, {
-                  name: aktivProt.name, ort: aktivProt.ort, autor: aktivProt.autor,
-                });
-                saveState();
-                onSchnellErstellung(prot, gruppe);
-              }}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-lg text-white shadow-lg transition hover:bg-violet-700 active:scale-95"
-            >
-              &#9889;
-            </button>
-          )}
-          <button
-            onClick={async () => {
-              const prot = aktivProt.nummer < 0 ? aktivProt : await getOrCreateDraftProtokoll(gruppe.id, {
-                name: aktivProt.name, ort: aktivProt.ort, autor: aktivProt.autor,
-              });
-              handleNeuesElement(prot, gruppe);
-            }}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-ping-blue text-white shadow-lg transition hover:bg-ping-blue-dark active:scale-95"
-          >
-            <IconPlus size={26} />
-          </button>
         </div>
       )}
       <ScrollToTopFab />
