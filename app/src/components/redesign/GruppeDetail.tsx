@@ -16,6 +16,7 @@ import { useFormFactor } from '../../hooks/useFormFactor';
 import { getProtokollgruppe, getProtokolleByGruppe, getElemente } from '../../db';
 import type { ProtokollMitGruppe } from '../../db';
 import type { Protokollgruppe } from '../../types';
+import { istVerteilt } from '../../protokollRegeln';
 
 // Status-Codes, die als "erledigt" fuer den Fortschrittsbalken zaehlen
 // (17 Erledigt-Info, 20 Erledigt, 25 Mangel-beseitigt).
@@ -238,13 +239,13 @@ export default function GruppeDetail({
         <EmptyState title="Noch keine Protokolle" hint="Legen Sie das erste Protokoll dieser Gruppe an." />
       ) : (
         <Card className="overflow-hidden">
-          {protokolle.map((p, idx) => {
+          {protokolle.map((p) => {
             const f = fortschritt[p.id] ?? { done: 0, total: 0 };
             const pct = f.total > 0 ? Math.round((f.done / f.total) * 100) : 0;
             const barColor =
               pct === 100 ? '#16a34a' : pct >= 70 ? '#B9791E' : pct >= 40 ? '#d97706' : '#dc2626';
-            // Nur das neueste (idx 0) gilt als „nicht verschickt".
-            const verschickt = idx > 0;
+            // Versandstatus aus derselben Regel wie Punkt-Sperre und Neuanlage (istVerteilt).
+            const verschickt = istVerteilt(p, protokolle);
             return (
               <button
                 key={p.id}

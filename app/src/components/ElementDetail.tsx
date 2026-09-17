@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { updateElement, deleteElement, saveFoto, getFotos, deleteFoto, getElement, findNachfolger, getElemente, getVerantwortliche, getProtokolleByGruppe, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
-import type { Verantwortlicher } from '../db';
+import type { Verantwortlicher, ProtokollMitGruppe } from '../db';
+import { istVerteilt } from '../protokollRegeln';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord, formatLatLon } from '../map-core/format';
 import BautagebuchWizard from './BautagebuchWizard';
@@ -10,7 +11,7 @@ import StatusBadge from './StatusBadge';
 import { Card, SectionLabel, PrimaryButton, SecondaryButton, DangerButton } from '../ui/primitives';
 import {
   IconChevronLeft, IconChevronRight, IconList, IconCamera, IconMapPin,
-  IconTrash, IconPlus, IconX, IconCalendar, IconCheck, IconUser,
+  IconTrash, IconPlus, IconX, IconCalendar, IconCheck, IconUser, IconLock,
 } from '../ui/icons';
 import { nameNorm, bestMatch, computeSuggestion, type TermLike } from '../termNorm';
 import ThemaAbgleichDialog from './ThemaAbgleichDialog';
@@ -71,9 +72,22 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   const [showBtWizard, setShowBtWizard] = useState(false);
   const [showProtokollWahl, setShowProtokollWahl] = useState(false);
   const [verschiebungsziele, setVerschiebungsziele] = useState<{ id: string; name: string; nummer: number; is_new?: boolean }[]>([]);
+  const [gruppenProts, setGruppenProts] = useState<ProtokollMitGruppe[] | null>(null);
 
   const istNeu = !!elem.is_new;
   const istBautagebuch = elem.thema === 'Bautagebuch';
+
+  // Handoff-Regel (protokollweit, nicht je Punkt): Ein Punkt eines verteilten
+  // Protokolls ist nur lesbar. Solange die Gruppenprotokolle laden, entscheidet
+  // allein ein vom Hub gelieferter is_new-Wert; fehlt er, bleibt der Punkt bis
+  // zur Entscheidung gesperrt (null = noch unbekannt, ohne Hinweisleiste).
+  const eigenesProt = gruppenProts?.find(p => p.id === elem.protokoll_id) ?? protokoll;
+  const verteilt: boolean | null = gruppenProts
+    ? istVerteilt(eigenesProt, gruppenProts)
+    : typeof protokoll.is_new === 'boolean' ? !protokoll.is_new : null;
+  const bearbeitbar = verteilt === false;
+  // Inhaltsfelder bleiben wie bisher lokal neu erfassten Punkten vorbehalten.
+  const inhaltEditierbar = bearbeitbar && istNeu;
 
   const swipe = useSwipe(
     () => nextElem && onNavigate(nextElem),
@@ -139,10 +153,11 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
 
   async function ladenVerschiebungsziele() {
     const prots = await getProtokolleByGruppe(gruppe.id);
+    setGruppenProts(prots);
     const ziele = prots.filter(p =>
-      p.id !== elem.protokoll_id && (p.nummer < 0 || (p as any).is_new)
+      p.id !== elem.protokoll_id && (p.nummer < 0 || p.is_new)
     );
-    setVerschiebungsziele(ziele.map(p => ({ id: p.id, name: p.name, nummer: p.nummer, is_new: (p as any).is_new })));
+    setVerschiebungsziele(ziele.map(p => ({ id: p.id, name: p.name, nummer: p.nummer, is_new: p.is_new })));
   }
 
   const alleFirmen = firmen.length > 0
@@ -204,18 +219,20 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
   function markDirty() { setDirty(true); setGespeichert(false); }
 
   function updateStatus(status: number) {
+    if (!bearbeitbar) return;
     setElem(prev => ({ ...prev, status: status, is_modified: true }));
     markDirty();
     setShowWeitereStatus(false);
   }
 
   function update(patch: Partial<Protokollelement>) {
-    if (!istNeu) return;
+    if (!inhaltEditierbar) return;
     setElem(prev => ({ ...prev, ...patch, is_modified: true }));
     markDirty();
   }
 
   function updateMobile(patch: Partial<Protokollelement['mobile_erfassung']>) {
+    if (!bearbeitbar) return;
     setElem(prev => ({
       ...prev, is_modified: true,
       mobile_erfassung: { ...prev.mobile_erfassung, ...patch },
@@ -324,14 +341,22 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               <IconCheck size={12} /> Gespeichert
             </span>
           )}
-          <span className={`shrink-0 text-[10.5px] ${istNeu ? 'text-green-200' : 'text-ping-blue-light'}`}>
-            {istNeu ? 'editierbar' : 'Status/GPS'}
+          <span className={`shrink-0 text-[10.5px] ${inhaltEditierbar ? 'text-green-200' : 'text-ping-blue-light'}`}>
+            {verteilt !== false ? 'nur lesen' : inhaltEditierbar ? 'editierbar' : 'Status/GPS'}
           </span>
         </div>
       </header>
 
       {/* Inhalt — im Panel-Modus eigener Scroll-Container, sonst Seiten-Scroll (ScrollToTopFab) */}
       <div className={`px-3 pt-3 ${dirty ? 'pb-28' : 'pb-8'} space-y-2.5 ${embedded ? 'ping-scroll min-h-0 flex-1 overflow-y-auto' : ''}`}>
+
+        {/* Hinweisleiste: Protokoll verteilt -> Punkt nur lesen (Tablet-Handoff, Abschnitt 3) */}
+        {verteilt === true && (
+          <div role="status" className="flex items-center gap-2 rounded-xl border border-black/10 bg-ping-bg px-3 py-2.5 text-[12px] font-semibold text-ping-text-mid">
+            <IconLock size={14} className="shrink-0" />
+            Protokoll bereits verteilt — Punkt nicht mehr bearbeitbar
+          </div>
+        )}
 
         {/* Vorgänger / Nachfolger */}
         {(vorgaenger.length > 0 || nachfolger.length > 0) && (
@@ -367,40 +392,45 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             <span className="text-[11px] font-semibold uppercase tracking-wide text-ping-text-light">Status</span>
             <StatusBadge status={elem.status} />
           </div>
-          <div className="mt-2.5 flex gap-2">
-            <button onClick={() => updateStatus(10)}
-              className="flex flex-1 items-center justify-center rounded-xl border border-black/5 bg-white py-2.5 transition"
-              style={{ boxShadow: elem.status === 10 ? '0 0 0 2px var(--color-ping-blue)' : undefined }}
-              aria-pressed={elem.status === 10}>
-              <StatusBadge status={10} />
-            </button>
-            <button onClick={() => updateStatus(20)}
-              className="flex flex-1 items-center justify-center rounded-xl border border-black/5 bg-white py-2.5 transition"
-              style={{ boxShadow: elem.status === 20 ? '0 0 0 2px var(--color-ping-blue)' : undefined }}
-              aria-pressed={elem.status === 20}>
-              <StatusBadge status={20} />
-            </button>
-            <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
-              className="w-12 shrink-0 rounded-xl border border-black/10 bg-ping-bg text-[15px] font-semibold text-ping-text-mid"
-              aria-expanded={showWeitereStatus} title="Weitere Status">···</button>
-          </div>
-          {/* weitere Status — ausklappbar */}
-          {showWeitereStatus && (
-            <div className="mt-2.5 border-t border-black/5 pt-2.5">
-              <div className="flex flex-wrap gap-1.5">
-                {HAUPT_STATUS.map(s => statusPickerBtn(s))}
+          {/* Statuswahl nur bei nicht verteiltem Protokoll — sonst genügt das Badge oben */}
+          {bearbeitbar && (
+            <>
+              <div className="mt-2.5 flex gap-2">
+                <button onClick={() => updateStatus(10)}
+                  className="flex flex-1 items-center justify-center rounded-xl border border-black/5 bg-white py-2.5 transition"
+                  style={{ boxShadow: elem.status === 10 ? '0 0 0 2px var(--color-ping-blue)' : undefined }}
+                  aria-pressed={elem.status === 10}>
+                  <StatusBadge status={10} />
+                </button>
+                <button onClick={() => updateStatus(20)}
+                  className="flex flex-1 items-center justify-center rounded-xl border border-black/5 bg-white py-2.5 transition"
+                  style={{ boxShadow: elem.status === 20 ? '0 0 0 2px var(--color-ping-blue)' : undefined }}
+                  aria-pressed={elem.status === 20}>
+                  <StatusBadge status={20} />
+                </button>
+                <button onClick={() => setShowWeitereStatus(!showWeitereStatus)}
+                  className="w-12 shrink-0 rounded-xl border border-black/10 bg-ping-bg text-[15px] font-semibold text-ping-text-mid"
+                  aria-expanded={showWeitereStatus} title="Weitere Status">···</button>
               </div>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {WEITERE_STATUS.map(s => statusPickerBtn(s))}
-              </div>
-            </div>
+              {/* weitere Status — ausklappbar */}
+              {showWeitereStatus && (
+                <div className="mt-2.5 border-t border-black/5 pt-2.5">
+                  <div className="flex flex-wrap gap-1.5">
+                    {HAUPT_STATUS.map(s => statusPickerBtn(s))}
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {WEITERE_STATUS.map(s => statusPickerBtn(s))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </Card>
 
         {/* Positionstext */}
         <Card className="p-3">
           <SectionLabel>Positionstext</SectionLabel>
-          {istNeu ? (
+          {inhaltEditierbar ? (
             <textarea value={elem.positionstext} onChange={(e) => update({ positionstext: e.target.value })}
               onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
               ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
@@ -414,7 +444,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         <div className="flex gap-2">
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel><span className="inline-flex items-center gap-1"><IconCalendar size={12} /> Termin</span></SectionLabel>
-            {istNeu ? (
+            {inhaltEditierbar ? (
               <input type="date" value={elem.termin ? elem.termin.slice(0, 10) : ''}
                 onChange={(e) => update({ termin: e.target.value ? e.target.value + 'T00:00:00' : '' })}
                 className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
@@ -424,7 +454,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </Card>
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel><span className="inline-flex items-center gap-1"><IconUser size={12} /> Verantw.</span></SectionLabel>
-            {istNeu ? (
+            {inhaltEditierbar ? (
               <select value={elem.verantwortlicher_id || ''}
                 onChange={(e) => {
                   const v = e.target.value;
@@ -443,7 +473,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </Card>
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel>Thema</SectionLabel>
-            {istNeu ? (
+            {inhaltEditierbar ? (
               <div className="flex flex-col gap-1.5">
                 {/* Kaskaden-Vorschlag: sichtbar, 1 Tap, NIE auto-gespeichert (W-4). */}
                 {vorschlag && (
@@ -490,7 +520,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         <div className="flex gap-2">
           <Card className="w-28 shrink-0 p-2.5">
             <SectionLabel>Position</SectionLabel>
-            {istNeu ? (
+            {inhaltEditierbar ? (
               <input type="text" value={elem.position} onChange={(e) => update({ position: e.target.value })}
                 placeholder="Position"
                 className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 font-mono text-[13px] outline-none focus:border-ping-blue" />
@@ -500,7 +530,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
           </Card>
           <Card className="min-w-0 flex-1 p-2.5">
             <SectionLabel>Titel</SectionLabel>
-            {istNeu ? (
+            {inhaltEditierbar ? (
               <input type="text" value={elem.positionstitel} onChange={(e) => update({ positionstitel: e.target.value })}
                 placeholder="optional"
                 className="w-full rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
@@ -513,7 +543,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         {/* Bemerkung */}
         <Card className="p-2.5">
           <SectionLabel>Bemerkung (intern)</SectionLabel>
-          {istNeu ? (
+          {inhaltEditierbar ? (
             <textarea value={elem.bemerkung} onChange={(e) => update({ bemerkung: e.target.value })} rows={2}
               placeholder="Optionale Bemerkung (intern)"
               className="w-full resize-none rounded-lg border border-black/10 bg-white px-2 py-1.5 text-[13px] outline-none focus:border-ping-blue" />
@@ -528,20 +558,22 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
             {/* Standort */}
             <div className="flex-1">
               <SectionLabel><span className="inline-flex items-center gap-1"><IconMapPin size={12} /> Standort</span></SectionLabel>
-              <div className="flex flex-wrap gap-1.5">
-                <button onClick={gpsErfassen} className="rounded-lg bg-ping-blue px-3 py-2 text-[12px] font-semibold text-white">GPS</button>
-                <button onClick={() => setKarteOffen(true)} className="rounded-lg bg-ping-blue-light px-3 py-2 text-[12px] font-semibold text-ping-blue">Karte</button>
-                {elem.mobile_erfassung.geo_lat != null && (
-                  <button onClick={() => updateMobile({ geo_lat: null, geo_lon: null, geo_accuracy: null, geo_heading: null, geo_text: null })}
-                    className="inline-flex items-center rounded-lg border border-black/10 bg-ping-bg px-2 py-2 text-ping-text-mid" aria-label="Standort löschen"><IconX size={14} /></button>
-                )}
-              </div>
+              {bearbeitbar && (
+                <div className="flex flex-wrap gap-1.5">
+                  <button onClick={gpsErfassen} className="rounded-lg bg-ping-blue px-3 py-2 text-[12px] font-semibold text-white">GPS</button>
+                  <button onClick={() => setKarteOffen(true)} className="rounded-lg bg-ping-blue-light px-3 py-2 text-[12px] font-semibold text-ping-blue">Karte</button>
+                  {elem.mobile_erfassung.geo_lat != null && (
+                    <button onClick={() => updateMobile({ geo_lat: null, geo_lon: null, geo_accuracy: null, geo_heading: null, geo_text: null })}
+                      className="inline-flex items-center rounded-lg border border-black/10 bg-ping-bg px-2 py-2 text-ping-text-mid" aria-label="Standort löschen"><IconX size={14} /></button>
+                  )}
+                </div>
+              )}
             </div>
             {/* Fotos */}
             <div className="flex-1">
               <SectionLabel><span className="inline-flex items-center gap-1"><IconCamera size={12} /> Fotos</span></SectionLabel>
               <div className="flex flex-wrap items-center gap-1.5">
-                {istNeu && (
+                {inhaltEditierbar && (
                   <>
                     <button onClick={() => fotoRef.current?.click()} className="inline-flex items-center gap-1 rounded-lg bg-ping-blue px-3 py-2 text-[12px] font-semibold text-white">
                       <IconCamera size={14} /> Kamera
@@ -571,7 +603,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
               {fotos.map(f => (
                 <div key={f.fotoId} className="relative h-12 w-12">
                   <img src={f.url} alt="" className="h-full w-full rounded-lg object-cover" />
-                  {istNeu && (
+                  {inhaltEditierbar && (
                     <button onClick={() => fotoLoeschen(f.fotoId)}
                       className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-white"
                       style={{ background: 'var(--color-ping-danger)' }} aria-label="Foto löschen"><IconX size={10} /></button>
@@ -583,7 +615,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         </Card>
 
         {/* Bautagebuch bearbeiten */}
-        {istBautagebuch && (
+        {istBautagebuch && bearbeitbar && (
           <button
             onClick={() => setShowBtWizard(true)}
             className="w-full rounded-xl bg-ping-gold px-4 py-[13px] text-[15px] font-semibold text-white transition hover:bg-ping-gold-dark"
@@ -593,7 +625,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         )}
 
         {/* Verschieben in anderes Protokoll (nur neue Elemente) */}
-        {istNeu && verschiebungsziele.length > 0 && (
+        {inhaltEditierbar && verschiebungsziele.length > 0 && (
           <Card className="p-2.5">
             <SecondaryButton block onClick={() => setShowProtokollWahl(!showProtokollWahl)}>
               In anderes Protokoll verschieben
@@ -619,7 +651,7 @@ export default function ElementDetail({ element, protokoll, gruppe, filteredIds,
         )}
 
         {/* Löschen (nur neue Elemente) */}
-        {istNeu && (
+        {inhaltEditierbar && (
           <DangerButton
             block
             onClick={async () => {

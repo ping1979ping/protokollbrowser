@@ -7,7 +7,8 @@ import SyncIndicator from './SyncIndicator';
 import StatusBadge from './StatusBadge';
 import { useSyncStatus } from '../useSyncStatus';
 import { ScreenHeader, EmptyState } from '../ui/primitives';
-import { IconSearch, IconX, IconPlus } from '../ui/icons';
+import { IconSearch, IconX, IconPlus, IconLock } from '../ui/icons';
+import { neuanlageErlaubt, obersterPunkt } from '../protokollRegeln';
 
 export interface UebersichtState {
   ansicht: 'alle' | 'einzeln' | 'karte';
@@ -28,9 +29,11 @@ interface Props {
   onZurueck: () => void;
   /** Docking-Variante: Wurzel fuellt den Container (h-full) und FABs positionieren absolut statt fixed. Aendert keine Logik. */
   embedded?: boolean;
+  /** Tablet quer: nach dem Laden einmalig den obersten Punkt der Liste aktivieren (Tablet-Handoff, Abschnitt 1). Ohne Punkte bleibt nur die Liste. */
+  autoAuswahlOberster?: boolean;
 }
 
-export default function ProtokollUebersicht({ gruppeId, initialState, onStateChange, onSelectElement, onNeuesElement, onBautagebuch, onSchnellErstellung, onExport, onZurueck, embedded = false }: Props) {
+export default function ProtokollUebersicht({ gruppeId, initialState, onStateChange, onSelectElement, onNeuesElement, onBautagebuch, onSchnellErstellung, onExport, onZurueck, embedded = false, autoAuswahlOberster = false }: Props) {
   const [gruppe, setGruppe] = useState<Protokollgruppe | null>(null);
   const [protokolle, setProtokolle] = useState<Protokoll[]>([]);
   const [gewaehltesProt, setGewaehltesProt] = useState<Protokoll | null>(null);
@@ -47,6 +50,8 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
   const [anzahlNeu, setAnzahlNeu] = useState(0);
   const [zeigeAenderungen, setZeigeAenderungen] = useState(false);
   const [verantwMap, setVerantwMap] = useState<Map<string, string>>(new Map());
+  const [geladen, setGeladen] = useState(false);
+  const autoAuswahlErledigt = useRef(false);
   const activeTabRef = useRef<HTMLButtonElement>(null);
 
   // Refs fuer synchronen Zugriff auf aktuellen State (vermeidet Race Conditions)
@@ -141,6 +146,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
     setAnzahlGeaendert(geaendert);
     setAnzahlNeu(neu);
     setHatAenderungen(geaendert + neu > 0);
+    setGeladen(true);
   }
 
   async function ladeElemente(prot: Protokoll) {
@@ -169,6 +175,18 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
 
   const aktuelleElemente = ansicht === 'einzeln' ? filtern(elemente) : filtern(alleElemente);
   const aktivProt = gewaehltesProt || protokolle[0];
+  // Neuanlage (Neuer Punkt/Schnell/BT) nur außerhalb des Tabs eines verteilten Protokolls
+  const neuErlaubt = neuanlageErlaubt(ansicht, aktivProt, protokolle);
+
+  // Tablet quer: Protokoll öffnen aktiviert sofort den obersten Punkt (einmal je Öffnen)
+  useEffect(() => {
+    if (!autoAuswahlOberster || autoAuswahlErledigt.current || !geladen || !gruppe) return;
+    autoAuswahlErledigt.current = true;
+    const erster = obersterPunkt(aktuelleElemente);
+    if (!erster) return;
+    const prot = protokolle.find(p => p.id === erster.protokoll_id) || aktivProt;
+    if (prot) handleSelectElement(erster, prot, gruppe, aktuelleElemente.map(e => e.id));
+  });
 
   if (!gruppe) return <div className="p-6 text-ping-text-light">Laden...</div>;
 
@@ -393,8 +411,19 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         </div>
       )}
 
+      {/* Tab eines verteilten Protokolls: keine Neuanlage, stattdessen Hinweis (Tablet-Handoff, Abschnitt 3) */}
+      {aktivProt && gruppe && !neuErlaubt && (
+        <div
+          role="status"
+          className={`${embedded ? 'absolute' : 'fixed'} bottom-4 right-4 flex items-center gap-2 rounded-xl border border-black/10 bg-ping-bg px-3.5 py-2.5 text-[12px] font-semibold text-ping-text-mid shadow-lg`}
+        >
+          <IconLock size={13} className="shrink-0" />
+          Protokoll abgeschlossen — keine neuen Punkte
+        </div>
+      )}
+
       {/* FABs — rund mit Schatten: + blau, BT gold, Schnell violett */}
-      {aktivProt && gruppe && (
+      {aktivProt && gruppe && neuErlaubt && (
         <div className={`${embedded ? 'absolute' : 'fixed'} bottom-4 right-4 flex flex-row items-center gap-2`}>
           {hatBautagebuch && onBautagebuch && (
             <button

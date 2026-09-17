@@ -114,13 +114,14 @@ export default function App() {
     setTabletDetail({ element: elem, protokoll: prot, gruppe: cur.gruppe, filteredIds: cur.filteredIds });
   }
 
-  // Browser-Node (embedded steuert Voll- vs. Split-Layout)
-  function browserNode(gruppeId: string, embedded: boolean, onSelect: (elem: Protokollelement, prot: Protokoll, grp: Protokollgruppe, ids?: string[]) => void) {
+  // Browser-Node (embedded steuert Voll- vs. Split-Layout; autoAuswahl aktiviert den obersten Punkt)
+  function browserNode(gruppeId: string, embedded: boolean, onSelect: (elem: Protokollelement, prot: Protokoll, grp: Protokollgruppe, ids?: string[]) => void, autoAuswahl = false) {
     return (
       <ProtokollUebersicht
         key={key}
         gruppeId={gruppeId}
         embedded={embedded}
+        autoAuswahlOberster={autoAuswahl}
         initialState={uebersichtStateRef.current}
         onStateChange={(s) => { uebersichtStateRef.current = s; }}
         onSelectElement={onSelect}
@@ -197,12 +198,13 @@ export default function App() {
       case 'sync-settings':
         return <SyncSettings onBack={() => setScreen({ name: 'abos' })} />;
       case 'uebersicht': {
-        // Tablet + Querformat: Master-Detail-Split (Liste links, Punkt-Detail rechts)
+        // Tablet + Querformat: Master-Detail-Split (Liste links, Punkt-Detail rechts).
+        // Ist noch kein Punkt aktiv, aktiviert das Öffnen den obersten Punkt (Handoff).
         if (isTablet && orientation === 'quer') {
           return (
             <div className="flex h-[100dvh] overflow-hidden bg-ping-surface">
               <div className="relative w-1/2 min-w-0 border-r border-black/10">
-                {browserNode(screen.gruppeId, true, (elem, prot, grp, ids) => setTabletDetail({ element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }))}
+                {browserNode(screen.gruppeId, true, (elem, prot, grp, ids) => setTabletDetail({ element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }), !tabletDetail)}
               </div>
               <div className="relative w-1/2 min-w-0 bg-white">
                 {tabletDetail
@@ -211,7 +213,7 @@ export default function App() {
                       onBack: () => setTabletDetail(null),
                       onNavigate: (elem) => { void navigateTabletDetail(elem, tabletDetail); },
                     })
-                  : <div className="flex h-full items-center justify-center px-6 text-center text-sm text-ping-text-light">Punkt aus der Liste auswaehlen</div>}
+                  : <div className="flex h-full items-center justify-center px-6 text-center text-sm text-ping-text-light">Punkt aus der Liste auswählen</div>}
               </div>
             </div>
           );
