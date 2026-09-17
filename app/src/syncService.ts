@@ -292,6 +292,10 @@ export interface UploadReport {
   status?: string;
   written?: number;
   skipped?: number;
+  /** Anzahl verworfener Feldänderungen an versendeten Protokollen (ohne Punktangabe). */
+  felder_abgelehnt?: number;
+  /** Kennungen der übersprungenen neuen Punkte. */
+  skipped_oids?: string[];
   term_remap?: Record<string, string>;
   [k: string]: unknown;
 }

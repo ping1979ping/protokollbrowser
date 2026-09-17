@@ -16,7 +16,7 @@ import { useFormFactor } from '../../hooks/useFormFactor';
 import { getProtokollgruppe, getProtokolleByGruppe, getElemente } from '../../db';
 import type { ProtokollMitGruppe } from '../../db';
 import type { Protokollgruppe } from '../../types';
-import { istVerteilt } from '../../protokollRegeln';
+import { versandStatus } from '../../protokollRegeln';
 
 // Status-Codes, die als "erledigt" fuer den Fortschrittsbalken zaehlen
 // (17 Erledigt-Info, 20 Erledigt, 25 Mangel-beseitigt).
@@ -244,8 +244,9 @@ export default function GruppeDetail({
             const pct = f.total > 0 ? Math.round((f.done / f.total) * 100) : 0;
             const barColor =
               pct === 100 ? '#16a34a' : pct >= 70 ? '#B9791E' : pct >= 40 ? '#d97706' : '#dc2626';
-            // Versandstatus aus derselben Regel wie Punkt-Sperre und Neuanlage (istVerteilt).
-            const verschickt = istVerteilt(p, protokolle);
+            // Versandstatus: Serverwert, sonst Ersatzregel; Anhänge ohne Serverwert ohne Badge (H1).
+            const versand = versandStatus(p, protokolle);
+            const verschickt = versand === 'verschickt';
             return (
               <button
                 key={p.id}
@@ -278,19 +279,21 @@ export default function GruppeDetail({
                   >
                     {f.total > 0 ? `${pct}%` : '—'}
                   </span>
-                  {/* Versand-Badge */}
-                  <span
-                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-bold"
-                    style={
-                      verschickt
-                        ? { background: '#EAFAF0', color: '#16803C' }
-                        : { background: '#FBF1E2', color: '#8A5A14' }
-                    }
-                    title="Versandstatus"
-                  >
-                    {verschickt && <IconCheck size={11} />}
-                    {verschickt ? 'verschickt' : 'nicht verschickt'}
-                  </span>
+                  {/* Versand-Badge — nur, wenn es eine Grundlage dafür gibt */}
+                  {versand && (
+                    <span
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-bold"
+                      style={
+                        verschickt
+                          ? { background: '#EAFAF0', color: '#16803C' }
+                          : { background: '#FBF1E2', color: '#8A5A14' }
+                      }
+                      title="Versandstatus"
+                    >
+                      {verschickt && <IconCheck size={11} />}
+                      {versand}
+                    </span>
+                  )}
                 </span>
               </button>
             );

@@ -8,7 +8,7 @@ import StatusBadge from './StatusBadge';
 import { useSyncStatus } from '../useSyncStatus';
 import { EmptyState } from '../ui/primitives';
 import { IconSearch, IconX, IconPlus, IconLock, IconKebab, IconChevronLeft, IconCamera } from '../ui/icons';
-import { neuanlageErlaubt, obersterPunkt, aktuellesProtokoll } from '../protokollRegeln';
+import { neuanlageErlaubt, obersterPunkt, aktuellesProtokoll, istVerteilt } from '../protokollRegeln';
 
 export interface UebersichtState {
   ansicht: 'alle' | 'einzeln' | 'karte';
@@ -448,7 +448,8 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
         >
           {neuErlaubt ? (
             <div className={`flex items-center gap-2 ${embedded ? 'justify-end' : ''}`}>
-              {btProt && onBautagebuch && (
+              {/* BT nur, solange das Bautagebuch nicht als verteilt gilt (Serverwert, H1) */}
+              {btProt && onBautagebuch && !istVerteilt(btProt, protokolle) && (
                 <button
                   onClick={() => {
                     saveState();

@@ -14,7 +14,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   istVerteilt, neuanlageErlaubt, obersterPunkt, bearbeitbareFelderNachVersand, freieFelder, ALLE_PUNKTFELDER,
-  aktuellesProtokoll, zielProtokollFuerNeuanlage,
+  aktuellesProtokoll, zielProtokollFuerNeuanlage, versandStatus,
 } from '../src/protokollRegeln.ts';
 
 const p = (id: string, nummer: number, is_new?: boolean | null) => ({ id, nummer, is_new });
@@ -213,4 +213,31 @@ test('oberster Punkt: Eingabeliste bleibt unverändert', () => {
   const punkte = [{ id: 'b', position: '2' }, { id: 'a', position: '1' }];
   obersterPunkt(punkte);
   assert.deepEqual(punkte.map((x) => x.id), ['b', 'a']);
+});
+
+// --- H1: Versand-Badge im Gruppen-Detail und Vorrang des Serverwerts ---------------
+
+test('Versand-Badge: Anhang ohne Serverwert -> kein Badge (keine Ableitung aus Nummern)', () => {
+  assert.equal(versandStatus(p('bt', -1), [p('p3', 3), p('p4', 4)]), null);
+});
+
+test('Versand-Badge: Serverwert gilt, auch für Anhänge', () => {
+  assert.equal(versandStatus(p('bt', -1, false), []), 'verschickt');
+  assert.equal(versandStatus(p('bt', -1, true), []), 'nicht verschickt');
+});
+
+test('Versand-Badge: reguläre Protokolle ohne Serverwert nach der Ersatzregel', () => {
+  const g = [p('p3', 3), p('p4', 4), p('d5', 5, true)];
+  assert.equal(versandStatus(g[0], g), 'verschickt');
+  assert.equal(versandStatus(g[1], g), 'nicht verschickt');
+  assert.equal(versandStatus(g[2], g), 'nicht verschickt');
+});
+
+test('Serverwert gilt allein: Nummern und Entwürfe ändern nichts, sobald is_new geliefert ist', () => {
+  const alt = p('p3', 3, true);
+  const neu = p('p4', 4, false);
+  const g = [alt, neu, p('d9', 9, true)];
+  assert.equal(istVerteilt(alt, g), false);
+  assert.equal(istVerteilt(neu, g), true);
+  assert.equal(istVerteilt(p('bt', -1, false), g), true);
 });

@@ -131,3 +131,19 @@ export function freieFelder(verteilt: boolean | null, lokalNeu: boolean): Readon
   return new Set<PunktFeld>(['status', 'positionstext', 'verortung']);
 }
 
+
+/**
+ * Versand-Badge im Gruppen-Detail („verschickt" / „nicht verschickt").
+ * - Liefert der Hub `is_new`, gilt allein dieser Wert — auch für Anhänge.
+ * - Anhänge (`nummer < 0`, z. B. Bautagebuch) ohne Serverwert: kein Badge. Für sie gibt es
+ *   keine Ableitung aus Nummern; „nicht verschickt" wäre eine Behauptung ohne Grundlage.
+ * - Reguläre Protokolle ohne Serverwert: nach der Ersatzregel `istVerteilt`.
+ */
+export function versandStatus(
+  protokoll: VerteiltKern,
+  gruppenProtokolle: readonly VerteiltKern[],
+): 'verschickt' | 'nicht verschickt' | null {
+  if (typeof protokoll.is_new === 'boolean') return protokoll.is_new ? 'nicht verschickt' : 'verschickt';
+  if (protokoll.nummer < 0) return null;
+  return istVerteilt(protokoll, gruppenProtokolle) ? 'verschickt' : 'nicht verschickt';
+}

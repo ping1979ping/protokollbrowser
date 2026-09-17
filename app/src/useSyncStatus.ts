@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { checkConnectivity, getServerUrl, syncProject, uploadZip } from './syncService';
-import { getPendingChangesCount, setSyncMeta, getPendingExports, deletePendingExport, clearSyncFlags } from './db';
+import { getPendingChangesCount, setSyncMeta, getPendingExports, deletePendingExport, clearSyncFlags, getElement } from './db';
+import { werteUploadAus } from './uploadAuswertung';
+import type { Protokollelement } from './types';
 
 const CHECK_INTERVAL_MS = 30_000;
 
@@ -82,10 +84,15 @@ export function useSyncStatus(gruppeId: string): SyncStatus {
         try {
           const pendingExps = await getPendingExports();
           for (const exp of pendingExps) {
-            await uploadZip(exp.gruppeId, exp.blob, exp.filename);
-            await clearSyncFlags(exp.elementIds);
+            const bericht = await uploadZip(exp.gruppeId, exp.blob, exp.filename);
+            // H1: Marken nur für belegt übernommene Punkte löschen (gleiche Auswertung wie im Export)
+            const elemente = (await Promise.all(exp.elementIds.map(id => getElement(id))))
+              .filter((e): e is Protokollelement => !!e);
+            const ausw = werteUploadAus(bericht, elemente);
+            await clearSyncFlags(ausw.markenLoeschen);
             await deletePendingExport(exp.id);
-            console.log('[Sync] Pending export hochgeladen:', exp.filename);
+            if (ausw.vollstaendig) console.log('[Sync] Pending export hochgeladen:', exp.filename);
+            else console.warn('[Sync] Hub hat nicht alles übernommen, Änderungsmarken bleiben:', exp.filename, ausw);
           }
         } catch (err) {
           console.warn('[Sync] Pending export Upload fehlgeschlagen:', err);
