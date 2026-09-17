@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
-import { getProtokolleByGruppe, getElemente, getProtokollgruppe, getOrCreateDraftProtokoll, findBautagebuchProtokoll, getVerantwortliche } from '../db';
+import { getProtokolleByGruppe, getElemente, getProtokollgruppe, zielOderEntwurfFuerNeuanlage, findBautagebuchProtokoll, getVerantwortliche } from '../db';
 import MapOverview from './map/MapOverview';
 import ScrollToTopFab from './ScrollToTopFab';
 import SyncIndicator from './SyncIndicator';
@@ -8,7 +8,7 @@ import StatusBadge from './StatusBadge';
 import { useSyncStatus } from '../useSyncStatus';
 import { EmptyState } from '../ui/primitives';
 import { IconSearch, IconX, IconPlus, IconLock, IconKebab, IconChevronLeft, IconCamera } from '../ui/icons';
-import { neuanlageErlaubt, obersterPunkt } from '../protokollRegeln';
+import { neuanlageErlaubt, obersterPunkt, aktuellesProtokoll } from '../protokollRegeln';
 
 export interface UebersichtState {
   ansicht: 'alle' | 'einzeln' | 'karte';
@@ -125,10 +125,9 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
     prots.sort((a, b) => b.nummer - a.nummer);
     setProtokolle(prots);
 
-    // Protokoll-Tab wiederherstellen: gespeichertes > Draft > erstes
+    // Protokoll-Tab wiederherstellen: gespeichertes > aktuelles Protokoll > erstes
     const restored = restoredProtId.current ? prots.find(p => p.id === restoredProtId.current) : null;
-    const draftProt = prots.find(p => (p as typeof p & { is_new?: boolean }).is_new);
-    const selectProt = restored || draftProt || prots[0];
+    const selectProt = restored || aktuellesProtokoll(prots) || prots[0];
     if (selectProt) {
       await ladeElemente(selectProt);
     }
@@ -464,9 +463,8 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
               {onSchnellErstellung && (
                 <button
                   onClick={async () => {
-                    const prot = aktivProt.nummer < 0 ? aktivProt : await getOrCreateDraftProtokoll(gruppe.id, {
-                      name: aktivProt.name, ort: aktivProt.ort, autor: aktivProt.autor,
-                    });
+                    // M1: Ziel ist das aktuelle Protokoll (nie ein Anhang); ein Entwurf entsteht erst beim Speichern
+                    const prot = await zielOderEntwurfFuerNeuanlage(gruppe.id, ansicht, aktivProt.id);
                     saveState();
                     onSchnellErstellung(prot, gruppe);
                   }}
@@ -479,9 +477,8 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
               )}
               <button
                 onClick={async () => {
-                  const prot = aktivProt.nummer < 0 ? aktivProt : await getOrCreateDraftProtokoll(gruppe.id, {
-                    name: aktivProt.name, ort: aktivProt.ort, autor: aktivProt.autor,
-                  });
+                  // M1: Ziel ist das aktuelle Protokoll (nie ein Anhang); ein Entwurf entsteht erst beim Speichern
+                  const prot = await zielOderEntwurfFuerNeuanlage(gruppe.id, ansicht, aktivProt.id);
                   handleNeuesElement(prot, gruppe);
                 }}
                 className={`flex min-h-[46px] items-center justify-center gap-1.5 rounded-[13px] bg-ping-blue px-5 text-[13.5px] font-semibold text-white shadow-[0_8px_22px_rgba(0,72,153,0.4)] transition hover:bg-ping-blue-dark active:scale-[.98] ${embedded ? '' : 'flex-[1.5]'}`}

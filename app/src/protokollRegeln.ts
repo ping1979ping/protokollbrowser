@@ -21,7 +21,9 @@ export type VerteiltKern = Pick<Protokoll, 'id' | 'nummer'> & { is_new?: boolean
  * 2. Fehlt `is_new` (der heutige Sync-Export liefert das Feld nicht), gilt ersatzweise
  *    die Design-Regel: aktuell ist das Protokoll mit der höchsten Nummer der Gruppe,
  *    alle älteren gelten als verteilt. Anhänge (`nummer < 0`, z. B. Bautagebuch)
- *    laufen fortlaufend weiter und gelten nie als verteilt.
+ *    laufen fortlaufend weiter und gelten nie als verteilt. Entwürfe (`is_new: true`,
+ *    lokal angelegt oder leer) zählen dabei NICHT als höheres Protokoll: dass ein
+ *    Entwurf existiert, belegt nicht, dass das vorige Protokoll verteilt wurde.
  *
  * @param gruppenProtokolle alle Protokolle derselben Gruppe (das Protokoll selbst darf fehlen)
  */
@@ -30,9 +32,40 @@ export function istVerteilt(protokoll: VerteiltKern, gruppenProtokolle: readonly
   if (protokoll.nummer < 0) return false;
   let hoechste = protokoll.nummer;
   for (const p of gruppenProtokolle) {
+    if (p.is_new === true) continue; // Entwurf: kein Beleg für eine Verteilung
     if (p.nummer > hoechste) hoechste = p.nummer;
   }
   return protokoll.nummer < hoechste;
+}
+
+/**
+ * Das aktuelle Protokoll der Gruppe: das höchste nicht verteilte, nie ein Anhang.
+ * Ein vom Hub bestätigtes Protokoll (ohne `is_new: true`) geht einem Entwurf vor;
+ * ein Entwurf ist nur aktuell, wenn es sonst kein offenes Protokoll gibt.
+ */
+export function aktuellesProtokoll<T extends VerteiltKern>(protokolle: readonly T[]): T | null {
+  const offen = protokolle
+    .filter(p => p.nummer >= 0 && !istVerteilt(p, protokolle))
+    .sort((a, b) => b.nummer - a.nummer);
+  return offen.find(p => p.is_new !== true) ?? offen[0] ?? null;
+}
+
+/**
+ * Zielprotokoll für „Neuer Punkt" und „Schnell" (nicht für den BT-Knopf, der schreibt
+ * ins Bautagebuch). Handoff Abschnitt 3: Neuanlage im Tab des aktuellen Protokolls und
+ * in „Gesamt"; die Punkte landen im aktuellen Protokoll.
+ * - Tab eines offenen (nicht verteilten) regulären Protokolls: dieses Protokoll.
+ * - sonst (Gesamt, Karte, Bautagebuch-/Anhang-Tab): das aktuelle Protokoll — nie ein Anhang.
+ * - `null`, wenn es kein offenes Protokoll gibt: der Aufrufer bildet dann einen Entwurf,
+ *   der erst beim Speichern des Punkts angelegt wird.
+ */
+export function zielProtokollFuerNeuanlage<T extends VerteiltKern>(
+  ansicht: 'alle' | 'einzeln' | 'karte',
+  aktiv: T | null | undefined,
+  protokolle: readonly T[],
+): T | null {
+  if (ansicht === 'einzeln' && aktiv && aktiv.nummer >= 0 && !istVerteilt(aktiv, protokolle)) return aktiv;
+  return aktuellesProtokoll(protokolle);
 }
 
 /**
@@ -97,3 +130,4 @@ export function freieFelder(verteilt: boolean | null, lokalNeu: boolean): Readon
   if (lokalNeu) return new Set(ALLE_PUNKTFELDER);
   return new Set<PunktFeld>(['status', 'positionstext', 'verortung']);
 }
+

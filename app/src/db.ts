@@ -1,5 +1,6 @@
 import { openDB } from 'idb';
 import { nameNorm } from './termNorm';
+import { zielProtokollFuerNeuanlage } from './protokollRegeln';
 import type { IDBPDatabase } from 'idb';
 import type { Protokollgruppe, Protokoll, Protokollelement, ProtokollPaket, Projekt, Werteliste, Adresse, Ansprechpartner } from './types';
 
@@ -186,14 +187,44 @@ export async function getProtokolleByGruppe(gruppeId: string): Promise<Protokoll
   return db.getAllFromIndex('protokolle', 'byGruppe', gruppeId);
 }
 
-export async function getOrCreateDraftProtokoll(
+/**
+ * Zielprotokoll für „Neuer Punkt"/„Schnell"/Nachfolger/Klonen (M1): das aktuelle nicht
+ * verteilte Protokoll der Gruppe (Regel in protokollRegeln.zielProtokollFuerNeuanlage),
+ * nie ein Anhang. Gibt es keines, wird ein Entwurf nur GEBILDET — gespeichert wird er
+ * erst zusammen mit dem ersten Punkt (sichereProtokoll), ein Abbruch hinterlässt nichts.
+ */
+export async function zielOderEntwurfFuerNeuanlage(
   gruppeId: string,
-  basierend: { name: string; ort: string; autor: string },
+  ansicht: 'alle' | 'einzeln' | 'karte',
+  aktivId: string | null | undefined,
 ): Promise<ProtokollMitGruppe> {
   const prots = await getProtokolleByGruppe(gruppeId);
-  const draft = prots.find(p => (p as ProtokollMitGruppe & { is_new?: boolean }).is_new);
-  if (draft) return draft;
+  const aktiv = aktivId ? prots.find(p => p.id === aktivId) ?? null : null;
+  const ziel = zielProtokollFuerNeuanlage(ansicht, aktiv, prots);
+  if (ziel) return ziel;
+  const vorlage = prots.filter(p => p.nummer >= 0).sort((a, b) => b.nummer - a.nummer)[0];
+  return bildeEntwurfProtokoll(gruppeId, prots, {
+    name: vorlage?.name ?? 'Protokoll',
+    ort: vorlage?.ort ?? '',
+    autor: vorlage?.autor ?? '',
+  });
+}
 
+/** Legt ein Protokoll (z. B. einen gebildeten Entwurf) an, falls es noch nicht gespeichert ist. */
+export async function sichereProtokoll(prot: Protokoll): Promise<void> {
+  const db = await getDb();
+  if (await db.get('protokolle', prot.id)) return;
+  if (!('gruppe_id' in prot)) throw new Error('Protokoll ohne Gruppenbezug kann nicht angelegt werden');
+  await db.put('protokolle', prot);
+  console.log('[Entwurf] Protokoll angelegt:', prot.name, 'Nr.', prot.nummer, 'Id:', prot.id);
+}
+
+/** Bildet einen Entwurf (Nummer = höchste + 1), ohne ihn zu speichern. */
+function bildeEntwurfProtokoll(
+  gruppeId: string,
+  prots: readonly Protokoll[],
+  basierend: { name: string; ort: string; autor: string },
+): ProtokollMitGruppe {
   const maxNummer = prots.reduce((max, p) => Math.max(max, p.nummer), 0);
   const neueNummer = maxNummer + 1;
   const nameBase = basierend.name.replace(/\s*\d+\s*[-–]\s*\d+$/, '').replace(/\s*\d+$/, '');
@@ -223,10 +254,6 @@ export async function getOrCreateDraftProtokoll(
     gruppe_id: gruppeId,
     is_new: true,
   };
-
-  const db = await getDb();
-  await db.put('protokolle', neuProt);
-  console.log('[Draft] Neues Protokoll erstellt:', neuProt.name, 'Nr.', neuProt.nummer, 'Id:', neuProt.id);
   return neuProt;
 }
 

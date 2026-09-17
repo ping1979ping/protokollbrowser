@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from './types';
-import { getProtokolleByGruppe, getOrCreateDraftProtokoll, findBautagebuchProtokoll } from './db';
+import { getProtokolleByGruppe, zielOderEntwurfFuerNeuanlage, findBautagebuchProtokoll } from './db';
 import ImportScreen from './components/ImportScreen';
 import ProtokollUebersicht from './components/ProtokollUebersicht';
 import type { UebersichtState } from './components/ProtokollUebersicht';
@@ -72,11 +72,10 @@ export default function App() {
     setScreen({ name: 'uebersicht', gruppeId });
   }
 
-  // Entwurf-Protokoll anlegen (fuer Nachfolger/Clone aus dem Punkt-Detail)
+  // Zielprotokoll für Nachfolger/Klonen aus dem Punkt-Detail (M1): das aktuelle Protokoll
+  // der Gruppe, nie ein Anhang; ein Entwurf wird erst beim Speichern des Punkts angelegt.
   async function draftProt(sel: Sel): Promise<Protokoll> {
-    return sel.protokoll.nummer < 0 ? sel.protokoll : await getOrCreateDraftProtokoll(sel.gruppe.id, {
-      name: sel.protokoll.name, ort: sel.protokoll.ort, autor: sel.protokoll.autor,
-    });
+    return zielOderEntwurfFuerNeuanlage(sel.gruppe.id, 'alle', null);
   }
 
   // Punkt-Detail als Node — wiederverwendet fuer Vollseite (Phone) und Tablet-Split-Pane

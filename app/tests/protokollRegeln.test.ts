@@ -14,6 +14,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   istVerteilt, neuanlageErlaubt, obersterPunkt, bearbeitbareFelderNachVersand, freieFelder, ALLE_PUNKTFELDER,
+  aktuellesProtokoll, zielProtokollFuerNeuanlage,
 } from '../src/protokollRegeln.ts';
 
 const p = (id: string, nummer: number, is_new?: boolean | null) => ({ id, nummer, is_new });
@@ -69,11 +70,19 @@ test('Ersatz: gleiche höchste Nummer (Dublette) -> beide nicht verteilt', () =>
   assert.equal(istVerteilt(b, [a, b]), false);
 });
 
-test('gemischt: lokaler Entwurf (is_new=true, Nr. 5) macht Nr. 4 ohne is_new zum verteilten', () => {
+// M1: ein Entwurf (is_new=true, vom Hub nicht als verteilt bestätigt, oft leer) belegt nicht,
+// dass ein älteres Protokoll verteilt wurde — er zählt in der Ersatzregel nicht als höheres Protokoll.
+test('gemischt: lokaler Entwurf (is_new=true, Nr. 5) macht Nr. 4 ohne is_new NICHT zum verteilten', () => {
   const nr4 = p('p4', 4);
   const entwurf = p('d5', 5, true);
-  assert.equal(istVerteilt(nr4, [nr4, entwurf]), true);
+  assert.equal(istVerteilt(nr4, [nr4, entwurf]), false);
   assert.equal(istVerteilt(entwurf, [nr4, entwurf]), false);
+});
+
+test('gemischt: Entwurf zählt nicht, ein höheres Serverprotokoll schon', () => {
+  const nr3 = p('p3', 3);
+  assert.equal(istVerteilt(nr3, [nr3, p('d9', 9, true)]), false);
+  assert.equal(istVerteilt(nr3, [nr3, p('d9', 9, true), p('p4', 4)]), true);
 });
 
 test('Anhänge heben die höchste Nummer nicht an', () => {
@@ -101,6 +110,55 @@ test('Neuanlage: Gesamt und Karte -> erlaubt, auch wenn das gewählte Protokoll 
 
 test('Neuanlage: kein Protokoll gewählt -> erlaubt (keine Sperre ohne Grundlage)', () => {
   assert.equal(neuanlageErlaubt('einzeln', null, []), true);
+});
+
+// --- M1: Zielprotokoll für Neuer Punkt / Schnell ----------------------------------
+// Handoff Abschnitt 3: „In ‚Gesamt' und im aktuellen Protokoll ist die Neuanlage möglich
+// (Punkte landen im aktuellen Protokoll)"; aktuell = neuestes (höchste Nr.), nicht verteilt.
+
+const nr3 = p('p3', 3);
+const nr4 = p('p4', 4);
+const bt = p('bt', -1);
+const gruppe = [nr3, nr4, bt];
+
+test('aktuelles Protokoll: höchstes nicht verteiltes, nie ein Anhang', () => {
+  assert.equal(aktuellesProtokoll(gruppe)?.id, 'p4');
+  assert.equal(aktuellesProtokoll([bt])?.id, undefined);
+  assert.equal(aktuellesProtokoll([]), null);
+});
+
+test('aktuelles Protokoll: bestätigtes Serverprotokoll vor liegengebliebenem Entwurf', () => {
+  assert.equal(aktuellesProtokoll([...gruppe, p('d5', 5, true)])?.id, 'p4');
+});
+
+test('aktuelles Protokoll: alle vom Hub als verteilt gemeldet -> offener Entwurf, sonst keines', () => {
+  const importiert = [p('i1', 1, false), p('i2', 2, false), p('ibt', -1, false)];
+  assert.equal(aktuellesProtokoll(importiert), null);
+  assert.equal(aktuellesProtokoll([...importiert, p('d3', 3, true)])?.id, 'd3');
+});
+
+test('Ziel Neuanlage: Tab des aktuellen Protokolls -> dieses Protokoll, kein neuer Entwurf', () => {
+  assert.equal(zielProtokollFuerNeuanlage('einzeln', nr4, gruppe)?.id, 'p4');
+});
+
+test('Ziel Neuanlage: Gesamt und Karte -> aktuelles Protokoll, auch wenn zuvor ein Anhang gewählt war', () => {
+  assert.equal(zielProtokollFuerNeuanlage('alle', bt, gruppe)?.id, 'p4');
+  assert.equal(zielProtokollFuerNeuanlage('karte', bt, gruppe)?.id, 'p4');
+});
+
+test('Ziel Neuanlage: Tab Bautagebuch/Anhang -> nie der Anhang, sondern das aktuelle Protokoll', () => {
+  assert.equal(zielProtokollFuerNeuanlage('einzeln', bt, gruppe)?.id, 'p4');
+});
+
+test('Ziel Neuanlage: Tab eines offenen Entwurfs -> der Entwurf', () => {
+  const d5 = p('d5', 5, true);
+  assert.equal(zielProtokollFuerNeuanlage('einzeln', d5, [...gruppe, d5])?.id, 'd5');
+});
+
+test('Ziel Neuanlage: kein offenes Protokoll -> null (Aufrufer bildet einen Entwurf erst beim Speichern)', () => {
+  const importiert = [p('i1', 1, false), p('i2', 2, false), p('ibt', -1, false)];
+  assert.equal(zielProtokollFuerNeuanlage('alle', importiert[1], importiert), null);
+  assert.equal(zielProtokollFuerNeuanlage('einzeln', importiert[2], importiert), null);
 });
 
 // --- Oberster Punkt (Tablet quer: beim Öffnen aktivieren) ------------------------

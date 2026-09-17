@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
 import { STATUS_MAP } from '../types';
-import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
+import { addElement, sichereProtokoll, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto, getProjektThemenByProjekt, getProjektThemenByGruppe, createAdhocProjektThema, type ProjektThema } from '../db';
 import type { Verantwortlicher } from '../db';
 import MapEditorModal from './map/MapEditorModal';
 import { formatCoord, formatLatLon } from '../map-core/format';
@@ -284,6 +284,8 @@ export default function NeuesElement({ protokoll, gruppe, vorgaenger, clone, isB
       is_new: true,
     };
 
+    // M1: ein gebildeter Entwurf wird erst mit dem ersten Punkt angelegt (Abbruch hinterlässt nichts)
+    await sichereProtokoll(protokoll);
     await addElement(neuesElem);
     setDirty(false);
     return true;

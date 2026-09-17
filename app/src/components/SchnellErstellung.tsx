@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Protokoll, Protokollelement, Protokollgruppe } from '../types';
-import { addElement, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
+import { addElement, sichereProtokoll, getElemente, getVerantwortliche, getProtokolleByGruppe, saveFoto } from '../db';
 import type { Verantwortlicher } from '../db';
 import { extractGpsFromImage } from '../exifGps';
 import { formatLatLon } from '../map-core/format';
@@ -166,6 +166,8 @@ export default function SchnellErstellung({ protokoll, gruppe, onBack, onDone }:
 
     const verantw = alleFirmen.find(t => t.oid === verantwFirmaOid);
     let count = 0;
+    // M1: ein gebildeter Entwurf wird erst jetzt, mit den ersten Punkten, angelegt
+    await sichereProtokoll(protokoll);
 
     for (let i = 0; i < fotos.length; i++) {
       const file = fotos[i];
