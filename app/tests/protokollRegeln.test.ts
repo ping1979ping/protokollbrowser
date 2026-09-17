@@ -174,12 +174,15 @@ test('oberster Punkt: numerisch sortiert (4.2 vor 4.10)', () => {
 });
 
 // --- Felder nach dem Versand (Sperrregel des Hub) ---------------------------------
-// Spiegel von ALLOWED_ON_LOCKED in hub-server backend/app/services/protokoll_sperre.py:33,
-// angewandt im Sync-Upload der App (routers/protokoll_sync.py:708).
+// Quelle ist die Hub-Zeile backend/app/services/protokoll_sperre.py:33
+//   ALLOWED_ON_LOCKED = frozenset({"status", "positionstext"})
+// angewandt im Sync-Upload (routers/protokoll_sync.py:708). EHRLICH: Dieser Test prüft nur
+// die App-Konstante gegen den hier abgeschriebenen Stand — einen echten Abgleich mit dem
+// Hub gibt es ohne Hub nicht; ändert der Hub seine Liste, bleibt dieser Test grün.
 
 const sortiert = (xs: Iterable<string>) => [...xs].sort();
 
-test('nach Versand: genau Status und Positionstext', () => {
+test('nach Versand: genau Status und Positionstext (App-Konstante, abgeschrieben aus protokoll_sperre.py:33)', () => {
   assert.deepEqual(sortiert(bearbeitbareFelderNachVersand()), ['positionstext', 'status']);
 });
 

@@ -13,6 +13,7 @@ import SyncSettings from './components/SyncSettings';
 import LoginScreen from './components/LoginScreen';
 import { isLoggedIn } from './authService';
 import { useFormFactor } from './hooks/useFormFactor';
+import { splitAnsicht, obersterPunktAutomatisch } from './hooks/formFaktor';
 // Redesign-Screens (PING Protokoll Design System, Smartphone + Tablet)
 import AboHome from './components/redesign/AboHome';
 import ProjektAuswahlNeu from './components/redesign/ProjektAuswahlNeu';
@@ -48,7 +49,7 @@ export default function App() {
   const [erfolgToast, setErfolgToast] = useState<string | null>(null);
   const [tabletDetail, setTabletDetail] = useState<Sel | null>(null);
   const uebersichtStateRef = useRef<UebersichtState | undefined>(undefined);
-  const { isTablet, orientation } = useFormFactor();
+  const formFaktor = useFormFactor();
 
   // Session-Ablauf abfangen (T-06-06-02).
   useEffect(() => {
@@ -201,11 +202,13 @@ export default function App() {
       case 'uebersicht': {
         // Tablet + Querformat: Master-Detail-Split (Liste links, Punkt-Detail rechts).
         // Ist noch kein Punkt aktiv, aktiviert das Öffnen den obersten Punkt (Handoff).
-        if (isTablet && orientation === 'quer') {
+        // Beide Entscheidungen stehen in hooks/formFaktor (Telefon quer bleibt Einspalter, H2).
+        const autoAuswahl = obersterPunktAutomatisch(formFaktor, !!tabletDetail);
+        if (splitAnsicht(formFaktor)) {
           return (
             <div className="flex h-[100dvh] overflow-hidden bg-ping-surface">
               <div className="relative w-1/2 min-w-0 border-r border-black/10">
-                {browserNode(screen.gruppeId, true, (elem, prot, grp, ids) => setTabletDetail({ element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }), !tabletDetail)}
+                {browserNode(screen.gruppeId, true, (elem, prot, grp, ids) => setTabletDetail({ element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }), autoAuswahl)}
               </div>
               <div className="relative w-1/2 min-w-0 bg-white">
                 {tabletDetail
@@ -220,7 +223,7 @@ export default function App() {
           );
         }
         // Phone / Hochformat: Liste als Vollseite, Detail per Navigation
-        return browserNode(screen.gruppeId, false, (elem, prot, grp, ids) => setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }));
+        return browserNode(screen.gruppeId, false, (elem, prot, grp, ids) => setScreen({ name: 'detail', element: elem, protokoll: prot, gruppe: grp, filteredIds: ids }), autoAuswahl);
       }
       case 'detail':
         return elementDetailNode(screen, {

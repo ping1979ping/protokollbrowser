@@ -457,6 +457,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                   }}
                   className="flex min-h-[46px] shrink-0 items-center justify-center rounded-[13px] bg-ping-gold px-4 text-[13px] font-semibold text-white shadow-[0_8px_18px_rgba(138,90,20,0.35)] transition hover:bg-ping-gold-dark active:scale-[.98]"
                   title="Bautagebuch-Eintrag"
+                  aria-label="Bautagebuch-Eintrag"
                 >
                   BT
                 </button>
