@@ -204,8 +204,10 @@ export async function zielOderEntwurfFuerNeuanlage(
   const ziel = zielProtokollFuerNeuanlage(ansicht, aktiv, prots);
   if (ziel) return ziel;
   const vorlage = prots.filter(p => p.nummer >= 0).sort((a, b) => b.nummer - a.nummer)[0];
+  // B2: ohne ein Protokoll als Vorlage (Gruppe ohne Protokolle) trägt Entwurf Nr. 1 den Gruppennamen
+  const gruppenName = vorlage ? undefined : (await getProtokollgruppe(gruppeId))?.name;
   return bildeEntwurfProtokoll(gruppeId, prots, {
-    name: vorlage?.name ?? 'Protokoll',
+    name: vorlage?.name ?? gruppenName ?? 'Protokoll',
     ort: vorlage?.ort ?? '',
     autor: vorlage?.autor ?? '',
   });

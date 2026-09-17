@@ -16,7 +16,7 @@ import { useFormFactor } from '../../hooks/useFormFactor';
 import { getProtokollgruppe, getProtokolleByGruppe, getElemente } from '../../db';
 import type { ProtokollMitGruppe } from '../../db';
 import type { Protokollgruppe } from '../../types';
-import { versandStatus } from '../../protokollRegeln';
+import { versandStatus, aktuellesProtokoll } from '../../protokollRegeln';
 
 // Status-Codes, die als "erledigt" fuer den Fortschrittsbalken zaehlen
 // (17 Erledigt-Info, 20 Erledigt, 25 Mangel-beseitigt).
@@ -118,8 +118,10 @@ export default function GruppeDetail({
   }
 
   const themen = parseThemen(gruppe.themen);
-  // Aktuelles Protokoll = hoechste Nummer = erstes Element nach absteigender Sortierung.
-  const aktuellesProtokoll = protokolle[0];
+  // B1: dieselbe Regel wie für neue Punkte (protokollRegeln) — das höchste nicht verteilte
+  // Protokoll, ein vom Hub bestätigtes vor einem liegengebliebenen Entwurf, nie ein Anhang.
+  // Ohne offenes Protokoll gibt es nichts „Aktuelles"; dann bleibt „Neues Protokoll".
+  const aktuelles = aktuellesProtokoll(protokolle);
   const zweiSpalten = ff.orientation === 'quer';
   const projektZeile = [gruppe.projekt_name, gruppe.projekt_nummer].filter(Boolean).join(' · ');
 
@@ -164,8 +166,8 @@ export default function GruppeDetail({
 
   const footer = (
     <StickyFooter>
-      {aktuellesProtokoll && (
-        <SecondaryButton onClick={() => onProtokollBearbeiten(gruppeId, aktuellesProtokoll.id)}>
+      {aktuelles && (
+        <SecondaryButton onClick={() => onProtokollBearbeiten(gruppeId, aktuelles.id)}>
           Letztes Protokoll bearbeiten
         </SecondaryButton>
       )}
@@ -223,8 +225,8 @@ export default function GruppeDetail({
         </div>
       </Card>
 
-      {aktuellesProtokoll && (
-        <SecondaryButton block onClick={() => onProtokollBearbeiten(gruppeId, aktuellesProtokoll.id)}>
+      {aktuelles && (
+        <SecondaryButton block onClick={() => onProtokollBearbeiten(gruppeId, aktuelles.id)}>
           Aktuelles Protokoll bearbeiten
         </SecondaryButton>
       )}

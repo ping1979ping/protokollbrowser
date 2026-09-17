@@ -465,8 +465,9 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
 
       {/* Feste Aktionsleiste unten (Handoff): BT gold, Schnell hellblau, Neuer Punkt PING-Blau.
           Eigene Zeile außerhalb des Scrollbereichs — bleibt beim Scrollen der Liste stehen.
-          Im Tab eines verteilten Protokolls stattdessen der Hinweis (Tablet-Handoff, Abschnitt 3). */}
-      {aktivProt && gruppe && (
+          Im Tab eines verteilten Protokolls stattdessen der Hinweis (Tablet-Handoff, Abschnitt 3).
+          B2: auch in einer Gruppe ohne Protokolle — der erste gespeicherte Punkt legt Entwurf Nr. 1 an. */}
+      {gruppe && (
         <div
           className="shrink-0 border-t border-black/5 bg-ping-surface px-3 pt-2.5"
           style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}
@@ -491,7 +492,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
                 <button
                   onClick={async () => {
                     // M1: Ziel ist das aktuelle Protokoll (nie ein Anhang); ein Entwurf entsteht erst beim Speichern
-                    const prot = await zielOderEntwurfFuerNeuanlage(gruppe.id, ansicht, aktivProt.id);
+                    const prot = await zielOderEntwurfFuerNeuanlage(gruppe.id, ansicht, aktivProt?.id);
                     saveState();
                     onSchnellErstellung(prot, gruppe);
                   }}
@@ -505,7 +506,7 @@ export default function ProtokollUebersicht({ gruppeId, initialState, onStateCha
               <button
                 onClick={async () => {
                   // M1: Ziel ist das aktuelle Protokoll (nie ein Anhang); ein Entwurf entsteht erst beim Speichern
-                  const prot = await zielOderEntwurfFuerNeuanlage(gruppe.id, ansicht, aktivProt.id);
+                  const prot = await zielOderEntwurfFuerNeuanlage(gruppe.id, ansicht, aktivProt?.id);
                   handleNeuesElement(prot, gruppe);
                 }}
                 className={`flex min-h-[46px] items-center justify-center gap-1.5 rounded-[13px] bg-ping-blue px-5 text-[13.5px] font-semibold text-white shadow-[0_8px_22px_rgba(0,72,153,0.4)] transition hover:bg-ping-blue-dark active:scale-[.98] ${embedded ? '' : 'flex-[1.5]'}`}
